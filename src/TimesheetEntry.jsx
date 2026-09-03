@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from './firebaseConfig';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 
 // Categorized Task List from Company Time Card
 const TASK_CATEGORIES = {
@@ -57,7 +57,7 @@ const TASK_CATEGORIES = {
 function getMonday(d) {
   const date = new Date(d);
   const day = date.getDay();
-  const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
   return new Date(date.setDate(diff));
 }
 
@@ -66,8 +66,17 @@ function formatDate(dateObj) {
   return dateObj.toISOString().split('T')[0];
 }
 
+const DEFAULT_BLANK_TASK = () => ({
+  id: Date.now() + Math.random(),
+  categoryGroup: "Framing & Envelope",
+  taskName: "Wall Framing",
+  hours: '',
+  travelTime: '',
+  comments: ''
+});
+
 export default function TimesheetEntry({ user, userProfile }) {
-  // Saved project
+  // Saved project preference
   const [project, setProject] = useState(() => {
     return localStorage.getItem(`sjr_last_project_${user.uid}`) || '';
   });
@@ -85,21 +94,78 @@ export default function TimesheetEntry({ user, userProfile }) {
   const [timeReturned, setTimeReturned] = useState('');
 
   // Dynamic Array of Tasks for the Day
-  const [tasks, setTasks] = useState([
-    {
-      id: Date.now(),
-      categoryGroup: "Framing & Envelope",
-      taskName: "Wall Framing",
-      hours: '',
-      travelTime: '',
-      comments: ''
-    }
-  ]);
+  const [tasks, setTasks] = useState([DEFAULT_BLANK_TASK()]);
 
   const [loading, setLoading] = useState(false);
+  const [fetchingDay, setFetchingDay] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  // Generate 7 days (Mon-Sun) for the current week bar
+  // Load existing entry for the selected date whenever selectedDate or user changes
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadDayEntry() {
+      if (!user?.uid || !selectedDate) return;
+      setFetchingDay(true);
+
+      try {
+        const q = query(
+          collection(db, 'timesheets'),
+          where('userId', '==', user.uid),
+          where('date', '==', selectedDate)
+        );
+
+        const querySnapshot = await getDocs(q);
+
+        if (!isMounted) return;
+
+        if (!querySnapshot.empty) {
+          // Take the most recently saved entry for this date
+          const docData = querySnapshot.docs[querySnapshot.docs.length - 1].data();
+
+          if (docData.project) setProject(docData.project);
+          if (docData.timeCardDetails) {
+            setStartTime(docData.timeCardDetails.startTime || '');
+            setTimeFinished(docData.timeCardDetails.timeFinished || '');
+            setTimeLeftSite(docData.timeCardDetails.timeLeftSite || '');
+            setTimeReturned(docData.timeCardDetails.timeReturned || '');
+          }
+
+          if (docData.tasks && docData.tasks.length > 0) {
+            setTasks(
+              docData.tasks.map((t) => ({
+                id: Date.now() + Math.random(),
+                categoryGroup: t.taskCategoryGroup || "Framing & Envelope",
+                taskName: t.taskName || "Wall Framing",
+                hours: t.hours !== undefined ? String(t.hours) : '',
+                travelTime: t.travelTime !== undefined ? String(t.travelTime) : '',
+                comments: t.comments || ''
+              }))
+            );
+          }
+        } else {
+          // Reset inputs if no entry exists for this selected date
+          setStartTime('');
+          setTimeFinished('');
+          setTimeLeftSite('');
+          setTimeReturned('');
+          setTasks([DEFAULT_BLANK_TASK()]);
+        }
+      } catch (err) {
+        console.warn("Could not fetch date entry (offline or permission issue):", err);
+      } finally {
+        if (isMounted) setFetchingDay(false);
+      }
+    }
+
+    loadDayEntry();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDate, user?.uid]);
+
+  // Generate 7 days (Mon-Sun) for current week
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const day = new Date(currentMonday);
     day.setDate(currentMonday.getDate() + i);
@@ -111,7 +177,6 @@ export default function TimesheetEntry({ user, userProfile }) {
     };
   });
 
-  // Navigate week forward or backward
   const handlePrevWeek = () => {
     const prevMon = new Date(currentMonday);
     prevMon.setDate(currentMonday.getDate() - 7);
@@ -137,17 +202,7 @@ export default function TimesheetEntry({ user, userProfile }) {
   };
 
   const handleAddTask = () => {
-    setTasks((prevTasks) => [
-      ...prevTasks,
-      {
-        id: Date.now() + Math.random(),
-        categoryGroup: "Framing & Envelope",
-        taskName: "Wall Framing",
-        hours: '',
-        travelTime: '',
-        comments: ''
-      }
-    ]);
+    setTasks((prevTasks) => [...prevTasks, DEFAULT_BLANK_TASK()]);
   };
 
   const handleRemoveTask = (id) => {
@@ -207,30 +262,10 @@ export default function TimesheetEntry({ user, userProfile }) {
         createdAt: serverTimestamp()
       });
 
-      setTasks([
-        {
-          id: Date.now(),
-          categoryGroup: "Framing & Envelope",
-          taskName: "Wall Framing",
-          hours: '',
-          travelTime: '',
-          comments: ''
-        }
-      ]);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3500);
     } catch (err) {
       console.warn("Offline or network delay caught during submission:", err);
-      setTasks([
-        {
-          id: Date.now(),
-          categoryGroup: "Framing & Envelope",
-          taskName: "Wall Framing",
-          hours: '',
-          travelTime: '',
-          comments: ''
-        }
-      ]);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3500);
     } finally {
@@ -247,7 +282,7 @@ export default function TimesheetEntry({ user, userProfile }) {
         <p className="text-xs text-slate-500 font-medium">Logged for: <span className="text-slate-800 font-semibold">{userProfile?.name || user.email}</span></p>
       </div>
 
-      {/* Week Calendar Header & Navigation */}
+      {/* Week Calendar Navigation */}
       <div className="bg-slate-900 text-white p-3 rounded-xl mb-5 shadow-inner">
         <div className="flex items-center justify-between mb-3 text-xs">
           <button
@@ -280,7 +315,7 @@ export default function TimesheetEntry({ user, userProfile }) {
           </div>
         </div>
 
-        {/* 7-Day Calendar Scroll Grid */}
+        {/* 7-Day Grid */}
         <div className="grid grid-cols-7 gap-1">
           {weekDays.map((day) => {
             const isSelected = selectedDate === day.dateStr;
@@ -312,14 +347,20 @@ export default function TimesheetEntry({ user, userProfile }) {
         </div>
       </div>
 
+      {fetchingDay && (
+        <div className="text-center py-2 text-xs font-semibold text-slate-500 animate-pulse">
+          Loading entry for {selectedDate}...
+        </div>
+      )}
+
       {success && (
         <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-sm font-semibold flex items-center gap-2">
-          <span>✓</span> Entry saved for {selectedDate}! {navigator.onLine ? "" : "(Saved offline, will sync when connected)"}
+          <span>✓</span> Entry saved for {selectedDate}!
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Project Name & Active Date Display */}
+        {/* Project Name & Active Date */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Project Name / Site</label>
@@ -412,7 +453,7 @@ export default function TimesheetEntry({ user, userProfile }) {
                 )}
               </div>
 
-              {/* Work Category & Specific Task */}
+              {/* Category & Specific Task */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Category Group</label>
@@ -441,7 +482,7 @@ export default function TimesheetEntry({ user, userProfile }) {
                 </div>
               </div>
 
-              {/* Task Hours & Travel Time */}
+              {/* Hours & Travel Time */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Task Hours</label>
@@ -468,7 +509,7 @@ export default function TimesheetEntry({ user, userProfile }) {
                 </div>
               </div>
 
-              {/* Comments / Details */}
+              {/* Comments */}
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Comments / Work Details</label>
                 <textarea
