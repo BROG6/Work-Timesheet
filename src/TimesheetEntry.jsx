@@ -18,7 +18,7 @@ function formatDate(dateObj) {
   return `${day}/${month}/${year}`;
 }
 
-// Helper to convert stored YYYY-MM-DD strings (if any) to DD/MM/YYYY
+// Helper to convert stored YYYY-MM-DD strings to DD/MM/YYYY
 function displayDate(dateStr) {
   if (!dateStr) return '';
   if (dateStr.includes('-')) {
@@ -66,25 +66,34 @@ const CATEGORIES_LIST = [
   "Other Leave (please specify)"
 ];
 
-export default function StaffDashboard({ userProfile }) {
+export default function TimesheetEntry({ userProfile }) {
+  // Weekly Hours State
   const [weeklyHours, setWeeklyHours] = useState(0);
   const [weekRangeStr, setWeekRangeStr] = useState('');
   const [loadingHours, setLoadingHours] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // Form State
+  // Form State with persistent project/site name via localStorage
   const [entryDate, setEntryDate] = useState(() => formatDate(new Date()));
-  const [projectName, setProjectName] = useState('');
+  const [projectName, setProjectName] = useState(() => {
+    return localStorage.getItem('last_site_name') || '';
+  });
   const [startTime, setStartTime] = useState('');
   const [timeLeftSite, setTimeLeftSite] = useState('');
   const [timeReturned, setTimeReturned] = useState('');
   const [timeFinished, setTimeFinished] = useState('');
 
-  // Task rows
+  // Task rows with Category selection
   const [tasks, setTasks] = useState([
-    { taskCategoryGroup: CATEGORIES_LIST[0], hours: '', travelTime: '', comments: '' }
+    { category: CATEGORIES_LIST[0], hours: '', travelTime: '', comments: '' }
   ]);
 
+  // Persist project/site name whenever changed
+  useEffect(() => {
+    localStorage.setItem('last_site_name', projectName);
+  }, [projectName]);
+
+  // Fetch weekly hours on mount / user session load
   useEffect(() => {
     if (userProfile?.uid) {
       fetchStaffWeeklyHours();
@@ -136,7 +145,7 @@ export default function StaffDashboard({ userProfile }) {
   const handleAddTask = () => {
     setTasks((prev) => [
       ...prev,
-      { taskCategoryGroup: CATEGORIES_LIST[0], hours: '', travelTime: '', comments: '' }
+      { category: CATEGORIES_LIST[0], hours: '', travelTime: '', comments: '' }
     ]);
   };
 
@@ -174,7 +183,7 @@ export default function StaffDashboard({ userProfile }) {
       const payload = {
         userId: userProfile.uid,
         userName: userProfile.name || userProfile.email || 'Staff Member',
-        date: entryDate, // Saved in DD/MM/YYYY format
+        date: entryDate,
         project: projectName || 'General / Unassigned',
         totalHours: calculatedTotalHours,
         status: 'pending',
@@ -185,21 +194,23 @@ export default function StaffDashboard({ userProfile }) {
           timeReturned,
           timeFinished
         },
-        tasks
+        tasks: tasks.map(task => ({
+          ...task,
+          taskCategoryGroup: task.category // Maps category for manager dashboard compatibility
+        }))
       };
 
       await addDoc(collection(db, 'timesheets'), payload);
       alert("Timesheet submitted successfully!");
 
-      // Reset Form fields
-      setProjectName('');
+      // Reset form fields (retaining persistent site name)
       setStartTime('');
       setTimeLeftSite('');
       setTimeReturned('');
       setTimeFinished('');
-      setTasks([{ taskCategoryGroup: CATEGORIES_LIST[0], hours: '', travelTime: '', comments: '' }]);
+      setTasks([{ category: CATEGORIES_LIST[0], hours: '', travelTime: '', comments: '' }]);
 
-      // Refresh weekly total counter
+      // Refresh weekly total
       fetchStaffWeeklyHours();
     } catch (err) {
       console.error("Error submitting timesheet:", err);
@@ -211,7 +222,7 @@ export default function StaffDashboard({ userProfile }) {
 
   return (
     <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-6">
-      {/* STAFF WEEKLY HOURS TOTAL BANNER */}
+      {/* WEEKLY HOURS TOTAL BANNER */}
       <div className="bg-slate-900 text-white p-5 rounded-xl shadow-sm border border-slate-800 flex justify-between items-center">
         <div>
           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
@@ -228,14 +239,14 @@ export default function StaffDashboard({ userProfile }) {
         </div>
       </div>
 
-      {/* TIMESHEET SUBMISSION FORM */}
+      {/* TIMESHEET ENTRY FORM */}
       <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-5">
         <div className="border-b border-slate-100 pb-3">
-          <h2 className="text-lg font-bold text-slate-900">Submit Daily Timesheet</h2>
-          <p className="text-xs text-slate-500 font-medium">Enter your hours and site task details below.</p>
+          <h2 className="text-lg font-bold text-slate-900">Timesheet Entry</h2>
+          <p className="text-xs text-slate-500 font-medium">Log your daily hours, site details, and tasks below.</p>
         </div>
 
-        {/* Date & Project Row */}
+        {/* Date & Persistent Site Name */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Date (DD/MM/YYYY)</label>
@@ -250,7 +261,9 @@ export default function StaffDashboard({ userProfile }) {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Project / Site Name</label>
+            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+              Site / Project Name <span className="text-[10px] text-emerald-600 lowercase font-normal">(saved for next time)</span>
+            </label>
             <input
               type="text"
               value={projectName}
@@ -309,37 +322,40 @@ export default function StaffDashboard({ userProfile }) {
           </div>
         </div>
 
-        {/* Tasks Section */}
+        {/* Tasks & Category Selection */}
         <div className="space-y-3">
           <div className="flex justify-between items-center">
-            <span className="text-xs font-bold text-slate-700 uppercase">Tasks Logged</span>
+            <span className="text-xs font-bold text-slate-700 uppercase">Task Breakdown</span>
             <button
               type="button"
               onClick={handleAddTask}
               className="text-xs font-bold text-emerald-600 hover:text-emerald-500 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg transition-colors"
             >
-              + Add Another Task
+              + Add Task Row
             </button>
           </div>
 
           {tasks.map((task, idx) => (
-            <div key={idx} className="bg-slate-50 rounded-xl p-3.5 border border-slate-200 space-y-3 relative">
+            <div key={idx} className="bg-slate-50 rounded-xl p-3.5 border border-slate-200 space-y-3">
               <div className="flex justify-between items-center gap-2">
-                <select
-                  value={task.taskCategoryGroup}
-                  onChange={(e) => handleTaskChange(idx, 'taskCategoryGroup', e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-bold text-slate-800"
-                >
-                  {CATEGORIES_LIST.map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
+                <div className="w-full">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Category</label>
+                  <select
+                    value={task.category}
+                    onChange={(e) => handleTaskChange(idx, 'category', e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-bold text-slate-800"
+                  >
+                    {CATEGORIES_LIST.map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
 
                 {tasks.length > 1 && (
                   <button
                     type="button"
                     onClick={() => handleRemoveTask(idx)}
-                    className="text-rose-500 hover:text-rose-700 font-bold text-xs px-2 py-1 bg-rose-50 border border-rose-200 rounded-lg"
+                    className="mt-4 text-rose-500 hover:text-rose-700 font-bold text-xs px-2 py-1.5 bg-rose-50 border border-rose-200 rounded-lg shrink-0"
                   >
                     Remove
                   </button>
@@ -348,7 +364,7 @@ export default function StaffDashboard({ userProfile }) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase">Task Hours</label>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase">Hours</label>
                   <input
                     type="number"
                     step="0.5"
@@ -373,9 +389,10 @@ export default function StaffDashboard({ userProfile }) {
               </div>
 
               <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Notes / Comments</label>
                 <input
                   type="text"
-                  placeholder="Task comments or details..."
+                  placeholder="Task details..."
                   value={task.comments}
                   onChange={(e) => handleTaskChange(idx, 'comments', e.target.value)}
                   className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs text-slate-800 font-medium"
