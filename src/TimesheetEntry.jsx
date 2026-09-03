@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+// src/TimesheetEntry.jsx
+import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebaseConfig';
 import { 
   collection, 
@@ -119,12 +120,86 @@ const DEFAULT_BLANK_TASK = (dateStr) => {
   };
 };
 
+// Autocomplete Input Component for Site / Project Selection
+function SiteAutoCompleteInput({ value, onChange, existingSites }) {
+  const [suggestions, setSuggestions] = useState([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    if (!value || value.trim() === '') {
+      setSuggestions([]);
+      setIsOpen(false);
+      return;
+    }
+
+    const queryText = value.toLowerCase().trim();
+    // Filter existing sites that contain or start with the typed letter(s)
+    const matches = existingSites.filter((site) =>
+      site.toLowerCase().includes(queryText)
+    );
+
+    setSuggestions(matches);
+    setIsOpen(matches.length > 0);
+  }, [value, existingSites]);
+
+  // Close dropdown if user taps outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelect = (siteName) => {
+    onChange(siteName);
+    setIsOpen(false);
+  };
+
+  return (
+    <div ref={wrapperRef} className="relative w-full">
+      <input
+        type="text"
+        placeholder="e.g. Levin Renovation"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => {
+          if (suggestions.length > 0) setIsOpen(true);
+        }}
+        className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+        required
+      />
+
+      {isOpen && (
+        <ul className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-lg text-sm">
+          {suggestions.map((site, index) => (
+            <li
+              key={index}
+              onClick={() => handleSelect(site)}
+              className="px-3 py-2.5 hover:bg-emerald-50 cursor-pointer text-slate-800 border-b border-slate-100 last:border-none flex justify-between items-center transition-colors"
+            >
+              <span className="font-semibold">{site}</span>
+              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded">
+                Existing Site
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function TimesheetEntry({ user, userProfile }) {
   const activeUser = user || userProfile;
   const userId = activeUser?.uid;
   const userName = userProfile?.name || activeUser?.name || activeUser?.email || 'Staff Member';
 
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [existingSites, setExistingSites] = useState([]);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -164,6 +239,44 @@ export default function TimesheetEntry({ user, userProfile }) {
   const [fetchingDay, setFetchingDay] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
 
+  // Load existing site names from Firestore (or local backup for offline autocomplete)
+  useEffect(() => {
+    async function fetchSites() {
+      try {
+        const q = query(collection(db, 'timesheets'));
+        let querySnapshot;
+        try {
+          querySnapshot = await getDocs(q);
+        } catch {
+          querySnapshot = await getDocsFromCache(q);
+        }
+
+        const sitesSet = new Set();
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data.project && data.project.trim() !== '') {
+            sitesSet.add(data.project.trim());
+          }
+        });
+
+        const uniqueSitesList = Array.from(sitesSet);
+        if (uniqueSitesList.length > 0) {
+          localStorage.setItem('sjr_known_sites', JSON.stringify(uniqueSitesList));
+          setExistingSites(uniqueSitesList);
+        } else {
+          const saved = localStorage.getItem('sjr_known_sites');
+          if (saved) setExistingSites(JSON.parse(saved));
+        }
+      } catch (err) {
+        console.warn("Could not fetch site names:", err);
+        const saved = localStorage.getItem('sjr_known_sites');
+        if (saved) setExistingSites(JSON.parse(saved));
+      }
+    }
+
+    fetchSites();
+  }, []);
+
   // Fetch weekly hours (handles cache seamlessly)
   const fetchStaffWeeklyHours = async () => {
     if (!userId) return;
@@ -180,7 +293,6 @@ export default function TimesheetEntry({ user, userProfile }) {
         where('userId', '==', userId)
       );
 
-      // Attempt getDocs; if network fails, persistentLocalCache fulfills from IndexedDB
       let querySnapshot;
       try {
         querySnapshot = await getDocs(q);
@@ -327,10 +439,16 @@ export default function TimesheetEntry({ user, userProfile }) {
     };
 
     try {
-      // With persistentLocalCache, addDoc resolves locally instantly when offline
       await addDoc(collection(db, 'timesheets'), payload);
 
       setWeeklyHours((prev) => prev + totalHours);
+
+      // Add to local site suggestions list if it's a new site
+      if (project && !existingSites.includes(project)) {
+        const updated = [...existingSites, project];
+        setExistingSites(updated);
+        localStorage.setItem('sjr_known_sites', JSON.stringify(updated));
+      }
 
       setStatusMessage({
         type: 'success',
@@ -485,18 +603,14 @@ export default function TimesheetEntry({ user, userProfile }) {
               <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
                 Project Name / Site
               </label>
-              <input
-                type="text"
-                placeholder="e.g. Levin Renovation"
+              <SiteAutoCompleteInput
                 value={project}
-                onChange={(e) => {
-                  const val = e.target.value;
+                onChange={(val) => {
                   setProject(val);
                   if (userId) localStorage.setItem(`sjr_last_project_${userId}`, val);
                   localStorage.setItem('last_site_name', val);
                 }}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500"
-                required
+                existingSites={existingSites}
               />
             </div>
             <div>
@@ -692,4 +806,3 @@ export default function TimesheetEntry({ user, userProfile }) {
     </div>
   );
 }
- 
