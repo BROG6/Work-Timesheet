@@ -2,11 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { db } from './firebaseConfig';
 import { collection, getDocs, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 
+// Import docx directly via Skypack CDN so it works without running 'npm install' on a terminal
+import { 
+  Document, 
+  Packer, 
+  Paragraph, 
+  Table, 
+  TableRow, 
+  TableCell, 
+  TextRun, 
+  AlignmentType, 
+  WidthType, 
+  BorderStyle 
+} from 'https://cdn.skypack.dev/docx';
+
 // Helper to get the Wednesday of a given date's week (Wed - Tue)
 function getWednesday(d) {
   const date = new Date(d);
   const day = date.getDay(); // 0 is Sun, 1 is Mon, 3 is Wed
-  // Difference relative to Wednesday (3)
   const diff = date.getDate() - day + (day < 3 ? -4 : 3);
   return new Date(date.setDate(diff));
 }
@@ -49,7 +62,7 @@ const CATEGORIES_LIST = [
   "Annual Leave",
   "Bereavement Leave",
   "Training",
-  "Other Leave"
+  "Other Leave (please specify)"
 ];
 
 export default function ManagerDashboard({ userProfile }) {
@@ -195,37 +208,70 @@ export default function ManagerDashboard({ userProfile }) {
   const totalFilteredHours = filteredTimesheets.reduce((sum, t) => sum + (parseFloat(t.totalHours) || 0), 0);
   const todayStr = formatDate(new Date());
 
-  // Export CSV matching original time card layout
-  const handleExportCSV = () => {
-    let csvContent = "data:text/csv;charset=utf-8,";
-
-    // Separate records by staff member or build full block
+  // Export as DOCX in original template layout
+  const handleExportDOCX = async () => {
     const selectedStaffLabel = filterUser === 'ALL' ? 'All Staff' : (staffOptions.find(s => s.value === filterUser)?.label || filterUser);
     const selectedProjectLabel = filterProject === 'ALL' ? 'All Projects' : filterProject;
 
-    csvContent += `Staff Member: "${selectedStaffLabel}",,,,,,Project: "${selectedProjectLabel}"\n`;
-    
-    // Header Rows
-    const daysHeader = ["Day", ...weekDays.map(d => d.dayName), "Totals"].join(",");
-    const datesHeader = ["Date", ...weekDays.map(d => d.dateStr), ""].join(",");
-    csvContent += daysHeader + "\n" + datesHeader + "\n";
+    const thinBorder = {
+      top: { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" },
+      bottom: { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" },
+      left: { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" },
+      right: { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" }
+    };
 
-    // Helper to get time card value for a given field across 7 days
-    const getTimeCardRow = (label, fieldKey) => {
-      const vals = weekDays.map((wd) => {
+    const makeCell = (text, bold = false, align = AlignmentType.LEFT, widthPct = null) => {
+      return new TableCell({
+        borders: thinBorder,
+        width: widthPct ? { size: widthPct, type: WidthType.PERCENTAGE } : undefined,
+        children: [
+          new Paragraph({
+            alignment: align,
+            children: [new TextRun({ text: String(text || ""), bold, size: 18 })]
+          })
+        ]
+      });
+    };
+
+    const tableRows = [];
+
+    // Header Row: Days (Wed - Tue + Totals)
+    const dayCells = [
+      makeCell("Day", true, AlignmentType.LEFT, 28),
+      ...weekDays.map(d => makeCell(d.dayName, true, AlignmentType.CENTER, 9)),
+      makeCell("Totals", true, AlignmentType.CENTER, 10)
+    ];
+    tableRows.push(new TableRow({ children: dayCells }));
+
+    // Date Row
+    const dateCells = [
+      makeCell("Date", true, AlignmentType.LEFT, 28),
+      ...weekDays.map(d => makeCell(d.dateStr, false, AlignmentType.CENTER, 9)),
+      makeCell("", false, AlignmentType.CENTER, 10)
+    ];
+    tableRows.push(new TableRow({ children: dateCells }));
+
+    // Timecard Field Helper Row
+    const addTimeCardRow = (label, fieldKey) => {
+      const rowVals = weekDays.map((wd) => {
         const matches = filteredTimesheets.filter((t) => t.date === wd.dateStr);
         if (!matches.length) return "";
         return matches.map((m) => m.timeCardDetails?.[fieldKey] || "").filter(Boolean).join(" / ");
       });
-      return [label, ...vals, ""].map(v => `"${v}"`).join(",");
+      const cells = [
+        makeCell(label, true, AlignmentType.LEFT, 28),
+        ...rowVals.map(v => makeCell(v, false, AlignmentType.CENTER, 9)),
+        makeCell("", false, AlignmentType.CENTER, 10)
+      ];
+      tableRows.push(new TableRow({ children: cells }));
     };
 
-    csvContent += getTimeCardRow("START TIME", "startTime") + "\n";
-    csvContent += getTimeCardRow("TIME LEFT SITE", "timeLeftSite") + "\n";
-    csvContent += getTimeCardRow("TIME RETURNED", "timeReturned") + "\n";
-    csvContent += getTimeCardRow("TIME FINISHED", "timeFinished") + "\n";
+    addTimeCardRow("START TIME", "startTime");
+    addTimeCardRow("TIME LEFT SITE", "timeLeftSite");
+    addTimeCardRow("TIME RETURNED", "timeReturned");
+    addTimeCardRow("TIME FINISHED", "timeFinished");
 
-    // Task / Category Rows
+    // Category Rows
     CATEGORIES_LIST.forEach((cat) => {
       let rowTotal = 0;
       const dayVals = weekDays.map((wd) => {
@@ -245,7 +291,12 @@ export default function ManagerDashboard({ userProfile }) {
         return catHours > 0 ? catHours : "";
       });
 
-      csvContent += [`"${cat}"`, ...dayVals, rowTotal > 0 ? rowTotal : ""].join(",") + "\n";
+      const catCells = [
+        makeCell(cat, false, AlignmentType.LEFT, 28),
+        ...dayVals.map(v => makeCell(v, false, AlignmentType.CENTER, 9)),
+        makeCell(rowTotal > 0 ? rowTotal : "", true, AlignmentType.CENTER, 10)
+      ];
+      tableRows.push(new TableRow({ children: catCells }));
     });
 
     // Total Hours Row
@@ -257,7 +308,12 @@ export default function ManagerDashboard({ userProfile }) {
       weekTotalHours += total;
       return total > 0 ? total : "";
     });
-    csvContent += ["TOTAL HOURS", ...dailyTotals, weekTotalHours].join(",") + "\n";
+    const totalCells = [
+      makeCell("TOTAL HOURS", true, AlignmentType.LEFT, 28),
+      ...dailyTotals.map(v => makeCell(v, true, AlignmentType.CENTER, 9)),
+      makeCell(weekTotalHours > 0 ? weekTotalHours : "", true, AlignmentType.CENTER, 10)
+    ];
+    tableRows.push(new TableRow({ children: totalCells }));
 
     // Travel Time Row
     let weekTotalTravel = 0;
@@ -275,27 +331,81 @@ export default function ManagerDashboard({ userProfile }) {
       weekTotalTravel += dayTravel;
       return dayTravel > 0 ? dayTravel : "";
     });
-    csvContent += ["Travel Time", ...dailyTravel, weekTotalTravel].join(",") + "\n\n";
+    const travelCells = [
+      makeCell("Travel Time", true, AlignmentType.LEFT, 28),
+      ...dailyTravel.map(v => makeCell(v, false, AlignmentType.CENTER, 9)),
+      makeCell(weekTotalTravel > 0 ? weekTotalTravel : "", true, AlignmentType.CENTER, 10)
+    ];
+    tableRows.push(new TableRow({ children: travelCells }));
 
-    // Comments Section
-    csvContent += "COMMENTS\n";
+    // Collect Comments
+    const commentParagraphs = [
+      new Paragraph({
+        children: [new TextRun({ text: "COMMENTS", bold: true, size: 20 })],
+        spaceBefore: 300,
+        spaceAfter: 100
+      })
+    ];
+
+    let commentsFound = false;
     filteredTimesheets.forEach((entry) => {
       if (entry.tasks) {
         entry.tasks.forEach((tk) => {
           if (tk.comments) {
-            csvContent += `"${entry.date} - ${userMap[entry.userId] || entry.userName || 'Staff'}: ${tk.comments.replace(/"/g, '""')}"\n`;
+            commentsFound = true;
+            commentParagraphs.push(
+              new Paragraph({
+                children: [
+                  new TextRun({ text: `${entry.date} - ${userMap[entry.userId] || entry.userName || 'Staff'}: `, bold: true, size: 18 }),
+                  new TextRun({ text: tk.comments, size: 18 })
+                ],
+                spaceAfter: 60
+              })
+            );
           }
         });
       }
     });
 
-    const encodedUri = encodeURI(csvContent);
+    if (!commentsFound) {
+      commentParagraphs.push(
+        new Paragraph({
+          children: [new TextRun({ text: "No comments recorded for this week.", italic: true, size: 18 })]
+        })
+      );
+    }
+
+    const docxDocument = new Document({
+      sections: [
+        {
+          properties: {},
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({ text: `Staff Member: ${selectedStaffLabel}`, bold: true, size: 22 }),
+                new TextRun({ text: `\t\tProject: ${selectedProjectLabel}`, bold: true, size: 22 })
+              ],
+              spaceAfter: 200
+            }),
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: tableRows
+            }),
+            ...commentParagraphs
+          ]
+        }
+      ]
+    });
+
+    const blob = await Packer.toBlob(docxDocument);
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `TimeCard_${weekStartStr}_to_${weekEndStr}.csv`);
+    link.href = url;
+    link.download = `TimeCard_${weekStartStr}_to_${weekEndStr}.docx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   if (loading) {
@@ -317,10 +427,10 @@ export default function ManagerDashboard({ userProfile }) {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={handleExportCSV}
+            onClick={handleExportDOCX}
             className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs px-3.5 py-2 rounded-lg transition-colors shadow-sm"
           >
-            Export Time Card (CSV)
+            Export Time Card (.docx)
           </button>
           <div className="bg-slate-800 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-700 font-semibold flex items-center gap-2">
             <span>Weekly Hours Logged:</span>
