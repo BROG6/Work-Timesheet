@@ -32,15 +32,39 @@ function formatDate(dateObj) {
   return `${day}/${month}/${year}`;
 }
 
-// Helper to convert stored YYYY-MM-DD strings (if any) to DD/MM/YYYY for uniform display
+// Helper to format DD/MM/YYYY to DD/MM for time card tables
+function formatDayMonth(dateStr) {
+  if (!dateStr) return '';
+  const parts = dateStr.split('/');
+  if (parts.length >= 2) {
+    return `${parts[0]}/${parts[1]}`;
+  }
+  return dateStr;
+}
+
+// Robust helper to convert various date stored formats to DD/MM/YYYY for uniform display
 function displayDate(dateStr) {
   if (!dateStr) return '';
-  if (dateStr.includes('-')) {
+  
+  // Handle JS Date objects or Firestore Timestamps
+  if (typeof dateStr === 'object' && dateStr.toDate) {
+    return formatDate(dateStr.toDate());
+  }
+  
+  // Handle ISO string format (e.g. 2026-09-04T...)
+  if (typeof dateStr === 'string' && dateStr.includes('T')) {
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) return formatDate(d);
+  }
+
+  // Handle YYYY-MM-DD string format
+  if (typeof dateStr === 'string' && dateStr.includes('-')) {
     const parts = dateStr.split('-');
     if (parts.length === 3 && parts[0].length === 4) {
       return `${parts[2]}/${parts[1]}/${parts[0]}`;
     }
   }
+  
   return dateStr;
 }
 
@@ -240,11 +264,8 @@ export default function ManagerDashboard({ userProfile }) {
 
   const todayStr = formatDate(new Date());
 
-  // Export as DOCX in original template layout
+  // Export as DOCX (Generates individual timecard sections per staff member if 'ALL' is selected)
   const handleExportDOCX = async () => {
-    const selectedStaffLabel = filterUser === 'ALL' ? 'All Staff' : (staffOptions.find(s => s.value === filterUser)?.label || filterUser);
-    const selectedProjectLabel = filterProject === 'ALL' ? 'All Projects' : filterProject;
-
     const thinBorder = {
       top: { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" },
       bottom: { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" },
@@ -265,168 +286,207 @@ export default function ManagerDashboard({ userProfile }) {
       });
     };
 
-    const tableRows = [];
+    // Active dates for the calendar week (DD/MM/YYYY)
+    const activeDates = weekDays.map((d) => d.dateStr);
 
-    // Header Row: Days (Wed - Tue + Totals)
-    const dayCells = [
-      makeCell("Day", true, AlignmentType.LEFT, 28),
-      ...weekDays.map(d => makeCell(d.dayName, true, AlignmentType.CENTER, 9)),
-      makeCell("Totals", true, AlignmentType.CENTER, 10)
-    ];
-    tableRows.push(new TableRow({ children: dayCells }));
-
-    // Date Row (DD/MM/YYYY)
-    const dateCells = [
-      makeCell("Date", true, AlignmentType.LEFT, 28),
-      ...weekDays.map(d => makeCell(d.dateStr, false, AlignmentType.CENTER, 9)),
-      makeCell("", false, AlignmentType.CENTER, 10)
-    ];
-    tableRows.push(new TableRow({ children: dateCells }));
-
-    // Timecard Field Helper Row
-    const addTimeCardRow = (label, fieldKey) => {
-      const rowVals = weekDays.map((wd) => {
-        const matches = filteredTimesheets.filter((t) => displayDate(t.date) === wd.dateStr);
-        if (!matches.length) return "";
-        return matches.map((m) => m.timeCardDetails?.[fieldKey] || "").filter(Boolean).join(" / ");
+    // Determine target staff members to render
+    let staffToExport = [];
+    if (filterUser === 'ALL') {
+      const weekEntries = timesheets.filter((t) => {
+        const matchesProject = filterProject === 'ALL' || (t.project || 'General / Unassigned') === filterProject;
+        return activeDates.includes(displayDate(t.date)) && matchesProject;
       });
-      const cells = [
-        makeCell(label, true, AlignmentType.LEFT, 28),
-        ...rowVals.map(v => makeCell(v, false, AlignmentType.CENTER, 9)),
-        makeCell("", false, AlignmentType.CENTER, 10)
-      ];
-      tableRows.push(new TableRow({ children: cells }));
-    };
-
-    addTimeCardRow("START TIME", "startTime");
-    addTimeCardRow("TIME LEFT SITE", "timeLeftSite");
-    addTimeCardRow("TIME RETURNED", "timeReturned");
-    addTimeCardRow("TIME FINISHED", "timeFinished");
-
-    // Category Rows
-    CATEGORIES_LIST.forEach((cat) => {
-      let rowTotal = 0;
-      const dayVals = weekDays.map((wd) => {
-        const matches = filteredTimesheets.filter((t) => displayDate(t.date) === wd.dateStr);
-        let catHours = 0;
-        matches.forEach((entry) => {
-          if (entry.tasks && Array.isArray(entry.tasks)) {
-            entry.tasks.forEach((task) => {
-              const matchedName = task.taskName || task.taskCategoryGroup || "";
-              if (matchedName.toLowerCase().trim() === cat.toLowerCase().trim()) {
-                catHours += parseFloat(task.hours) || 0;
-              }
-            });
-          }
+      
+      staffToExport = Array.from(new Set(weekEntries.map((t) => t.userId || t.userName)))
+        .map((staffKey) => {
+          const opt = staffOptions.find((s) => s.value === staffKey);
+          return { key: staffKey, label: opt ? opt.label : staffKey };
         });
-        rowTotal += catHours;
-        return catHours > 0 ? catHours : "";
-      });
-
-      const catCells = [
-        makeCell(cat, false, AlignmentType.LEFT, 28),
-        ...dayVals.map(v => makeCell(v, false, AlignmentType.CENTER, 9)),
-        makeCell(rowTotal > 0 ? rowTotal : "", true, AlignmentType.CENTER, 10)
-      ];
-      tableRows.push(new TableRow({ children: catCells }));
-    });
-
-    // Total Hours Row
-    let weekTotalHours = 0;
-    const dailyTotals = weekDays.map((wd) => {
-      const total = filteredTimesheets
-        .filter((t) => displayDate(t.date) === wd.dateStr)
-        .reduce((sum, t) => sum + (parseFloat(t.totalHours) || 0), 0);
-      weekTotalHours += total;
-      return total > 0 ? total : "";
-    });
-    const totalCells = [
-      makeCell("TOTAL HOURS", true, AlignmentType.LEFT, 28),
-      ...dailyTotals.map(v => makeCell(v, true, AlignmentType.CENTER, 9)),
-      makeCell(weekTotalHours > 0 ? weekTotalHours : "", true, AlignmentType.CENTER, 10)
-    ];
-    tableRows.push(new TableRow({ children: totalCells }));
-
-    // Travel Time Row
-    let weekTotalTravel = 0;
-    const dailyTravel = weekDays.map((wd) => {
-      let dayTravel = 0;
-      filteredTimesheets
-        .filter((t) => displayDate(t.date) === wd.dateStr)
-        .forEach((entry) => {
-          if (entry.tasks) {
-            entry.tasks.forEach((tk) => {
-              dayTravel += parseFloat(tk.travelTime) || 0;
-            });
-          }
-        });
-      weekTotalTravel += dayTravel;
-      return dayTravel > 0 ? dayTravel : "";
-    });
-    const travelCells = [
-      makeCell("Travel Time", true, AlignmentType.LEFT, 28),
-      ...dailyTravel.map(v => makeCell(v, false, AlignmentType.CENTER, 9)),
-      makeCell(weekTotalTravel > 0 ? weekTotalTravel : "", true, AlignmentType.CENTER, 10)
-    ];
-    tableRows.push(new TableRow({ children: travelCells }));
-
-    // Collect Comments
-    const commentParagraphs = [
-      new Paragraph({
-        children: [new TextRun({ text: "COMMENTS", bold: true, size: 20 })],
-        spaceBefore: 300,
-        spaceAfter: 100
-      })
-    ];
-
-    let commentsFound = false;
-    filteredTimesheets.forEach((entry) => {
-      if (entry.tasks) {
-        entry.tasks.forEach((tk) => {
-          if (tk.comments) {
-            commentsFound = true;
-            commentParagraphs.push(
-              new Paragraph({
-                children: [
-                  new TextRun({ text: `${displayDate(entry.date)} - ${userMap[entry.userId] || entry.userName || 'Staff'}: `, bold: true, size: 18 }),
-                  new TextRun({ text: tk.comments, size: 18 })
-                ],
-                spaceAfter: 60
-              })
-            );
-          }
-        });
-      }
-    });
-
-    if (!commentsFound) {
-      commentParagraphs.push(
-        new Paragraph({
-          children: [new TextRun({ text: "No comments recorded for this week.", italic: true, size: 18 })]
-        })
-      );
+    } else {
+      const opt = staffOptions.find((s) => s.value === filterUser);
+      staffToExport = [{ key: filterUser, label: opt ? opt.label : filterUser }];
     }
 
-    const docxDocument = new Document({
-      sections: [
-        {
-          properties: {},
-          children: [
-            new Paragraph({
-              children: [
-                new TextRun({ text: `Staff Member: ${selectedStaffLabel}`, bold: true, size: 22 }),
-                new TextRun({ text: `\t\tProject: ${selectedProjectLabel}`, bold: true, size: 22 })
-              ],
-              spaceAfter: 200
-            }),
-            new Table({
-              width: { size: 100, type: WidthType.PERCENTAGE },
-              rows: tableRows
-            }),
-            ...commentParagraphs
-          ]
+    if (staffToExport.length === 0) {
+      alert("No timesheet data available to export for the selected week/filter.");
+      return;
+    }
+
+    // Helper to generate docx elements for a single staff member
+    const buildStaffSection = (staffMember) => {
+      const staffEntries = timesheets.filter((t) => {
+        const matchesStaff = t.userId === staffMember.key || t.userName === staffMember.key;
+        const matchesProject = filterProject === 'ALL' || (t.project || 'General / Unassigned') === filterProject;
+        return matchesStaff && matchesProject && activeDates.includes(displayDate(t.date));
+      });
+
+      const staffProjects = Array.from(new Set(staffEntries.map((t) => t.project || 'General'))).join(', ') || (filterProject === 'ALL' ? 'All Projects' : filterProject);
+
+      const tableRows = [];
+
+      // Header Row: Days
+      const dayCells = [
+        makeCell("Day", true, AlignmentType.LEFT, 28),
+        ...weekDays.map((d) => makeCell(d.dayName, true, AlignmentType.CENTER, 9)),
+        makeCell("Totals", true, AlignmentType.CENTER, 10)
+      ];
+      tableRows.push(new TableRow({ children: dayCells }));
+
+      // Date Row (Displays DD/MM only)
+      const dateCells = [
+        makeCell("Date", true, AlignmentType.LEFT, 28),
+        ...weekDays.map((d) => makeCell(formatDayMonth(d.dateStr), false, AlignmentType.CENTER, 9)),
+        makeCell("", false, AlignmentType.CENTER, 10)
+      ];
+      tableRows.push(new TableRow({ children: dateCells }));
+
+      // Timecard Field Helper Row
+      const addTimeCardRow = (label, fieldKey) => {
+        const rowVals = weekDays.map((wd) => {
+          const matches = staffEntries.filter((t) => displayDate(t.date) === wd.dateStr);
+          if (!matches.length) return "";
+          return matches.map((m) => m.timeCardDetails?.[fieldKey] || "").filter(Boolean).join(" / ");
+        });
+        const cells = [
+          makeCell(label, true, AlignmentType.LEFT, 28),
+          ...rowVals.map((v) => makeCell(v, false, AlignmentType.CENTER, 9)),
+          makeCell("", false, AlignmentType.CENTER, 10)
+        ];
+        tableRows.push(new TableRow({ children: cells }));
+      };
+
+      addTimeCardRow("START TIME", "startTime");
+      addTimeCardRow("TIME LEFT SITE", "timeLeftSite");
+      addTimeCardRow("TIME RETURNED", "timeReturned");
+      addTimeCardRow("TIME FINISHED", "timeFinished");
+
+      // Category Rows
+      CATEGORIES_LIST.forEach((cat) => {
+        let rowTotal = 0;
+        const dayVals = weekDays.map((wd) => {
+          const matches = staffEntries.filter((t) => displayDate(t.date) === wd.dateStr);
+          let catHours = 0;
+          matches.forEach((entry) => {
+            if (entry.tasks && Array.isArray(entry.tasks)) {
+              entry.tasks.forEach((task) => {
+                const matchedName = task.taskName || task.taskCategoryGroup || "";
+                if (matchedName.toLowerCase().trim() === cat.toLowerCase().trim()) {
+                  catHours += parseFloat(task.hours) || 0;
+                }
+              });
+            }
+          });
+          rowTotal += catHours;
+          return catHours > 0 ? catHours : "";
+        });
+
+        const catCells = [
+          makeCell(cat, false, AlignmentType.LEFT, 28),
+          ...dayVals.map((v) => makeCell(v, false, AlignmentType.CENTER, 9)),
+          makeCell(rowTotal > 0 ? rowTotal : "", true, AlignmentType.CENTER, 10)
+        ];
+        tableRows.push(new TableRow({ children: catCells }));
+      });
+
+      // Total Hours Row
+      let weekTotalHours = 0;
+      const dailyTotals = weekDays.map((wd) => {
+        const total = staffEntries
+          .filter((t) => displayDate(t.date) === wd.dateStr)
+          .reduce((sum, t) => sum + (parseFloat(t.totalHours) || 0), 0);
+        weekTotalHours += total;
+        return total > 0 ? total : "";
+      });
+      const totalCells = [
+        makeCell("TOTAL HOURS", true, AlignmentType.LEFT, 28),
+        ...dailyTotals.map((v) => makeCell(v, true, AlignmentType.CENTER, 9)),
+        makeCell(weekTotalHours > 0 ? weekTotalHours : "", true, AlignmentType.CENTER, 10)
+      ];
+      tableRows.push(new TableRow({ children: totalCells }));
+
+      // Travel Time Row
+      let weekTotalTravel = 0;
+      const dailyTravel = weekDays.map((wd) => {
+        let dayTravel = 0;
+        staffEntries
+          .filter((t) => displayDate(t.date) === wd.dateStr)
+          .forEach((entry) => {
+            if (entry.tasks) {
+              entry.tasks.forEach((tk) => {
+                dayTravel += parseFloat(tk.travelTime) || 0;
+              });
+            }
+          });
+        weekTotalTravel += dayTravel;
+        return dayTravel > 0 ? dayTravel : "";
+      });
+      const travelCells = [
+        makeCell("Travel Time", true, AlignmentType.LEFT, 28),
+        ...dailyTravel.map((v) => makeCell(v, false, AlignmentType.CENTER, 9)),
+        makeCell(weekTotalTravel > 0 ? weekTotalTravel : "", true, AlignmentType.CENTER, 10)
+      ];
+      tableRows.push(new TableRow({ children: travelCells }));
+
+      // Collect Comments
+      const commentParagraphs = [
+        new Paragraph({
+          children: [new TextRun({ text: "COMMENTS", bold: true, size: 20 })],
+          spaceBefore: 300,
+          spaceAfter: 100
+        })
+      ];
+
+      let commentsFound = false;
+      staffEntries.forEach((entry) => {
+        if (entry.tasks) {
+          entry.tasks.forEach((tk) => {
+            if (tk.comments) {
+              commentsFound = true;
+              commentParagraphs.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({ text: `${formatDayMonth(displayDate(entry.date))}: `, bold: true, size: 18 }),
+                    new TextRun({ text: tk.comments, size: 18 })
+                  ],
+                  spaceAfter: 60
+                })
+              );
+            }
+          });
         }
-      ]
+      });
+
+      if (!commentsFound) {
+        commentParagraphs.push(
+          new Paragraph({
+            children: [new TextRun({ text: "No comments recorded for this week.", italic: true, size: 18 })]
+          })
+        );
+      }
+
+      return [
+        new Paragraph({
+          children: [
+            new TextRun({ text: `Staff Member: ${staffMember.label}`, bold: true, size: 22 }),
+            new TextRun({ text: `\t\tProject: ${staffProjects}`, bold: true, size: 22 })
+          ],
+          spaceAfter: 200
+        }),
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: tableRows
+        }),
+        ...commentParagraphs
+      ];
+    };
+
+    const docSections = staffToExport.map((staffMember) => ({
+      properties: {},
+      children: buildStaffSection(staffMember)
+    }));
+
+    const docxDocument = new Document({
+      sections: docSections
     });
 
     const fileStartStr = weekStartStr.replaceAll('/', '-');
@@ -436,7 +496,9 @@ export default function ManagerDashboard({ userProfile }) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `TimeCard_${fileStartStr}_to_${fileEndStr}.docx`;
+    link.download = filterUser === 'ALL' 
+      ? `All_Staff_TimeCards_${fileStartStr}_to_${fileEndStr}.docx`
+      : `TimeCard_${staffToExport[0].label.replace(/\s+/g, '_')}_${fileStartStr}_to_${fileEndStr}.docx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
