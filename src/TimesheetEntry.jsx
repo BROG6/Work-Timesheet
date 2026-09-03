@@ -11,8 +11,8 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 
-// Reference to logo image in the public directory
-const SJR_BUILDERS_LOGO = "/logo.jpg";
+// Import logo directly from src/assets so Vite processes and bundles it
+import sjrLogo from './assets/logo.jpg';
 
 // Categorized Task List
 const TASK_CATEGORIES = {
@@ -316,7 +316,7 @@ export default function TimesheetEntry({ user, userProfile }) {
       setWeeklyHours(total);
     } catch (err) {
       console.warn("Could not retrieve weekly hours:", err);
-    } finally {
+    } fontally {
       setLoadingHours(false);
     }
   };
@@ -500,7 +500,7 @@ export default function TimesheetEntry({ user, userProfile }) {
         {/* Header Bar with Logo */}
         <div className="border-b border-slate-200 pb-3 mb-4 flex items-center gap-3">
           <img 
-            src={SJR_BUILDERS_LOGO} 
+            src={sjrLogo} 
             alt="SJR Builders Logo" 
             className="h-10 w-auto object-contain"
           />
