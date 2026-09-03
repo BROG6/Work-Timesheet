@@ -142,7 +142,7 @@ export default function ManagerDashboard({ userProfile }) {
       setUsers(userData);
     } catch (err) {
       console.error("Error fetching manager data:", err);
-    } fontally {
+    } finally {
       setLoading(false);
     }
   };
