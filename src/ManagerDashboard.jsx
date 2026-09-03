@@ -273,7 +273,7 @@ export default function ManagerDashboard({ userProfile }) {
       right: { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" }
     };
 
-    // Compact Cell formatting
+    // Compact Cell formatting (size 14 = 7pt)
     const makeCell = (text, bold = false, align = AlignmentType.LEFT, widthPct = null) => {
       return new TableCell({
         borders: thinBorder,
@@ -302,7 +302,7 @@ export default function ManagerDashboard({ userProfile }) {
       return;
     }
 
-    // Determine target sites to export (either the active selected site, or all unique sites present in this week's data)
+    // Determine target sites to export (either selected site or all unique sites)
     let sitesToExport = [];
     if (filterProject === 'ALL') {
       sitesToExport = Array.from(new Set(activeWeekEntries.map((t) => t.project || 'General')));
@@ -328,7 +328,7 @@ export default function ManagerDashboard({ userProfile }) {
         return { key, label: opt ? opt.label : key };
       });
 
-      // Build document sections for this site (one section per staff member who worked on this site)
+      // Build document sections for this site
       const buildStaffSectionForSite = (staffMember) => {
         const staffSiteEntries = siteEntries.filter(
           (t) => t.userId === staffMember.key || t.userName === staffMember.key
@@ -442,9 +442,9 @@ export default function ManagerDashboard({ userProfile }) {
         // Collect Comments
         const commentParagraphs = [
           new Paragraph({
-            children: [new TextRun({ text: "COMMENTS", bold: true, size: 18 })],
-            spaceBefore: 200,
-            spaceAfter: 80
+            children: [new TextRun({ text: "COMMENTS", bold: true, size: 16 })],
+            spaceBefore: 160,
+            spaceAfter: 60
           })
         ];
 
@@ -457,10 +457,10 @@ export default function ManagerDashboard({ userProfile }) {
                 commentParagraphs.push(
                   new Paragraph({
                     children: [
-                      new TextRun({ text: `${formatDayMonth(displayDate(entry.date))}: `, bold: true, size: 16 }),
-                      new TextRun({ text: tk.comments, size: 16 })
+                      new TextRun({ text: `${formatDayMonth(displayDate(entry.date))}: `, bold: true, size: 14 }),
+                      new TextRun({ text: tk.comments, size: 14 })
                     ],
-                    spaceAfter: 40
+                    spaceAfter: 30
                   })
                 );
               }
@@ -471,18 +471,24 @@ export default function ManagerDashboard({ userProfile }) {
         if (!commentsFound) {
           commentParagraphs.push(
             new Paragraph({
-              children: [new TextRun({ text: "No comments recorded for this site this week.", italic: true, size: 16 })]
+              children: [new TextRun({ text: "No comments recorded for this site this week.", italic: true, size: 14 })]
             })
           );
         }
 
         return [
+          // Reduced font size for Site / Project & Staff Member headers (size: 16 = 8pt)
           new Paragraph({
             children: [
-              new TextRun({ text: `Site / Project: ${siteName}`, bold: true, size: 22 }),
-              new TextRun({ text: `\t\tStaff Member: ${staffMember.label}`, bold: true, size: 20 })
+              new TextRun({ text: `Site / Project: ${siteName}`, bold: true, size: 16 })
             ],
-            spaceAfter: 150
+            spaceAfter: 40
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: `Staff Member: ${staffMember.label}`, bold: true, size: 16 })
+            ],
+            spaceAfter: 100
           }),
           new Table({
             width: { size: 100, type: WidthType.PERCENTAGE },
