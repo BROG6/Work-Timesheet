@@ -1,174 +1,367 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebaseConfig';
-import { collection, query, where, onSnapshot, updateDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc } from 'firebase/firestore';
 
-const DAYS_OF_WEEK = ["Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue"];
+// Helper to get the Monday of a given date's week
+function getMonday(d) {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(date.setDate(diff));
+}
+
+// Helper to format date into YYYY-MM-DD
+function formatDate(dateObj) {
+  return dateObj.toISOString().split('T')[0];
+}
 
 export default function ManagerDashboard({ userProfile }) {
-  const [entries, setEntries] = useState([]);
+  const [timesheets, setTimesheets] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedStaff, setSelectedStaff] = useState('All');
+  const [filterUser, setFilterUser] = useState('ALL');
+  const [filterProject, setFilterProject] = useState('ALL');
+
+  // Calendar week view state
+  const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()));
+  const [selectedDate, setSelectedDate] = useState('ALL'); // 'ALL' for entire week or YYYY-MM-DD for single day
 
   useEffect(() => {
-    // Query all timesheet submissions for the current company
-    const companyCode = userProfile?.companyCode || 'DEFAULT';
-    const q = query(
-      collection(db, 'timesheets'),
-      where('companyCode', '==', companyCode)
-    );
+    fetchData();
+  }, []);
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setEntries(docs);
-      setLoading(false);
-    }, (err) => {
-      console.error("Error fetching timesheets:", err);
-      setLoading(false);
-    });
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const timesheetSnap = await getDocs(collection(db, 'timesheets'));
+      const timesheetData = timesheetSnap.docs.map((d) => ({
+        id: d.id,
+        ...d.data()
+      }));
 
-    return () => unsubscribe();
-  }, [userProfile]);
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const userData = usersSnap.docs.map((d) => ({
+        uid: d.id,
+        ...d.data()
+      }));
+
+      setTimesheets(timesheetData);
+      setUsers(userData);
+    } catch (err) {
+      console.error("Error fetching manager data:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleStatusChange = async (id, newStatus) => {
     try {
       await updateDoc(doc(db, 'timesheets', id), {
         status: newStatus
       });
+      setTimesheets((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
+      );
     } catch (err) {
       console.error("Error updating status:", err);
-      alert("Failed to update status.");
     }
   };
 
-  // Get unique list of staff names for filtering
-  const staffMembers = ['All', ...new Set(entries.map(e => e.userName).filter(Boolean))];
+  // Generate 7 days (Mon-Sun) for current week
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const day = new Date(currentMonday);
+    day.setDate(currentMonday.getDate() + i);
+    const dateStr = formatDate(day);
 
-  // Filter entries by selected staff member
-  const filteredEntries = selectedStaff === 'All' 
-    ? entries 
-    : entries.filter(e => e.userName === selectedStaff);
+    // Calculate total hours logged on this specific day
+    const dayTotalHours = timesheets
+      .filter((t) => t.date === dateStr)
+      .reduce((sum, t) => sum + (parseFloat(t.totalHours) || 0), 0);
 
-  // Calculate totals
-  const totalTaskHours = filteredEntries.reduce((sum, e) => sum + (e.hours || 0), 0);
-  const totalTravelHours = filteredEntries.reduce((sum, e) => sum + (e.travelTime || 0), 0);
+    return {
+      dateStr,
+      dayName: day.toLocaleDateString('en-NZ', { weekday: 'short' }),
+      dayNumber: day.getDate(),
+      monthName: day.toLocaleDateString('en-NZ', { month: 'short' }),
+      dayTotalHours
+    };
+  });
+
+  const weekStartStr = weekDays[0].dateStr;
+  const weekEndStr = weekDays[6].dateStr;
+
+  const handlePrevWeek = () => {
+    const prevMon = new Date(currentMonday);
+    prevMon.setDate(currentMonday.getDate() - 7);
+    setCurrentMonday(prevMon);
+  };
+
+  const handleNextWeek = () => {
+    const nextMon = new Date(currentMonday);
+    nextMon.setDate(currentMonday.getDate() + 7);
+    setCurrentMonday(nextMon);
+  };
+
+  const handleTodayClick = () => {
+    setCurrentMonday(getMonday(new Date()));
+    setSelectedDate(formatDate(new Date()));
+  };
+
+  // Lookup map for fast name fetching
+  const userMap = {};
+  users.forEach((u) => {
+    userMap[u.uid] = u.name || u.email;
+  });
+
+  // Extract staff list with registered full names
+  const staffOptions = Array.from(
+    new Set(timesheets.map((t) => t.userId || t.userName))
+  ).map((staffIdentifier) => {
+    const matchingUser = users.find(
+      (u) => u.uid === staffIdentifier || u.email === staffIdentifier || u.name === staffIdentifier
+    );
+    const displayName = matchingUser?.name || userMap[staffIdentifier] || staffIdentifier;
+    return {
+      value: staffIdentifier,
+      label: displayName
+    };
+  });
+
+  const uniqueProjects = Array.from(new Set(timesheets.map((t) => t.project || 'General / Unassigned')));
+
+  // Filter timesheets by Date/Week, Staff Member, and Project
+  const filteredTimesheets = timesheets.filter((t) => {
+    const matchesUser = filterUser === 'ALL' || t.userId === filterUser || t.userName === filterUser;
+    const matchesProject = filterProject === 'ALL' || (t.project || 'General / Unassigned') === filterProject;
+
+    let matchesDate = false;
+    if (selectedDate === 'ALL') {
+      // Include any date falling within current week (Monday to Sunday)
+      matchesDate = t.date >= weekStartStr && t.date <= weekEndStr;
+    } else {
+      matchesDate = t.date === selectedDate;
+    }
+
+    return matchesUser && matchesProject && matchesDate;
+  });
+
+  const totalFilteredHours = filteredTimesheets.reduce((sum, t) => sum + (parseFloat(t.totalHours) || 0), 0);
+  const todayStr = formatDate(new Date());
+
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto p-6 text-center text-slate-500 font-semibold animate-pulse">
+        Loading Manager Dashboard...
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-4xl mx-auto p-4 space-y-6">
-      {/* Header & Quick Summary Stats */}
-      <div className="bg-slate-900 text-white p-5 rounded-xl shadow-md flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-6">
+      {/* Manager Dashboard Title Header */}
+      <div className="bg-slate-900 text-white p-5 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-sm">
         <div>
-          <h1 className="text-2xl font-bold">Manager Timesheet Portal</h1>
-          <p className="text-slate-400 text-xs mt-1">Reviewing submissions for company code: <span className="text-emerald-400 font-semibold">{userProfile?.companyCode}</span></p>
+          <h1 className="text-xl font-bold">Manager Dashboard</h1>
+          <p className="text-xs text-slate-400 font-medium mt-0.5">SJR Builders Work & Hours Overview</p>
         </div>
-        <div className="flex gap-3 text-center">
-          <div className="bg-slate-800 px-4 py-2 rounded-lg border border-slate-700">
-            <span className="block text-xs text-slate-400 uppercase font-semibold">Total Work Hrs</span>
-            <span className="text-xl font-bold text-emerald-400">{totalTaskHours.toFixed(2)}</span>
-          </div>
-          <div className="bg-slate-800 px-4 py-2 rounded-lg border border-slate-700">
-            <span className="block text-xs text-slate-400 uppercase font-semibold">Travel Hrs</span>
-            <span className="text-xl font-bold text-amber-400">{totalTravelHours.toFixed(2)}</span>
-          </div>
+        <div className="bg-slate-800 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-700 font-semibold flex items-center gap-2">
+          <span>Weekly Hours Logged:</span>
+          <strong className="text-emerald-400 text-sm">{totalFilteredHours} hrs</strong>
         </div>
       </div>
 
-      {/* Staff Filter Dropdown */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-        <label className="text-xs font-bold text-slate-700 uppercase">Filter Staff Member:</label>
-        <select
-          value={selectedStaff}
-          onChange={(e) => setSelectedStaff(e.target.value)}
-          className="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500"
-        >
-          {staffMembers.map(staff => (
-            <option key={staff} value={staff}>{staff}</option>
-          ))}
-        </select>
-      </div>
+      {/* Weekly Roundup Calendar */}
+      <div className="bg-slate-900 text-white p-4 rounded-xl shadow-md border border-slate-800">
+        <div className="flex flex-col md:flex-row items-center justify-between mb-3 text-xs gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handlePrevWeek}
+              className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
+            >
+              ← Prev Week
+            </button>
+            <span className="font-bold text-slate-200">
+              {weekDays[0].monthName} {weekDays[0].dayNumber} – {weekDays[6].monthName} {weekDays[6].dayNumber}
+            </span>
+            <button
+              type="button"
+              onClick={handleNextWeek}
+              className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
+            >
+              Next Week →
+            </button>
+          </div>
 
-      {/* Time Card Entries List */}
-      {loading ? (
-        <div className="text-center py-8 text-slate-500 font-medium">Loading weekly time cards...</div>
-      ) : filteredEntries.length === 0 ? (
-        <div className="text-center py-8 bg-white rounded-xl border border-slate-200 text-slate-500 font-medium">
-          No time card entries found.
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedDate('ALL')}
+              className={`px-2.5 py-1 rounded-md font-bold text-xs transition-colors ${
+                selectedDate === 'ALL'
+                  ? 'bg-emerald-500 text-slate-950'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              Show Full Week
+            </button>
+            <button
+              type="button"
+              onClick={handleTodayClick}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded-md font-bold transition-colors text-xs"
+            >
+              Today
+            </button>
+          </div>
         </div>
-      ) : (
-        <div className="space-y-4">
-          {filteredEntries.map((entry) => (
-            <div key={entry.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:border-slate-300 transition-all">
-              <div className="flex flex-col sm:flex-row justify-between sm:items-center pb-3 mb-3 border-b border-slate-100 gap-2">
-                <div>
-                  <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
-                    {entry.project || "General Project"}
-                  </span>
-                  <h3 className="font-bold text-slate-900 text-lg mt-1">{entry.userName}</h3>
-                  <p className="text-xs text-slate-500">{entry.date}</p>
-                </div>
 
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs font-bold px-2.5 py-1 rounded-full uppercase border ${
-                    entry.status === 'approved' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
-                    entry.status === 'rejected' ? 'bg-rose-100 text-rose-800 border-rose-200' :
-                    'bg-amber-100 text-amber-800 border-amber-200'
+        {/* 7-Day Roundup Cards */}
+        <div className="grid grid-cols-7 gap-1.5">
+          {weekDays.map((day) => {
+            const isSelected = selectedDate === day.dateStr;
+            const isToday = todayStr === day.dateStr;
+
+            return (
+              <button
+                key={day.dateStr}
+                type="button"
+                onClick={() => setSelectedDate(day.dateStr)}
+                className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${
+                  isSelected
+                    ? 'bg-emerald-500 text-slate-950 font-bold shadow-lg scale-105'
+                    : 'bg-slate-800/90 hover:bg-slate-700 text-slate-300'
+                }`}
+              >
+                <span className="text-[10px] uppercase font-semibold opacity-80">{day.dayName}</span>
+                <span className="text-base font-extrabold my-0.5">{day.dayNumber}</span>
+                <span className={`text-[10px] font-bold px-1 rounded ${
+                  isSelected ? 'bg-slate-950/20 text-slate-950' : 'text-emerald-400'
+                }`}>
+                  {day.dayTotalHours > 0 ? `${day.dayTotalHours}h` : '0h'}
+                </span>
+                {isToday && (
+                  <span className={`text-[8px] px-1 mt-1 rounded uppercase tracking-wider font-bold ${
+                    isSelected ? 'bg-slate-950 text-emerald-300' : 'bg-emerald-500/20 text-emerald-400'
                   }`}>
-                    {entry.status || 'pending'}
+                    Today
                   </span>
-
-                  {/* Quick Action Buttons */}
-                  <button
-                    onClick={() => handleStatusChange(entry.id, 'approved')}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow transition-colors"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => handleStatusChange(entry.id, 'rejected')}
-                    className="bg-slate-200 hover:bg-rose-600 hover:text-white text-slate-700 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
-                  >
-                    Reject
-                  </button>
-                </div>
-              </div>
-
-              {/* Task Details & Hours Breakdown */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase">Category & Task</p>
-                  <p className="font-bold text-slate-800">{entry.taskCategoryGroup}</p>
-                  <p className="text-slate-600 font-medium">{entry.taskName}</p>
-                  {entry.comments && (
-                    <p className="text-xs bg-slate-50 border border-slate-200 p-2 rounded mt-2 text-slate-700 italic">
-                      "{entry.comments}"
-                    </p>
-                  )}
-                </div>
-
-                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-1 text-xs">
-                  <div className="flex justify-between font-bold text-slate-800 text-sm pb-1 border-b border-slate-200">
-                    <span>Task Duration:</span>
-                    <span className="text-emerald-700">{entry.hours} hrs</span>
-                  </div>
-                  {entry.travelTime > 0 && (
-                    <div className="flex justify-between font-semibold text-slate-600">
-                      <span>Travel Time:</span>
-                      <span>{entry.travelTime} hrs</span>
-                    </div>
-                  )}
-                  {entry.timeCardDetails?.startTime && (
-                    <div className="pt-1 text-slate-500 grid grid-cols-2 gap-1 text-[11px]">
-                      <span>Start: {entry.timeCardDetails.startTime}</span>
-                      <span>Left Site: {entry.timeCardDetails.timeLeftSite || '--'}</span>
-                      <span>Returned: {entry.timeCardDetails.timeReturned || '--'}</span>
-                      <span>Finished: {entry.timeCardDetails.timeFinished || '--'}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
+                )}
+              </button>
+            );
+          })}
         </div>
-      )}
+      </div>
+
+      {/* Filter Toolbar */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4 shadow-sm">
+        <div>
+          <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Filter Staff Member</label>
+          <select
+            value={filterUser}
+            onChange={(e) => setFilterUser(e.target.value)}
+            className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium focus:ring-2 focus:ring-emerald-500 text-slate-800"
+          >
+            <option value="ALL">All Staff Members</option>
+            {staffOptions.map((staff) => (
+              <option key={staff.value} value={staff.value}>
+                {staff.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Filter Project / Site</label>
+          <select
+            value={filterProject}
+            onChange={(e) => setFilterProject(e.target.value)}
+            className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium focus:ring-2 focus:ring-emerald-500 text-slate-800"
+          >
+            <option value="ALL">All Projects</option>
+            {uniqueProjects.map((p) => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Submissions List */}
+      <div className="space-y-4">
+        {filteredTimesheets.length === 0 ? (
+          <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500 font-medium">
+            No timesheet submissions match the selected date or filters.
+          </div>
+        ) : (
+          filteredTimesheets.map((entry) => {
+            const staffDisplayName = userMap[entry.userId] || entry.userName || "Staff Member";
+
+            return (
+              <div key={entry.id} className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 pb-3 gap-2">
+                  <div>
+                    <span className="text-base font-bold text-slate-900">{staffDisplayName}</span>
+                    <p className="text-xs text-slate-500 font-medium">
+                      Site: <span className="text-slate-800 font-semibold">{entry.project || "General"}</span> | Date: <span className="text-slate-800 font-semibold">{entry.date}</span>
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-extrabold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200">
+                      {entry.totalHours || 0} Hours
+                    </span>
+                    <select
+                      value={entry.status || 'pending'}
+                      onChange={(e) => handleStatusChange(entry.id, e.target.value)}
+                      className={`text-xs font-bold rounded-lg px-2.5 py-1.5 border ${
+                        entry.status === 'approved'
+                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                          : entry.status === 'rejected'
+                          ? 'bg-rose-100 text-rose-800 border-rose-300'
+                          : 'bg-amber-50 text-amber-800 border-amber-300'
+                      }`}
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* On-Site Times */}
+                {entry.timeCardDetails && (entry.timeCardDetails.startTime || entry.timeCardDetails.timeFinished) && (
+                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-xs grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div><span className="text-slate-400">Start:</span> <strong className="text-slate-700">{entry.timeCardDetails.startTime || '-'}</strong></div>
+                    <div><span className="text-slate-400">Finished:</span> <strong className="text-slate-700">{entry.timeCardDetails.timeFinished || '-'}</strong></div>
+                    <div><span className="text-slate-400">Left Site:</span> <strong className="text-slate-700">{entry.timeCardDetails.timeLeftSite || '-'}</strong></div>
+                    <div><span className="text-slate-400">Returned:</span> <strong className="text-slate-700">{entry.timeCardDetails.timeReturned || '-'}</strong></div>
+                  </div>
+                )}
+
+                {/* Tasks List */}
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Completed Tasks</span>
+                  {entry.tasks && entry.tasks.length > 0 ? (
+                    entry.tasks.map((t, idx) => (
+                      <div key={idx} className="bg-slate-50 rounded-lg p-3 border border-slate-200 text-xs space-y-1">
+                        <div className="flex justify-between font-bold text-slate-800">
+                          <span>{t.taskCategoryGroup} → {t.taskName}</span>
+                          <span className="text-emerald-700">{t.hours} hrs {t.travelTime > 0 ? `(+${t.travelTime} hrs travel)` : ''}</span>
+                        </div>
+                        {t.comments && (
+                          <p className="text-slate-600 text-[11px] italic bg-white p-2 rounded border border-slate-100 mt-1">
+                            "{t.comments}"
+                          </p>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">No specific tasks recorded.</span>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }
