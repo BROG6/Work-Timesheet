@@ -142,7 +142,7 @@ export default function ManagerDashboard({ userProfile }) {
       setUsers(userData);
     } catch (err) {
       console.error("Error fetching manager data:", err);
-    } finally {
+    } fontally {
       setLoading(false);
     }
   };
@@ -175,14 +175,39 @@ export default function ManagerDashboard({ userProfile }) {
     }
   };
 
-  // Generate 7 days starting Wednesday through Tuesday
+  const userMap = {};
+  users.forEach((u) => {
+    userMap[u.uid] = u.name || u.email;
+  });
+
+  const staffOptions = Array.from(
+    new Set(timesheets.map((t) => t.userId || t.userName))
+  ).map((staffIdentifier) => {
+    const matchingUser = users.find(
+      (u) => u.uid === staffIdentifier || u.email === staffIdentifier || u.name === staffIdentifier
+    );
+    const displayName = matchingUser?.name || userMap[staffIdentifier] || staffIdentifier;
+    return {
+      value: staffIdentifier,
+      label: displayName
+    };
+  });
+
+  const uniqueProjects = Array.from(new Set(timesheets.map((t) => t.project || 'General / Unassigned')));
+
+  // Generate 7 days starting Wednesday through Tuesday, dynamically calculating daily hours based on selected filters
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const day = new Date(currentWednesday);
     day.setDate(currentWednesday.getDate() + i);
     const dateStr = formatDate(day);
 
     const dayTotalHours = timesheets
-      .filter((t) => displayDate(t.date) === dateStr)
+      .filter((t) => {
+        const matchesDate = displayDate(t.date) === dateStr;
+        const matchesUser = filterUser === 'ALL' || t.userId === filterUser || t.userName === filterUser;
+        const matchesProject = filterProject === 'ALL' || (t.project || 'General / Unassigned') === filterProject;
+        return matchesDate && matchesUser && matchesProject;
+      })
       .reduce((sum, t) => sum + (parseFloat(t.totalHours) || 0), 0);
 
     return {
@@ -213,26 +238,6 @@ export default function ManagerDashboard({ userProfile }) {
     setCurrentWednesday(getWednesday(new Date()));
     setSelectedDate(formatDate(new Date()));
   };
-
-  const userMap = {};
-  users.forEach((u) => {
-    userMap[u.uid] = u.name || u.email;
-  });
-
-  const staffOptions = Array.from(
-    new Set(timesheets.map((t) => t.userId || t.userName))
-  ).map((staffIdentifier) => {
-    const matchingUser = users.find(
-      (u) => u.uid === staffIdentifier || u.email === staffIdentifier || u.name === staffIdentifier
-    );
-    const displayName = matchingUser?.name || userMap[staffIdentifier] || staffIdentifier;
-    return {
-      value: staffIdentifier,
-      label: displayName
-    };
-  });
-
-  const uniqueProjects = Array.from(new Set(timesheets.map((t) => t.project || 'General / Unassigned')));
 
   const filteredTimesheets = timesheets.filter((t) => {
     const matchesUser = filterUser === 'ALL' || t.userId === filterUser || t.userName === filterUser;
@@ -477,7 +482,6 @@ export default function ManagerDashboard({ userProfile }) {
         }
 
         return [
-          // Reduced font size for Site / Project & Staff Member headers (size: 16 = 8pt)
           new Paragraph({
             children: [
               new TextRun({ text: `Site / Project: ${siteName}`, bold: true, size: 16 })
