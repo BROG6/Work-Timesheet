@@ -55,11 +55,11 @@ export default function TimesheetEntry({ user, userProfile }) {
   const [project, setProject] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   
-  // Site Time Tracking (Ordered: Start -> Left Site -> Returned -> Finished)
+  // Site Time Tracking (Ordered: Start -> Finished -> Left Site -> Returned)
   const [startTime, setStartTime] = useState('');
+  const [timeFinished, setTimeFinished] = useState('');
   const [timeLeftSite, setTimeLeftSite] = useState('');
   const [timeReturned, setTimeReturned] = useState('');
-  const [timeFinished, setTimeFinished] = useState('');
   
   // Work Task Selection
   const [selectedGroup, setSelectedGroup] = useState("Framing & Envelope");
@@ -94,9 +94,9 @@ export default function TimesheetEntry({ user, userProfile }) {
         date: date,
         timeCardDetails: {
           startTime,
+          timeFinished,
           timeLeftSite,
-          timeReturned,
-          timeFinished
+          timeReturned
         },
         taskCategoryGroup: selectedGroup,
         taskName: selectedTask,
@@ -168,16 +168,16 @@ export default function TimesheetEntry({ user, userProfile }) {
               <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5" />
             </div>
             <div>
+              <label className="text-slate-500 font-medium">Time Finished</label>
+              <input type="time" value={timeFinished} onChange={(e) => setTimeFinished(e.target.value)} className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5" />
+            </div>
+            <div>
               <label className="text-slate-500 font-medium">Time Left Site</label>
               <input type="time" value={timeLeftSite} onChange={(e) => setTimeLeftSite(e.target.value)} className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5" />
             </div>
             <div>
               <label className="text-slate-500 font-medium">Time Returned</label>
               <input type="time" value={timeReturned} onChange={(e) => setTimeReturned(e.target.value)} className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5" />
-            </div>
-            <div>
-              <label className="text-slate-500 font-medium">Time Finished</label>
-              <input type="time" value={timeFinished} onChange={(e) => setTimeFinished(e.target.value)} className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5" />
             </div>
           </div>
         </div>
