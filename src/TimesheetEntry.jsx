@@ -53,15 +53,32 @@ const TASK_CATEGORIES = {
   ]
 };
 
+// Helper to get the Monday of a given date's week
+function getMonday(d) {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+  return new Date(date.setDate(diff));
+}
+
+// Helper to format date into YYYY-MM-DD
+function formatDate(dateObj) {
+  return dateObj.toISOString().split('T')[0];
+}
+
 export default function TimesheetEntry({ user, userProfile }) {
-  // Load saved project from localStorage or default to empty string
+  // Saved project
   const [project, setProject] = useState(() => {
     return localStorage.getItem(`sjr_last_project_${user.uid}`) || '';
   });
 
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  
-  // Site Time Tracking (Ordered: Start -> Finished -> Left Site -> Returned)
+  // Selected date state
+  const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
+
+  // Calendar week view state (tracks current Monday)
+  const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()));
+
+  // Site Time Tracking
   const [startTime, setStartTime] = useState('');
   const [timeFinished, setTimeFinished] = useState('');
   const [timeLeftSite, setTimeLeftSite] = useState('');
@@ -78,18 +95,47 @@ export default function TimesheetEntry({ user, userProfile }) {
       comments: ''
     }
   ]);
-  
+
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  // Save project name locally whenever worker changes it
+  // Generate 7 days (Mon-Sun) for the current week bar
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const day = new Date(currentMonday);
+    day.setDate(currentMonday.getDate() + i);
+    return {
+      dateStr: formatDate(day),
+      dayName: day.toLocaleDateString('en-NZ', { weekday: 'short' }),
+      dayNumber: day.getDate(),
+      monthName: day.toLocaleDateString('en-NZ', { month: 'short' })
+    };
+  });
+
+  // Navigate week forward or backward
+  const handlePrevWeek = () => {
+    const prevMon = new Date(currentMonday);
+    prevMon.setDate(currentMonday.getDate() - 7);
+    setCurrentMonday(prevMon);
+  };
+
+  const handleNextWeek = () => {
+    const nextMon = new Date(currentMonday);
+    nextMon.setDate(currentMonday.getDate() + 7);
+    setCurrentMonday(nextMon);
+  };
+
+  const handleTodayClick = () => {
+    const todayStr = formatDate(new Date());
+    setCurrentMonday(getMonday(new Date()));
+    setSelectedDate(todayStr);
+  };
+
   const handleProjectChange = (e) => {
     const val = e.target.value;
     setProject(val);
     localStorage.setItem(`sjr_last_project_${user.uid}`, val);
   };
 
-  // Add a new task row to the form
   const handleAddTask = () => {
     setTasks((prevTasks) => [
       ...prevTasks,
@@ -104,19 +150,16 @@ export default function TimesheetEntry({ user, userProfile }) {
     ]);
   };
 
-  // Remove a task row
   const handleRemoveTask = (id) => {
-    if (tasks.length === 1) return; // Keep at least one task row
+    if (tasks.length === 1) return;
     setTasks((prevTasks) => prevTasks.filter((t) => t.id !== id));
   };
 
-  // Handle changes within specific task fields
   const handleTaskChange = (id, field, value) => {
     setTasks((prevTasks) =>
       prevTasks.map((t) => {
         if (t.id === id) {
           const updated = { ...t, [field]: value };
-          // If group changes, default task to first item in group
           if (field === 'categoryGroup') {
             updated.taskName = TASK_CATEGORIES[value][0];
           }
@@ -127,7 +170,6 @@ export default function TimesheetEntry({ user, userProfile }) {
     );
   };
 
-  // Calculate total task hours logged
   const totalHours = tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
 
   const handleSubmit = async (e) => {
@@ -141,13 +183,12 @@ export default function TimesheetEntry({ user, userProfile }) {
     setSuccess(false);
 
     try {
-      // Save entry to Firestore with multi-task support
       await addDoc(collection(db, 'timesheets'), {
         userId: user.uid,
         userName: userProfile?.name || user.email,
         companyCode: userProfile?.companyCode || 'SJR Builders',
         project: project || "General / Unassigned",
-        date: date,
+        date: selectedDate,
         timeCardDetails: {
           startTime,
           timeFinished,
@@ -166,7 +207,6 @@ export default function TimesheetEntry({ user, userProfile }) {
         createdAt: serverTimestamp()
       });
 
-      // Reset task rows to single blank task, retaining active project name
       setTasks([
         {
           id: Date.now(),
@@ -198,6 +238,8 @@ export default function TimesheetEntry({ user, userProfile }) {
     }
   };
 
+  const todayStr = formatDate(new Date());
+
   return (
     <div className="max-w-xl mx-auto bg-white border border-slate-200 rounded-xl shadow-sm p-5 my-4">
       <div className="border-b border-slate-200 pb-3 mb-4">
@@ -205,14 +247,79 @@ export default function TimesheetEntry({ user, userProfile }) {
         <p className="text-xs text-slate-500 font-medium">Logged for: <span className="text-slate-800 font-semibold">{userProfile?.name || user.email}</span></p>
       </div>
 
+      {/* Week Calendar Header & Navigation */}
+      <div className="bg-slate-900 text-white p-3 rounded-xl mb-5 shadow-inner">
+        <div className="flex items-center justify-between mb-3 text-xs">
+          <button
+            type="button"
+            onClick={handlePrevWeek}
+            className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
+          >
+            ← Prev Week
+          </button>
+          
+          <span className="font-bold text-slate-200">
+            {weekDays[0].monthName} {weekDays[0].dayNumber} – {weekDays[6].monthName} {weekDays[6].dayNumber}
+          </span>
+
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={handleTodayClick}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded-md font-bold transition-colors"
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={handleNextWeek}
+              className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
+            >
+              Next Week →
+            </button>
+          </div>
+        </div>
+
+        {/* 7-Day Calendar Scroll Grid */}
+        <div className="grid grid-cols-7 gap-1">
+          {weekDays.map((day) => {
+            const isSelected = selectedDate === day.dateStr;
+            const isToday = todayStr === day.dateStr;
+
+            return (
+              <button
+                key={day.dateStr}
+                type="button"
+                onClick={() => setSelectedDate(day.dateStr)}
+                className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${
+                  isSelected
+                    ? 'bg-emerald-500 text-slate-950 font-bold shadow-md scale-105'
+                    : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
+                }`}
+              >
+                <span className="text-[10px] uppercase font-semibold opacity-80">{day.dayName}</span>
+                <span className="text-base font-extrabold my-0.5">{day.dayNumber}</span>
+                {isToday && (
+                  <span className={`text-[8px] px-1 rounded uppercase tracking-wider font-bold ${
+                    isSelected ? 'bg-slate-950 text-emerald-300' : 'bg-emerald-500/20 text-emerald-400'
+                  }`}>
+                    Today
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {success && (
         <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-sm font-semibold flex items-center gap-2">
-          <span>✓</span> Entry saved! {navigator.onLine ? "" : "(Saved offline, will sync when connected)"}
+          <span>✓</span> Entry saved for {selectedDate}! {navigator.onLine ? "" : "(Saved offline, will sync when connected)"}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Project Name & Date */}
+        {/* Project Name & Active Date Display */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Project Name / Site</label>
@@ -226,11 +333,14 @@ export default function TimesheetEntry({ user, userProfile }) {
             />
           </div>
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Date</label>
+            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Selected Date</label>
             <input
               type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
+              value={selectedDate}
+              onChange={(e) => {
+                setSelectedDate(e.target.value);
+                setCurrentMonday(getMonday(e.target.value));
+              }}
               className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium focus:ring-2 focus:ring-emerald-500"
               required
             />
@@ -387,7 +497,7 @@ export default function TimesheetEntry({ user, userProfile }) {
           disabled={loading}
           className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors disabled:opacity-50 mt-4"
         >
-          {loading ? "Saving Entry..." : "Submit Time Card Entry"}
+          {loading ? "Saving Entry..." : `Submit Entry for ${selectedDate}`}
         </button>
       </form>
     </div>
