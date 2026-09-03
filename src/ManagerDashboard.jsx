@@ -24,9 +24,24 @@ function getWednesday(d) {
   return new Date(date.setDate(diff));
 }
 
-// Helper to format date into YYYY-MM-DD
+// Helper to format date into DD/MM/YYYY
 function formatDate(dateObj) {
-  return dateObj.toISOString().split('T')[0];
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const year = dateObj.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+// Helper to convert stored YYYY-MM-DD strings (if any) to DD/MM/YYYY for uniform display
+function displayDate(dateStr) {
+  if (!dateStr) return '';
+  if (dateStr.includes('-')) {
+    const parts = dateStr.split('-');
+    if (parts.length === 3 && parts[0].length === 4) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+  }
+  return dateStr;
 }
 
 const CATEGORIES_LIST = [
@@ -84,10 +99,14 @@ export default function ManagerDashboard({ userProfile }) {
     setLoading(true);
     try {
       const timesheetSnap = await getDocs(collection(db, 'timesheets'));
-      const timesheetData = timesheetSnap.docs.map((d) => ({
-        id: d.id,
-        ...d.data()
-      }));
+      const timesheetData = timesheetSnap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ...data,
+          date: displayDate(data.date) // Ensure stored dates are displayed as DD/MM/YYYY
+        };
+      });
 
       const usersSnap = await getDocs(collection(db, 'users'));
       const userData = usersSnap.docs.map((d) => ({
@@ -139,7 +158,7 @@ export default function ManagerDashboard({ userProfile }) {
     const dateStr = formatDate(day);
 
     const dayTotalHours = timesheets
-      .filter((t) => t.date === dateStr)
+      .filter((t) => displayDate(t.date) === dateStr)
       .reduce((sum, t) => sum + (parseFloat(t.totalHours) || 0), 0);
 
     return {
@@ -195,11 +214,14 @@ export default function ManagerDashboard({ userProfile }) {
     const matchesUser = filterUser === 'ALL' || t.userId === filterUser || t.userName === filterUser;
     const matchesProject = filterProject === 'ALL' || (t.project || 'General / Unassigned') === filterProject;
 
+    const formattedEntryDate = displayDate(t.date);
     let matchesDate = false;
+
     if (selectedDate === 'ALL') {
-      matchesDate = t.date >= weekStartStr && t.date <= weekEndStr;
+      const activeDates = weekDays.map((d) => d.dateStr);
+      matchesDate = activeDates.includes(formattedEntryDate);
     } else {
-      matchesDate = t.date === selectedDate;
+      matchesDate = formattedEntryDate === selectedDate;
     }
 
     return matchesUser && matchesProject && matchesDate;
@@ -243,7 +265,7 @@ export default function ManagerDashboard({ userProfile }) {
     ];
     tableRows.push(new TableRow({ children: dayCells }));
 
-    // Date Row
+    // Date Row (DD/MM/YYYY)
     const dateCells = [
       makeCell("Date", true, AlignmentType.LEFT, 28),
       ...weekDays.map(d => makeCell(d.dateStr, false, AlignmentType.CENTER, 9)),
@@ -254,7 +276,7 @@ export default function ManagerDashboard({ userProfile }) {
     // Timecard Field Helper Row
     const addTimeCardRow = (label, fieldKey) => {
       const rowVals = weekDays.map((wd) => {
-        const matches = filteredTimesheets.filter((t) => t.date === wd.dateStr);
+        const matches = filteredTimesheets.filter((t) => displayDate(t.date) === wd.dateStr);
         if (!matches.length) return "";
         return matches.map((m) => m.timeCardDetails?.[fieldKey] || "").filter(Boolean).join(" / ");
       });
@@ -275,7 +297,7 @@ export default function ManagerDashboard({ userProfile }) {
     CATEGORIES_LIST.forEach((cat) => {
       let rowTotal = 0;
       const dayVals = weekDays.map((wd) => {
-        const matches = filteredTimesheets.filter((t) => t.date === wd.dateStr);
+        const matches = filteredTimesheets.filter((t) => displayDate(t.date) === wd.dateStr);
         let catHours = 0;
         matches.forEach((entry) => {
           if (entry.tasks && Array.isArray(entry.tasks)) {
@@ -303,7 +325,7 @@ export default function ManagerDashboard({ userProfile }) {
     let weekTotalHours = 0;
     const dailyTotals = weekDays.map((wd) => {
       const total = filteredTimesheets
-        .filter((t) => t.date === wd.dateStr)
+        .filter((t) => displayDate(t.date) === wd.dateStr)
         .reduce((sum, t) => sum + (parseFloat(t.totalHours) || 0), 0);
       weekTotalHours += total;
       return total > 0 ? total : "";
@@ -320,7 +342,7 @@ export default function ManagerDashboard({ userProfile }) {
     const dailyTravel = weekDays.map((wd) => {
       let dayTravel = 0;
       filteredTimesheets
-        .filter((t) => t.date === wd.dateStr)
+        .filter((t) => displayDate(t.date) === wd.dateStr)
         .forEach((entry) => {
           if (entry.tasks) {
             entry.tasks.forEach((tk) => {
@@ -356,7 +378,7 @@ export default function ManagerDashboard({ userProfile }) {
             commentParagraphs.push(
               new Paragraph({
                 children: [
-                  new TextRun({ text: `${entry.date} - ${userMap[entry.userId] || entry.userName || 'Staff'}: `, bold: true, size: 18 }),
+                  new TextRun({ text: `${displayDate(entry.date)} - ${userMap[entry.userId] || entry.userName || 'Staff'}: `, bold: true, size: 18 }),
                   new TextRun({ text: tk.comments, size: 18 })
                 ],
                 spaceAfter: 60
@@ -397,11 +419,14 @@ export default function ManagerDashboard({ userProfile }) {
       ]
     });
 
+    const fileStartStr = weekStartStr.replaceAll('/', '-');
+    const fileEndStr = weekEndStr.replaceAll('/', '-');
+
     const blob = await Packer.toBlob(docxDocument);
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `TimeCard_${weekStartStr}_to_${weekEndStr}.docx`;
+    link.download = `TimeCard_${fileStartStr}_to_${fileEndStr}.docx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -451,7 +476,7 @@ export default function ManagerDashboard({ userProfile }) {
               ← Prev Week
             </button>
             <span className="font-bold text-slate-200">
-              {weekDays[0].monthName} {weekDays[0].dayNumber} (Wed) – {weekDays[6].monthName} {weekDays[6].dayNumber} (Tue)
+              {weekDays[0].dateStr} (Wed) – {weekDays[6].dateStr} (Tue)
             </span>
             <button
               type="button"
@@ -570,7 +595,7 @@ export default function ManagerDashboard({ userProfile }) {
                   <div>
                     <span className="text-base font-bold text-slate-900">{staffDisplayName}</span>
                     <p className="text-xs text-slate-500 font-medium">
-                      Site: <span className="text-slate-800 font-semibold">{entry.project || "General"}</span> | Date: <span className="text-slate-800 font-semibold">{entry.date}</span>
+                      Site: <span className="text-slate-800 font-semibold">{entry.project || "General"}</span> | Date: <span className="text-slate-800 font-semibold">{displayDate(entry.date)}</span>
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
