@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebaseConfig';
-import { collection, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 
 // Helper to get the Monday of a given date's week
 function getMonday(d) {
@@ -64,6 +64,22 @@ export default function ManagerDashboard({ userProfile }) {
       );
     } catch (err) {
       console.error("Error updating status:", err);
+    }
+  };
+
+  // Delete handler for incorrect job entries
+  const handleDeleteEntry = async (id, projectName) => {
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete this timesheet entry for "${projectName || 'General'}"? This action cannot be undone.`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      await deleteDoc(doc(db, 'timesheets', id));
+      setTimesheets((prev) => prev.filter((item) => item.id !== id));
+    } catch (err) {
+      console.error("Error deleting timesheet entry:", err);
+      alert("Failed to delete entry. Please check permissions and try again.");
     }
   };
 
@@ -304,7 +320,7 @@ export default function ManagerDashboard({ userProfile }) {
                       Site: <span className="text-slate-800 font-semibold">{entry.project || "General"}</span> | Date: <span className="text-slate-800 font-semibold">{entry.date}</span>
                     </p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <span className="text-sm font-extrabold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200">
                       {entry.totalHours || 0} Hours
                     </span>
@@ -323,6 +339,16 @@ export default function ManagerDashboard({ userProfile }) {
                       <option value="approved">Approved</option>
                       <option value="rejected">Rejected</option>
                     </select>
+
+                    {/* Delete Entry Button */}
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteEntry(entry.id, entry.project)}
+                      className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-bold px-2.5 py-1.5 rounded-lg transition-colors ml-1"
+                      title="Delete this timesheet entry"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
 
