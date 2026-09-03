@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { db } from './firebaseConfig';
 import { collection, getDocs, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 
-// Helper to get the Monday of a given date's week
-function getMonday(d) {
+// Helper to get the Wednesday of a given date's week (Wed - Tue)
+function getWednesday(d) {
   const date = new Date(d);
-  const day = date.getDay();
-  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  const day = date.getDay(); // 0 is Sun, 1 is Mon, 3 is Wed
+  // Difference relative to Wednesday (3)
+  const diff = date.getDate() - day + (day < 3 ? -4 : 3);
   return new Date(date.setDate(diff));
 }
 
@@ -15,6 +16,42 @@ function formatDate(dateObj) {
   return dateObj.toISOString().split('T')[0];
 }
 
+const CATEGORIES_LIST = [
+  "Demolition",
+  "Profile/Set Up",
+  "Excavate/Footings",
+  "Boxing",
+  "Reinforcing",
+  "Polythene/Polystyrene",
+  "Concrete/Blockfill",
+  "Timber Floor Structure & Flooring",
+  "Structural Steel",
+  "Structural Connections",
+  "Wall Framing",
+  "Roof Framing and Purlins",
+  "Fascia and Soffits",
+  "C/Battens, Rab/Ecoply",
+  "Building Paper/Aliband",
+  "Exterior Windows/Doors",
+  "Exterior Cladding",
+  "Insulation",
+  "Ceiling Battens",
+  "Ceiling Linings",
+  "Interior Doors",
+  "Wall Linings",
+  "Scotia/Skirting/Architrave",
+  "Hardware/ Door Hardware",
+  "Shelving/Joinery",
+  "Deck Framing & Decking",
+  "Driveway/Paths/Landscaping",
+  "Other (PTO)",
+  "Sick Leave",
+  "Annual Leave",
+  "Bereavement Leave",
+  "Training",
+  "Other Leave"
+];
+
 export default function ManagerDashboard({ userProfile }) {
   const [timesheets, setTimesheets] = useState([]);
   const [users, setUsers] = useState([]);
@@ -22,9 +59,9 @@ export default function ManagerDashboard({ userProfile }) {
   const [filterUser, setFilterUser] = useState('ALL');
   const [filterProject, setFilterProject] = useState('ALL');
 
-  // Calendar week view state
-  const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()));
-  const [selectedDate, setSelectedDate] = useState('ALL'); // 'ALL' for entire week or YYYY-MM-DD for single day
+  // Calendar week view state starting Wednesday
+  const [currentWednesday, setCurrentWednesday] = useState(() => getWednesday(new Date()));
+  const [selectedDate, setSelectedDate] = useState('ALL');
 
   useEffect(() => {
     fetchData();
@@ -67,7 +104,6 @@ export default function ManagerDashboard({ userProfile }) {
     }
   };
 
-  // Delete handler for incorrect job entries
   const handleDeleteEntry = async (id, projectName) => {
     const confirmDelete = window.confirm(
       `Are you sure you want to delete this timesheet entry for "${projectName || 'General'}"? This action cannot be undone.`
@@ -79,17 +115,16 @@ export default function ManagerDashboard({ userProfile }) {
       setTimesheets((prev) => prev.filter((item) => item.id !== id));
     } catch (err) {
       console.error("Error deleting timesheet entry:", err);
-      alert("Failed to delete entry. Please check permissions and try again.");
+      alert("Failed to delete entry.");
     }
   };
 
-  // Generate 7 days (Mon-Sun) for current week
+  // Generate 7 days starting Wednesday through Tuesday
   const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const day = new Date(currentMonday);
-    day.setDate(currentMonday.getDate() + i);
+    const day = new Date(currentWednesday);
+    day.setDate(currentWednesday.getDate() + i);
     const dateStr = formatDate(day);
 
-    // Calculate total hours logged on this specific day
     const dayTotalHours = timesheets
       .filter((t) => t.date === dateStr)
       .reduce((sum, t) => sum + (parseFloat(t.totalHours) || 0), 0);
@@ -107,29 +142,27 @@ export default function ManagerDashboard({ userProfile }) {
   const weekEndStr = weekDays[6].dateStr;
 
   const handlePrevWeek = () => {
-    const prevMon = new Date(currentMonday);
-    prevMon.setDate(currentMonday.getDate() - 7);
-    setCurrentMonday(prevMon);
+    const prevWed = new Date(currentWednesday);
+    prevWed.setDate(currentWednesday.getDate() - 7);
+    setCurrentWednesday(prevWed);
   };
 
   const handleNextWeek = () => {
-    const nextMon = new Date(currentMonday);
-    nextMon.setDate(currentMonday.getDate() + 7);
-    setCurrentMonday(nextMon);
+    const nextWed = new Date(currentWednesday);
+    nextWed.setDate(currentWednesday.getDate() + 7);
+    setCurrentWednesday(nextWed);
   };
 
   const handleTodayClick = () => {
-    setCurrentMonday(getMonday(new Date()));
+    setCurrentWednesday(getWednesday(new Date()));
     setSelectedDate(formatDate(new Date()));
   };
 
-  // Lookup map for fast name fetching
   const userMap = {};
   users.forEach((u) => {
     userMap[u.uid] = u.name || u.email;
   });
 
-  // Extract staff list with registered full names
   const staffOptions = Array.from(
     new Set(timesheets.map((t) => t.userId || t.userName))
   ).map((staffIdentifier) => {
@@ -145,14 +178,12 @@ export default function ManagerDashboard({ userProfile }) {
 
   const uniqueProjects = Array.from(new Set(timesheets.map((t) => t.project || 'General / Unassigned')));
 
-  // Filter timesheets by Date/Week, Staff Member, and Project
   const filteredTimesheets = timesheets.filter((t) => {
     const matchesUser = filterUser === 'ALL' || t.userId === filterUser || t.userName === filterUser;
     const matchesProject = filterProject === 'ALL' || (t.project || 'General / Unassigned') === filterProject;
 
     let matchesDate = false;
     if (selectedDate === 'ALL') {
-      // Include any date falling within current week (Monday to Sunday)
       matchesDate = t.date >= weekStartStr && t.date <= weekEndStr;
     } else {
       matchesDate = t.date === selectedDate;
@@ -163,6 +194,109 @@ export default function ManagerDashboard({ userProfile }) {
 
   const totalFilteredHours = filteredTimesheets.reduce((sum, t) => sum + (parseFloat(t.totalHours) || 0), 0);
   const todayStr = formatDate(new Date());
+
+  // Export CSV matching original time card layout
+  const handleExportCSV = () => {
+    let csvContent = "data:text/csv;charset=utf-8,";
+
+    // Separate records by staff member or build full block
+    const selectedStaffLabel = filterUser === 'ALL' ? 'All Staff' : (staffOptions.find(s => s.value === filterUser)?.label || filterUser);
+    const selectedProjectLabel = filterProject === 'ALL' ? 'All Projects' : filterProject;
+
+    csvContent += `Staff Member: "${selectedStaffLabel}",,,,,,Project: "${selectedProjectLabel}"\n`;
+    
+    // Header Rows
+    const daysHeader = ["Day", ...weekDays.map(d => d.dayName), "Totals"].join(",");
+    const datesHeader = ["Date", ...weekDays.map(d => d.dateStr), ""].join(",");
+    csvContent += daysHeader + "\n" + datesHeader + "\n";
+
+    // Helper to get time card value for a given field across 7 days
+    const getTimeCardRow = (label, fieldKey) => {
+      const vals = weekDays.map((wd) => {
+        const matches = filteredTimesheets.filter((t) => t.date === wd.dateStr);
+        if (!matches.length) return "";
+        return matches.map((m) => m.timeCardDetails?.[fieldKey] || "").filter(Boolean).join(" / ");
+      });
+      return [label, ...vals, ""].map(v => `"${v}"`).join(",");
+    };
+
+    csvContent += getTimeCardRow("START TIME", "startTime") + "\n";
+    csvContent += getTimeCardRow("TIME LEFT SITE", "timeLeftSite") + "\n";
+    csvContent += getTimeCardRow("TIME RETURNED", "timeReturned") + "\n";
+    csvContent += getTimeCardRow("TIME FINISHED", "timeFinished") + "\n";
+
+    // Task / Category Rows
+    CATEGORIES_LIST.forEach((cat) => {
+      let rowTotal = 0;
+      const dayVals = weekDays.map((wd) => {
+        const matches = filteredTimesheets.filter((t) => t.date === wd.dateStr);
+        let catHours = 0;
+        matches.forEach((entry) => {
+          if (entry.tasks && Array.isArray(entry.tasks)) {
+            entry.tasks.forEach((task) => {
+              const matchedName = task.taskName || task.taskCategoryGroup || "";
+              if (matchedName.toLowerCase().trim() === cat.toLowerCase().trim()) {
+                catHours += parseFloat(task.hours) || 0;
+              }
+            });
+          }
+        });
+        rowTotal += catHours;
+        return catHours > 0 ? catHours : "";
+      });
+
+      csvContent += [`"${cat}"`, ...dayVals, rowTotal > 0 ? rowTotal : ""].join(",") + "\n";
+    });
+
+    // Total Hours Row
+    let weekTotalHours = 0;
+    const dailyTotals = weekDays.map((wd) => {
+      const total = filteredTimesheets
+        .filter((t) => t.date === wd.dateStr)
+        .reduce((sum, t) => sum + (parseFloat(t.totalHours) || 0), 0);
+      weekTotalHours += total;
+      return total > 0 ? total : "";
+    });
+    csvContent += ["TOTAL HOURS", ...dailyTotals, weekTotalHours].join(",") + "\n";
+
+    // Travel Time Row
+    let weekTotalTravel = 0;
+    const dailyTravel = weekDays.map((wd) => {
+      let dayTravel = 0;
+      filteredTimesheets
+        .filter((t) => t.date === wd.dateStr)
+        .forEach((entry) => {
+          if (entry.tasks) {
+            entry.tasks.forEach((tk) => {
+              dayTravel += parseFloat(tk.travelTime) || 0;
+            });
+          }
+        });
+      weekTotalTravel += dayTravel;
+      return dayTravel > 0 ? dayTravel : "";
+    });
+    csvContent += ["Travel Time", ...dailyTravel, weekTotalTravel].join(",") + "\n\n";
+
+    // Comments Section
+    csvContent += "COMMENTS\n";
+    filteredTimesheets.forEach((entry) => {
+      if (entry.tasks) {
+        entry.tasks.forEach((tk) => {
+          if (tk.comments) {
+            csvContent += `"${entry.date} - ${userMap[entry.userId] || entry.userName || 'Staff'}: ${tk.comments.replace(/"/g, '""')}"\n`;
+          }
+        });
+      }
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `TimeCard_${weekStartStr}_to_${weekEndStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   if (loading) {
     return (
@@ -180,13 +314,22 @@ export default function ManagerDashboard({ userProfile }) {
           <h1 className="text-xl font-bold">Manager Dashboard</h1>
           <p className="text-xs text-slate-400 font-medium mt-0.5">SJR Builders Work & Hours Overview</p>
         </div>
-        <div className="bg-slate-800 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-700 font-semibold flex items-center gap-2">
-          <span>Weekly Hours Logged:</span>
-          <strong className="text-emerald-400 text-sm">{totalFilteredHours} hrs</strong>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleExportCSV}
+            className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs px-3.5 py-2 rounded-lg transition-colors shadow-sm"
+          >
+            Export Time Card (CSV)
+          </button>
+          <div className="bg-slate-800 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-700 font-semibold flex items-center gap-2">
+            <span>Weekly Hours Logged:</span>
+            <strong className="text-emerald-400 text-sm">{totalFilteredHours} hrs</strong>
+          </div>
         </div>
       </div>
 
-      {/* Weekly Roundup Calendar */}
+      {/* Weekly Roundup Calendar (Wed to Tue) */}
       <div className="bg-slate-900 text-white p-4 rounded-xl shadow-md border border-slate-800">
         <div className="flex flex-col md:flex-row items-center justify-between mb-3 text-xs gap-2">
           <div className="flex items-center gap-2">
@@ -198,7 +341,7 @@ export default function ManagerDashboard({ userProfile }) {
               ← Prev Week
             </button>
             <span className="font-bold text-slate-200">
-              {weekDays[0].monthName} {weekDays[0].dayNumber} – {weekDays[6].monthName} {weekDays[6].dayNumber}
+              {weekDays[0].monthName} {weekDays[0].dayNumber} (Wed) – {weekDays[6].monthName} {weekDays[6].dayNumber} (Tue)
             </span>
             <button
               type="button"
@@ -340,7 +483,6 @@ export default function ManagerDashboard({ userProfile }) {
                       <option value="rejected">Rejected</option>
                     </select>
 
-                    {/* Delete Entry Button */}
                     <button
                       type="button"
                       onClick={() => handleDeleteEntry(entry.id, entry.project)}
@@ -369,7 +511,7 @@ export default function ManagerDashboard({ userProfile }) {
                     entry.tasks.map((t, idx) => (
                       <div key={idx} className="bg-slate-50 rounded-lg p-3 border border-slate-200 text-xs space-y-1">
                         <div className="flex justify-between font-bold text-slate-800">
-                          <span>{t.taskCategoryGroup} → {t.taskName}</span>
+                          <span>{t.taskCategoryGroup || t.taskName}</span>
                           <span className="text-emerald-700">{t.hours} hrs {t.travelTime > 0 ? `(+${t.travelTime} hrs travel)` : ''}</span>
                         </div>
                         {t.comments && (
