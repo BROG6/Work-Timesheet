@@ -273,14 +273,16 @@ export default function ManagerDashboard({ userProfile }) {
       right: { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" }
     };
 
+    // Compact Cell formatting (size 14 = 7pt, reduced cell padding)
     const makeCell = (text, bold = false, align = AlignmentType.LEFT, widthPct = null) => {
       return new TableCell({
         borders: thinBorder,
         width: widthPct ? { size: widthPct, type: WidthType.PERCENTAGE } : undefined,
+        margin: { top: 40, bottom: 40, left: 60, right: 60 },
         children: [
           new Paragraph({
             alignment: align,
-            children: [new TextRun({ text: String(text || ""), bold, size: 18 })]
+            children: [new TextRun({ text: String(text || ""), bold, size: 14 })]
           })
         ]
       });
@@ -324,19 +326,19 @@ export default function ManagerDashboard({ userProfile }) {
 
       const tableRows = [];
 
-      // Header Row: Days
+      // Header Row: Days (Column width adjustments for more breathing room)
       const dayCells = [
-        makeCell("Day", true, AlignmentType.LEFT, 28),
-        ...weekDays.map((d) => makeCell(d.dayName, true, AlignmentType.CENTER, 9)),
-        makeCell("Totals", true, AlignmentType.CENTER, 10)
+        makeCell("Day", true, AlignmentType.LEFT, 22),
+        ...weekDays.map((d) => makeCell(d.dayName, true, AlignmentType.CENTER, 9.75)),
+        makeCell("Totals", true, AlignmentType.CENTER, 9.75)
       ];
       tableRows.push(new TableRow({ children: dayCells }));
 
       // Date Row (Displays DD/MM only)
       const dateCells = [
-        makeCell("Date", true, AlignmentType.LEFT, 28),
-        ...weekDays.map((d) => makeCell(formatDayMonth(d.dateStr), false, AlignmentType.CENTER, 9)),
-        makeCell("", false, AlignmentType.CENTER, 10)
+        makeCell("Date", true, AlignmentType.LEFT, 22),
+        ...weekDays.map((d) => makeCell(formatDayMonth(d.dateStr), false, AlignmentType.CENTER, 9.75)),
+        makeCell("", false, AlignmentType.CENTER, 9.75)
       ];
       tableRows.push(new TableRow({ children: dateCells }));
 
@@ -348,9 +350,9 @@ export default function ManagerDashboard({ userProfile }) {
           return matches.map((m) => m.timeCardDetails?.[fieldKey] || "").filter(Boolean).join(" / ");
         });
         const cells = [
-          makeCell(label, true, AlignmentType.LEFT, 28),
-          ...rowVals.map((v) => makeCell(v, false, AlignmentType.CENTER, 9)),
-          makeCell("", false, AlignmentType.CENTER, 10)
+          makeCell(label, true, AlignmentType.LEFT, 22),
+          ...rowVals.map((v) => makeCell(v, false, AlignmentType.CENTER, 9.75)),
+          makeCell("", false, AlignmentType.CENTER, 9.75)
         ];
         tableRows.push(new TableRow({ children: cells }));
       };
@@ -381,9 +383,9 @@ export default function ManagerDashboard({ userProfile }) {
         });
 
         const catCells = [
-          makeCell(cat, false, AlignmentType.LEFT, 28),
-          ...dayVals.map((v) => makeCell(v, false, AlignmentType.CENTER, 9)),
-          makeCell(rowTotal > 0 ? rowTotal : "", true, AlignmentType.CENTER, 10)
+          makeCell(cat, false, AlignmentType.LEFT, 22),
+          ...dayVals.map((v) => makeCell(v, false, AlignmentType.CENTER, 9.75)),
+          makeCell(rowTotal > 0 ? rowTotal : "", true, AlignmentType.CENTER, 9.75)
         ];
         tableRows.push(new TableRow({ children: catCells }));
       });
@@ -398,9 +400,9 @@ export default function ManagerDashboard({ userProfile }) {
         return total > 0 ? total : "";
       });
       const totalCells = [
-        makeCell("TOTAL HOURS", true, AlignmentType.LEFT, 28),
-        ...dailyTotals.map((v) => makeCell(v, true, AlignmentType.CENTER, 9)),
-        makeCell(weekTotalHours > 0 ? weekTotalHours : "", true, AlignmentType.CENTER, 10)
+        makeCell("TOTAL HOURS", true, AlignmentType.LEFT, 22),
+        ...dailyTotals.map((v) => makeCell(v, true, AlignmentType.CENTER, 9.75)),
+        makeCell(weekTotalHours > 0 ? weekTotalHours : "", true, AlignmentType.CENTER, 9.75)
       ];
       tableRows.push(new TableRow({ children: totalCells }));
 
@@ -421,18 +423,18 @@ export default function ManagerDashboard({ userProfile }) {
         return dayTravel > 0 ? dayTravel : "";
       });
       const travelCells = [
-        makeCell("Travel Time", true, AlignmentType.LEFT, 28),
-        ...dailyTravel.map((v) => makeCell(v, false, AlignmentType.CENTER, 9)),
-        makeCell(weekTotalTravel > 0 ? weekTotalTravel : "", true, AlignmentType.CENTER, 10)
+        makeCell("Travel Time", true, AlignmentType.LEFT, 22),
+        ...dailyTravel.map((v) => makeCell(v, false, AlignmentType.CENTER, 9.75)),
+        makeCell(weekTotalTravel > 0 ? weekTotalTravel : "", true, AlignmentType.CENTER, 9.75)
       ];
       tableRows.push(new TableRow({ children: travelCells }));
 
       // Collect Comments
       const commentParagraphs = [
         new Paragraph({
-          children: [new TextRun({ text: "COMMENTS", bold: true, size: 20 })],
-          spaceBefore: 300,
-          spaceAfter: 100
+          children: [new TextRun({ text: "COMMENTS", bold: true, size: 18 })],
+          spaceBefore: 200,
+          spaceAfter: 80
         })
       ];
 
@@ -445,10 +447,10 @@ export default function ManagerDashboard({ userProfile }) {
               commentParagraphs.push(
                 new Paragraph({
                   children: [
-                    new TextRun({ text: `${formatDayMonth(displayDate(entry.date))}: `, bold: true, size: 18 }),
-                    new TextRun({ text: tk.comments, size: 18 })
+                    new TextRun({ text: `${formatDayMonth(displayDate(entry.date))}: `, bold: true, size: 16 }),
+                    new TextRun({ text: tk.comments, size: 16 })
                   ],
-                  spaceAfter: 60
+                  spaceAfter: 40
                 })
               );
             }
@@ -459,7 +461,7 @@ export default function ManagerDashboard({ userProfile }) {
       if (!commentsFound) {
         commentParagraphs.push(
           new Paragraph({
-            children: [new TextRun({ text: "No comments recorded for this week.", italic: true, size: 18 })]
+            children: [new TextRun({ text: "No comments recorded for this week.", italic: true, size: 16 })]
           })
         );
       }
@@ -467,10 +469,10 @@ export default function ManagerDashboard({ userProfile }) {
       return [
         new Paragraph({
           children: [
-            new TextRun({ text: `Staff Member: ${staffMember.label}`, bold: true, size: 22 }),
-            new TextRun({ text: `\t\tProject: ${staffProjects}`, bold: true, size: 22 })
+            new TextRun({ text: `Staff Member: ${staffMember.label}`, bold: true, size: 20 }),
+            new TextRun({ text: `\t\tProject: ${staffProjects}`, bold: true, size: 20 })
           ],
-          spaceAfter: 200
+          spaceAfter: 150
         }),
         new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
