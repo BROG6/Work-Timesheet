@@ -118,7 +118,7 @@ export default function ManagerDashboard({ userProfile }) {
       setUsers(userData);
     } catch (err) {
       console.error("Error fetching manager data:", err);
-    } fontinally {
+    } finally {
       setLoading(false);
     }
   };
