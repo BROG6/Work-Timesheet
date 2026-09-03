@@ -1,8 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebaseConfig';
-import { collection, addDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
+import { 
+  collection, 
+  addDoc, 
+  query, 
+  where, 
+  getDocs, 
+  getDocsFromCache,
+  serverTimestamp 
+} from 'firebase/firestore';
 
-// Categorized Task List from Company Time Card
+// Categorized Task List
 const TASK_CATEGORIES = {
   "Site Setup & Earthworks": [
     "Demolition",
@@ -53,15 +61,13 @@ const TASK_CATEGORIES = {
   ]
 };
 
-// Helper to get Wednesday of the current pay week (Wed - Tue)
 function getWednesday(d) {
   const date = new Date(d);
-  const day = date.getDay(); // 0 is Sun, 1 is Mon, 3 is Wed
+  const day = date.getDay();
   const diff = date.getDate() - day + (day < 3 ? -4 : 3);
   return new Date(date.setDate(diff));
 }
 
-// Helper to get the Monday of a given date's week
 function getMonday(d) {
   const date = new Date(d);
   const day = date.getDay();
@@ -69,7 +75,6 @@ function getMonday(d) {
   return new Date(date.setDate(diff));
 }
 
-// Helper to format date into YYYY-MM-DD
 function formatDate(dateObj) {
   const y = dateObj.getFullYear();
   const m = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -77,7 +82,6 @@ function formatDate(dateObj) {
   return `${y}-${m}-${d}`;
 }
 
-// Helper to format date into DD/MM/YYYY for display/matching
 function formatDisplayDate(dateObj) {
   const day = String(dateObj.getDate()).padStart(2, '0');
   const month = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -85,7 +89,6 @@ function formatDisplayDate(dateObj) {
   return `${day}/${month}/${year}`;
 }
 
-// Helper to convert stored YYYY-MM-DD strings to DD/MM/YYYY
 function displayDate(dateStr) {
   if (!dateStr) return '';
   if (dateStr.includes('-')) {
@@ -97,15 +100,13 @@ function displayDate(dateStr) {
   return dateStr;
 }
 
-// Helper to check if a YYYY-MM-DD string is Friday
 function isFriday(dateStr) {
   if (!dateStr) return false;
   const [year, month, day] = dateStr.split('-').map(Number);
   const d = new Date(year, month - 1, day);
-  return d.getDay() === 5; // 5 is Friday
+  return d.getDay() === 5;
 }
 
-// Helper for default task based on Friday logic
 const DEFAULT_BLANK_TASK = (dateStr) => {
   const isFri = isFriday(dateStr);
   return {
@@ -123,7 +124,21 @@ export default function TimesheetEntry({ user, userProfile }) {
   const userId = activeUser?.uid;
   const userName = userProfile?.name || activeUser?.name || activeUser?.email || 'Staff Member';
 
-  // Saved project preference
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   const [project, setProject] = useState(() => {
     if (userId) {
       return localStorage.getItem(`sjr_last_project_${userId}`) || localStorage.getItem('last_site_name') || '';
@@ -131,31 +146,25 @@ export default function TimesheetEntry({ user, userProfile }) {
     return localStorage.getItem('last_site_name') || '';
   });
 
-  // Selected date state (Stored strictly as YYYY-MM-DD)
   const [selectedDate, setSelectedDate] = useState(() => formatDate(new Date()));
-
-  // Calendar week view state (tracks current Monday)
   const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()));
 
-  // Weekly Hours State
   const [weeklyHours, setWeeklyHours] = useState(0);
   const [weekRangeStr, setWeekRangeStr] = useState('');
   const [loadingHours, setLoadingHours] = useState(true);
 
-  // Site Time Tracking with default state
   const [startTime, setStartTime] = useState('07:00');
   const [timeFinished, setTimeFinished] = useState(() => isFriday(formatDate(new Date())) ? '15:30' : '16:30');
   const [timeLeftSite, setTimeLeftSite] = useState('');
   const [timeReturned, setTimeReturned] = useState('');
 
-  // Dynamic Array of Tasks for the Day
   const [tasks, setTasks] = useState(() => [DEFAULT_BLANK_TASK(formatDate(new Date()))]);
 
   const [loading, setLoading] = useState(false);
   const [fetchingDay, setFetchingDay] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(null);
 
-  // Fetch weekly hours calculation (Wednesday - Tuesday)
+  // Fetch weekly hours (handles cache seamlessly)
   const fetchStaffWeeklyHours = async () => {
     if (!userId) return;
     setLoadingHours(true);
@@ -164,16 +173,20 @@ export default function TimesheetEntry({ user, userProfile }) {
       const currentTue = new Date(currentWed);
       currentTue.setDate(currentWed.getDate() + 6);
 
-      const weekStart = formatDisplayDate(currentWed);
-      const weekEnd = formatDisplayDate(currentTue);
-      setWeekRangeStr(`${weekStart} – ${weekEnd}`);
+      setWeekRangeStr(`${formatDisplayDate(currentWed)} – ${formatDisplayDate(currentTue)}`);
 
       const q = query(
         collection(db, 'timesheets'),
         where('userId', '==', userId)
       );
 
-      const querySnapshot = await getDocs(q);
+      // Attempt getDocs; if network fails, persistentLocalCache fulfills from IndexedDB
+      let querySnapshot;
+      try {
+        querySnapshot = await getDocs(q);
+      } catch (e) {
+        querySnapshot = await getDocsFromCache(q);
+      }
 
       const validWeekDates = Array.from({ length: 7 }, (_, i) => {
         const d = new Date(currentWed);
@@ -184,16 +197,14 @@ export default function TimesheetEntry({ user, userProfile }) {
       let total = 0;
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        const formattedDate = displayDate(data.date);
-
-        if (validWeekDates.includes(formattedDate)) {
+        if (validWeekDates.includes(displayDate(data.date))) {
           total += parseFloat(data.totalHours) || 0;
         }
       });
 
       setWeeklyHours(total);
     } catch (err) {
-      console.error("Error calculating weekly hours:", err);
+      console.warn("Could not retrieve weekly hours:", err);
     } finally {
       setLoadingHours(false);
     }
@@ -205,7 +216,7 @@ export default function TimesheetEntry({ user, userProfile }) {
     }
   }, [userId]);
 
-  // Load existing entry or set defaults for selected date
+  // Load selected date entry with local cache fallback
   useEffect(() => {
     let isMounted = true;
 
@@ -220,7 +231,12 @@ export default function TimesheetEntry({ user, userProfile }) {
           where('date', '==', selectedDate)
         );
 
-        const querySnapshot = await getDocs(q);
+        let querySnapshot;
+        try {
+          querySnapshot = await getDocs(q);
+        } catch {
+          querySnapshot = await getDocsFromCache(q);
+        }
 
         if (!isMounted) return;
 
@@ -235,7 +251,7 @@ export default function TimesheetEntry({ user, userProfile }) {
             setTimeReturned(docData.timeCardDetails.timeReturned || '');
           }
 
-          if (docData.tasks && docData.tasks.length > 0) {
+          if (docData.tasks?.length > 0) {
             setTasks(
               docData.tasks.map((t) => ({
                 id: Date.now() + Math.random(),
@@ -248,7 +264,6 @@ export default function TimesheetEntry({ user, userProfile }) {
             );
           }
         } else {
-          // Reset to requested default values if no entry exists for selected date
           setStartTime('07:00');
           setTimeFinished(isFriday(selectedDate) ? '15:30' : '16:30');
           setTimeLeftSite('');
@@ -256,7 +271,7 @@ export default function TimesheetEntry({ user, userProfile }) {
           setTasks([DEFAULT_BLANK_TASK(selectedDate)]);
         }
       } catch (err) {
-        console.warn("Could not fetch date entry:", err);
+        console.warn("Cache load note:", err);
       } finally {
         if (isMounted) setFetchingDay(false);
       }
@@ -269,7 +284,6 @@ export default function TimesheetEntry({ user, userProfile }) {
     };
   }, [selectedDate, userId]);
 
-  // Generate 7 days (Mon-Sun) for current week grid
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const day = new Date(currentMonday);
     day.setDate(currentMonday.getDate() + i);
@@ -281,64 +295,6 @@ export default function TimesheetEntry({ user, userProfile }) {
     };
   });
 
-  const handlePrevWeek = () => {
-    const prevMon = new Date(currentMonday);
-    prevMon.setDate(currentMonday.getDate() - 7);
-    setCurrentMonday(prevMon);
-  };
-
-  const handleNextWeek = () => {
-    const nextMon = new Date(currentMonday);
-    nextMon.setDate(currentMonday.getDate() + 7);
-    setCurrentMonday(nextMon);
-  };
-
-  const handleTodayClick = () => {
-    const todayStr = formatDate(new Date());
-    setCurrentMonday(getMonday(new Date()));
-    setSelectedDate(todayStr);
-  };
-
-  const handleProjectChange = (e) => {
-    const val = e.target.value;
-    setProject(val);
-    if (userId) {
-      localStorage.setItem(`sjr_last_project_${userId}`, val);
-    }
-    localStorage.setItem('last_site_name', val);
-  };
-
-  const handleAddTask = () => {
-    setTasks((prevTasks) => [...prevTasks, {
-      id: Date.now() + Math.random(),
-      categoryGroup: "Framing & Envelope",
-      taskName: "Wall Framing",
-      hours: '0',
-      travelTime: '',
-      comments: ''
-    }]);
-  };
-
-  const handleRemoveTask = (id) => {
-    if (tasks.length === 1) return;
-    setTasks((prevTasks) => prevTasks.filter((t) => t.id !== id));
-  };
-
-  const handleTaskChange = (id, field, value) => {
-    setTasks((prevTasks) =>
-      prevTasks.map((t) => {
-        if (t.id === id) {
-          const updated = { ...t, [field]: value };
-          if (field === 'categoryGroup') {
-            updated.taskName = TASK_CATEGORIES[value][0];
-          }
-          return updated;
-        }
-        return t;
-      })
-    );
-  };
-
   const totalHours = tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
 
   const handleSubmit = async (e) => {
@@ -349,45 +305,47 @@ export default function TimesheetEntry({ user, userProfile }) {
       return;
     }
 
-    if (!userId) {
-      alert("User session not found. Please log in again.");
-      return;
-    }
-
     setLoading(true);
-    setSuccess(false);
+
+    const payload = {
+      userId,
+      userName,
+      companyCode: userProfile?.companyCode || 'SJR Builders',
+      project: project || "General / Unassigned",
+      date: selectedDate,
+      timeCardDetails: { startTime, timeFinished, timeLeftSite, timeReturned },
+      tasks: tasks.map((t) => ({
+        taskCategoryGroup: t.categoryGroup,
+        taskName: t.taskName,
+        hours: parseFloat(t.hours) || 0,
+        travelTime: t.travelTime ? parseFloat(t.travelTime) : 0,
+        comments: t.comments
+      })),
+      totalHours,
+      status: 'pending',
+      createdAt: serverTimestamp()
+    };
 
     try {
-      await addDoc(collection(db, 'timesheets'), {
-        userId: userId,
-        userName: userName,
-        companyCode: userProfile?.companyCode || 'SJR Builders',
-        project: project || "General / Unassigned",
-        date: selectedDate,
-        timeCardDetails: {
-          startTime,
-          timeFinished,
-          timeLeftSite,
-          timeReturned
-        },
-        tasks: tasks.map((t) => ({
-          taskCategoryGroup: t.categoryGroup,
-          taskName: t.taskName,
-          hours: parseFloat(t.hours) || 0,
-          travelTime: t.travelTime ? parseFloat(t.travelTime) : 0,
-          comments: t.comments
-        })),
-        totalHours: totalHours,
-        status: 'pending',
-        createdAt: serverTimestamp()
+      // With persistentLocalCache, addDoc resolves locally instantly when offline
+      await addDoc(collection(db, 'timesheets'), payload);
+
+      setWeeklyHours((prev) => prev + totalHours);
+
+      setStatusMessage({
+        type: 'success',
+        text: isOnline
+          ? `Entry saved for ${displayDate(selectedDate)}!`
+          : `Saved locally! Will sync automatically when back online.`
       });
 
-      setSuccess(true);
-      fetchStaffWeeklyHours();
-      setTimeout(() => setSuccess(false), 3500);
+      setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
-      console.error("Error submitting entry:", err);
-      alert("Failed to submit timesheet. Check your connection or console.");
+      console.error("Submission error:", err);
+      setStatusMessage({
+        type: 'error',
+        text: "Could not write entry locally. Check storage settings."
+      });
     } finally {
       setLoading(false);
     }
@@ -397,7 +355,15 @@ export default function TimesheetEntry({ user, userProfile }) {
 
   return (
     <div className="max-w-xl mx-auto space-y-4 my-4">
-      {/* WEEKLY HOURS TOTAL BANNER */}
+      {/* Network Connection Banner */}
+      {!isOnline && (
+        <div className="bg-amber-500 text-slate-950 px-4 py-2 rounded-lg text-xs font-bold flex items-center justify-between shadow">
+          <span>⚡ Working Offline</span>
+          <span className="font-medium text-[11px]">Saved locally & auto-syncs when online</span>
+        </div>
+      )}
+
+      {/* Weekly Hours Banner */}
       <div className="bg-slate-900 text-white p-5 rounded-xl shadow-sm border border-slate-800 flex justify-between items-center">
         <div>
           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
@@ -422,12 +388,16 @@ export default function TimesheetEntry({ user, userProfile }) {
           </p>
         </div>
 
-        {/* Week Calendar Navigation */}
+        {/* 7-Day Navigation */}
         <div className="bg-slate-900 text-white p-3 rounded-xl mb-5 shadow-inner">
           <div className="flex items-center justify-between mb-3 text-xs">
             <button
               type="button"
-              onClick={handlePrevWeek}
+              onClick={() => {
+                const p = new Date(currentMonday);
+                p.setDate(p.getDate() - 7);
+                setCurrentMonday(p);
+              }}
               className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
             >
               ← Prev Week
@@ -440,14 +410,21 @@ export default function TimesheetEntry({ user, userProfile }) {
             <div className="flex gap-1.5">
               <button
                 type="button"
-                onClick={handleTodayClick}
+                onClick={() => {
+                  setCurrentMonday(getMonday(new Date()));
+                  setSelectedDate(todayStr);
+                }}
                 className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded-md font-bold transition-colors"
               >
                 Today
               </button>
               <button
                 type="button"
-                onClick={handleNextWeek}
+                onClick={() => {
+                  const n = new Date(currentMonday);
+                  n.setDate(n.getDate() + 7);
+                  setCurrentMonday(n);
+                }}
                 className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
               >
                 Next Week →
@@ -455,7 +432,6 @@ export default function TimesheetEntry({ user, userProfile }) {
             </div>
           </div>
 
-          {/* 7-Day Grid */}
           <div className="grid grid-cols-7 gap-1">
             {weekDays.map((day) => {
               const isSelected = selectedDate === day.dateStr;
@@ -493,25 +469,33 @@ export default function TimesheetEntry({ user, userProfile }) {
           </div>
         )}
 
-        {success && (
-          <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-sm font-semibold flex items-center gap-2">
-            <span>✓</span> Entry saved for {displayDate(selectedDate)}!
+        {statusMessage && (
+          <div className={`mb-4 p-3 rounded-lg text-sm font-semibold flex items-center gap-2 ${
+            statusMessage.type === 'error'
+              ? 'bg-rose-50 border border-rose-200 text-rose-800'
+              : 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+          }`}>
+            <span>{statusMessage.type === 'error' ? '⚠️' : '✓'}</span> {statusMessage.text}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Project Name & Active Date */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                Project Name / Site <span className="text-[10px] text-emerald-600 lowercase font-normal">(saved for next time)</span>
+                Project Name / Site
               </label>
               <input
                 type="text"
                 placeholder="e.g. Levin Renovation"
                 value={project}
-                onChange={handleProjectChange}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setProject(val);
+                  if (userId) localStorage.setItem(`sjr_last_project_${userId}`, val);
+                  localStorage.setItem('last_site_name', val);
+                }}
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500"
                 required
               />
             </div>
@@ -526,13 +510,13 @@ export default function TimesheetEntry({ user, userProfile }) {
                     setCurrentMonday(getMonday(e.target.value));
                   }
                 }}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500"
                 required
               />
             </div>
           </div>
 
-          {/* Site Arrival & Exit Times */}
+          {/* On-Site Hours */}
           <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
             <span className="block text-xs font-bold text-slate-700 uppercase mb-2">On-Site Hours (Optional)</span>
             <div className="grid grid-cols-2 gap-2 text-xs">
@@ -575,7 +559,7 @@ export default function TimesheetEntry({ user, userProfile }) {
             </div>
           </div>
 
-          {/* Tasks Section */}
+          {/* Tasks List */}
           <div className="space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200 pb-1">
               <span className="text-xs font-bold text-slate-700 uppercase">Tasks Completed</span>
@@ -583,13 +567,13 @@ export default function TimesheetEntry({ user, userProfile }) {
             </div>
 
             {tasks.map((taskItem, index) => (
-              <div key={taskItem.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-3 relative">
+              <div key={taskItem.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-bold text-slate-500 uppercase">Task #{index + 1}</span>
                   {tasks.length > 1 && (
                     <button
                       type="button"
-                      onClick={() => handleRemoveTask(taskItem.id)}
+                      onClick={() => setTasks((prev) => prev.filter((t) => t.id !== taskItem.id))}
                       className="text-xs text-rose-600 hover:text-rose-800 font-semibold"
                     >
                       Remove
@@ -597,13 +581,19 @@ export default function TimesheetEntry({ user, userProfile }) {
                   )}
                 </div>
 
-                {/* Category Group & Task Name Selection */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Category Group</label>
                     <select
                       value={taskItem.categoryGroup}
-                      onChange={(e) => handleTaskChange(taskItem.id, 'categoryGroup', e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setTasks((prev) => prev.map((t) => t.id === taskItem.id ? {
+                          ...t,
+                          categoryGroup: val,
+                          taskName: TASK_CATEGORIES[val][0]
+                        } : t));
+                      }}
                       className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800"
                     >
                       {Object.keys(TASK_CATEGORIES).map((group) => (
@@ -616,7 +606,10 @@ export default function TimesheetEntry({ user, userProfile }) {
                     <label className="block text-xs font-medium text-slate-600 mb-1">Task Undertaken</label>
                     <select
                       value={taskItem.taskName}
-                      onChange={(e) => handleTaskChange(taskItem.id, 'taskName', e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setTasks((prev) => prev.map((t) => t.id === taskItem.id ? { ...t, taskName: val } : t));
+                      }}
                       className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800"
                     >
                       {TASK_CATEGORIES[taskItem.categoryGroup]?.map((t) => (
@@ -626,17 +619,18 @@ export default function TimesheetEntry({ user, userProfile }) {
                   </div>
                 </div>
 
-                {/* Hours & Travel Time */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Task Hours</label>
                     <input
                       type="number"
                       step="0.25"
-                      placeholder="e.g. 4.0"
                       value={taskItem.hours}
-                      onChange={(e) => handleTaskChange(taskItem.id, 'hours', e.target.value)}
-                      className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 font-bold text-slate-800"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setTasks((prev) => prev.map((t) => t.id === taskItem.id ? { ...t, hours: val } : t));
+                      }}
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500"
                       required
                     />
                   </div>
@@ -645,32 +639,41 @@ export default function TimesheetEntry({ user, userProfile }) {
                     <input
                       type="number"
                       step="0.25"
-                      placeholder="e.g. 0.5"
                       value={taskItem.travelTime}
-                      onChange={(e) => handleTaskChange(taskItem.id, 'travelTime', e.target.value)}
-                      className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 text-slate-800 font-medium"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setTasks((prev) => prev.map((t) => t.id === taskItem.id ? { ...t, travelTime: val } : t));
+                      }}
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
                 </div>
 
-                {/* Comments */}
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Comments / Work Details</label>
                   <textarea
                     rows="2"
-                    placeholder="Task specifics or notes..."
                     value={taskItem.comments}
-                    onChange={(e) => handleTaskChange(taskItem.id, 'comments', e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 font-medium"
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setTasks((prev) => prev.map((t) => t.id === taskItem.id ? { ...t, comments: val } : t));
+                    }}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
               </div>
             ))}
 
-            {/* Add Additional Task Button */}
             <button
               type="button"
-              onClick={handleAddTask}
+              onClick={() => setTasks((prev) => [...prev, {
+                id: Date.now() + Math.random(),
+                categoryGroup: "Framing & Envelope",
+                taskName: "Wall Framing",
+                hours: '0',
+                travelTime: '',
+                comments: ''
+              }])}
               className="w-full py-2 px-3 border-2 border-dashed border-emerald-600 text-emerald-700 font-bold rounded-lg hover:bg-emerald-50 text-sm transition-colors"
             >
               + Add Another Task
@@ -689,3 +692,4 @@ export default function TimesheetEntry({ user, userProfile }) {
     </div>
   );
 }
+ 
