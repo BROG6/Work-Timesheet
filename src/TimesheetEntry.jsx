@@ -53,6 +53,14 @@ const TASK_CATEGORIES = {
   ]
 };
 
+// Helper to get Wednesday of the current pay week (Wed - Tue)
+function getWednesday(d) {
+  const date = new Date(d);
+  const day = date.getDay(); // 0 is Sun, 1 is Mon, 3 is Wed
+  const diff = date.getDate() - day + (day < 3 ? -4 : 3);
+  return new Date(date.setDate(diff));
+}
+
 // Helper to get the Monday of a given date's week
 function getMonday(d) {
   const date = new Date(d);
@@ -66,6 +74,26 @@ function formatDate(dateObj) {
   return dateObj.toISOString().split('T')[0];
 }
 
+// Helper to format date into DD/MM/YYYY for display/matching
+function formatDisplayDate(dateObj) {
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const year = dateObj.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+// Helper to convert stored YYYY-MM-DD strings to DD/MM/YYYY
+function displayDate(dateStr) {
+  if (!dateStr) return '';
+  if (dateStr.includes('-')) {
+    const parts = dateStr.split('-');
+    if (parts.length === 3 && parts[0].length === 4) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+  }
+  return dateStr;
+}
+
 const DEFAULT_BLANK_TASK = () => ({
   id: Date.now() + Math.random(),
   categoryGroup: "Framing & Envelope",
@@ -76,9 +104,17 @@ const DEFAULT_BLANK_TASK = () => ({
 });
 
 export default function TimesheetEntry({ user, userProfile }) {
+  // Normalize user ID and profile details regardless of passed prop name
+  const activeUser = user || userProfile;
+  const userId = activeUser?.uid;
+  const userName = userProfile?.name || activeUser?.name || activeUser?.email || 'Staff Member';
+
   // Saved project preference
   const [project, setProject] = useState(() => {
-    return localStorage.getItem(`sjr_last_project_${user.uid}`) || '';
+    if (userId) {
+      return localStorage.getItem(`sjr_last_project_${userId}`) || localStorage.getItem('last_site_name') || '';
+    }
+    return localStorage.getItem('last_site_name') || '';
   });
 
   // Selected date state
@@ -86,6 +122,11 @@ export default function TimesheetEntry({ user, userProfile }) {
 
   // Calendar week view state (tracks current Monday)
   const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()));
+
+  // Weekly Hours State
+  const [weeklyHours, setWeeklyHours] = useState(0);
+  const [weekRangeStr, setWeekRangeStr] = useState('');
+  const [loadingHours, setLoadingHours] = useState(true);
 
   // Site Time Tracking
   const [startTime, setStartTime] = useState('');
@@ -100,18 +141,68 @@ export default function TimesheetEntry({ user, userProfile }) {
   const [fetchingDay, setFetchingDay] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  // Load existing entry for the selected date whenever selectedDate or user changes
+  // Fetch weekly hours calculation (Wednesday - Tuesday)
+  const fetchStaffWeeklyHours = async () => {
+    if (!userId) return;
+    setLoadingHours(true);
+    try {
+      const currentWed = getWednesday(new Date());
+      const currentTue = new Date(currentWed);
+      currentTue.setDate(currentWed.getDate() + 6);
+
+      const weekStart = formatDisplayDate(currentWed);
+      const weekEnd = formatDisplayDate(currentTue);
+      setWeekRangeStr(`${weekStart} – ${weekEnd}`);
+
+      const q = query(
+        collection(db, 'timesheets'),
+        where('userId', '==', userId)
+      );
+
+      const querySnapshot = await getDocs(q);
+
+      const validWeekDates = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(currentWed);
+        d.setDate(currentWed.getDate() + i);
+        return formatDisplayDate(d);
+      });
+
+      let total = 0;
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        const formattedDate = displayDate(data.date);
+
+        if (validWeekDates.includes(formattedDate)) {
+          total += parseFloat(data.totalHours) || 0;
+        }
+      });
+
+      setWeeklyHours(total);
+    } catch (err) {
+      console.error("Error calculating weekly hours:", err);
+    } finally {
+      setLoadingHours(false);
+    }
+  };
+
+  useEffect(() => {
+    if (userId) {
+      fetchStaffWeeklyHours();
+    }
+  }, [userId]);
+
+  // Load existing entry for the selected date whenever selectedDate or userId changes
   useEffect(() => {
     let isMounted = true;
 
     async function loadDayEntry() {
-      if (!user?.uid || !selectedDate) return;
+      if (!userId || !selectedDate) return;
       setFetchingDay(true);
 
       try {
         const q = query(
           collection(db, 'timesheets'),
-          where('userId', '==', user.uid),
+          where('userId', '==', userId),
           where('date', '==', selectedDate)
         );
 
@@ -120,7 +211,6 @@ export default function TimesheetEntry({ user, userProfile }) {
         if (!isMounted) return;
 
         if (!querySnapshot.empty) {
-          // Take the most recently saved entry for this date
           const docData = querySnapshot.docs[querySnapshot.docs.length - 1].data();
 
           if (docData.project) setProject(docData.project);
@@ -135,8 +225,8 @@ export default function TimesheetEntry({ user, userProfile }) {
             setTasks(
               docData.tasks.map((t) => ({
                 id: Date.now() + Math.random(),
-                categoryGroup: t.taskCategoryGroup || "Framing & Envelope",
-                taskName: t.taskName || "Wall Framing",
+                categoryGroup: t.taskCategoryGroup || t.categoryGroup || "Framing & Envelope",
+                taskName: t.taskName || t.category || "Wall Framing",
                 hours: t.hours !== undefined ? String(t.hours) : '',
                 travelTime: t.travelTime !== undefined ? String(t.travelTime) : '',
                 comments: t.comments || ''
@@ -144,7 +234,6 @@ export default function TimesheetEntry({ user, userProfile }) {
             );
           }
         } else {
-          // Reset inputs if no entry exists for this selected date
           setStartTime('');
           setTimeFinished('');
           setTimeLeftSite('');
@@ -163,9 +252,9 @@ export default function TimesheetEntry({ user, userProfile }) {
     return () => {
       isMounted = false;
     };
-  }, [selectedDate, user?.uid]);
+  }, [selectedDate, userId]);
 
-  // Generate 7 days (Mon-Sun) for current week
+  // Generate 7 days (Mon-Sun) for current week grid
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const day = new Date(currentMonday);
     day.setDate(currentMonday.getDate() + i);
@@ -198,7 +287,10 @@ export default function TimesheetEntry({ user, userProfile }) {
   const handleProjectChange = (e) => {
     const val = e.target.value;
     setProject(val);
-    localStorage.setItem(`sjr_last_project_${user.uid}`, val);
+    if (userId) {
+      localStorage.setItem(`sjr_last_project_${userId}`, val);
+    }
+    localStorage.setItem('last_site_name', val);
   };
 
   const handleAddTask = () => {
@@ -234,13 +326,18 @@ export default function TimesheetEntry({ user, userProfile }) {
       return;
     }
 
+    if (!userId) {
+      alert("User session not found. Please log in again.");
+      return;
+    }
+
     setLoading(true);
     setSuccess(false);
 
     try {
       await addDoc(collection(db, 'timesheets'), {
-        userId: user.uid,
-        userName: userProfile?.name || user.email,
+        userId: userId,
+        userName: userName,
         companyCode: userProfile?.companyCode || 'SJR Builders',
         project: project || "General / Unassigned",
         date: selectedDate,
@@ -263,6 +360,7 @@ export default function TimesheetEntry({ user, userProfile }) {
       });
 
       setSuccess(true);
+      fetchStaffWeeklyHours(); // Update weekly total after submission
       setTimeout(() => setSuccess(false), 3500);
     } catch (err) {
       console.warn("Offline or network delay caught during submission:", err);
@@ -276,271 +374,294 @@ export default function TimesheetEntry({ user, userProfile }) {
   const todayStr = formatDate(new Date());
 
   return (
-    <div className="max-w-xl mx-auto bg-white border border-slate-200 rounded-xl shadow-sm p-5 my-4">
-      <div className="border-b border-slate-200 pb-3 mb-4">
-        <h2 className="text-xl font-bold text-slate-900">Weekly Time Card Entry</h2>
-        <p className="text-xs text-slate-500 font-medium">Logged for: <span className="text-slate-800 font-semibold">{userProfile?.name || user.email}</span></p>
+    <div className="max-w-xl mx-auto space-y-4 my-4">
+      {/* WEEKLY HOURS TOTAL BANNER */}
+      <div className="bg-slate-900 text-white p-5 rounded-xl shadow-sm border border-slate-800 flex justify-between items-center">
+        <div>
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+            This Week's Total Hours
+          </span>
+          <span className="text-xs text-slate-300 font-medium mt-0.5 block">
+            {weekRangeStr || "Current Pay Week"}
+          </span>
+        </div>
+        <div className="text-right">
+          <span className="text-3xl font-black text-emerald-400">
+            {loadingHours ? "..." : `${weeklyHours} hrs`}
+          </span>
+        </div>
       </div>
 
-      {/* Week Calendar Navigation */}
-      <div className="bg-slate-900 text-white p-3 rounded-xl mb-5 shadow-inner">
-        <div className="flex items-center justify-between mb-3 text-xs">
-          <button
-            type="button"
-            onClick={handlePrevWeek}
-            className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
-          >
-            ← Prev Week
-          </button>
-          
-          <span className="font-bold text-slate-200">
-            {weekDays[0].monthName} {weekDays[0].dayNumber} – {weekDays[6].monthName} {weekDays[6].dayNumber}
-          </span>
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+        <div className="border-b border-slate-200 pb-3 mb-4">
+          <h2 className="text-xl font-bold text-slate-900">Weekly Time Card Entry</h2>
+          <p className="text-xs text-slate-500 font-medium">
+            Logged for: <span className="text-slate-800 font-semibold">{userName}</span>
+          </p>
+        </div>
 
-          <div className="flex gap-1.5">
+        {/* Week Calendar Navigation */}
+        <div className="bg-slate-900 text-white p-3 rounded-xl mb-5 shadow-inner">
+          <div className="flex items-center justify-between mb-3 text-xs">
             <button
               type="button"
-              onClick={handleTodayClick}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded-md font-bold transition-colors"
-            >
-              Today
-            </button>
-            <button
-              type="button"
-              onClick={handleNextWeek}
+              onClick={handlePrevWeek}
               className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
             >
-              Next Week →
+              ← Prev Week
             </button>
-          </div>
-        </div>
+            
+            <span className="font-bold text-slate-200">
+              {weekDays[0].monthName} {weekDays[0].dayNumber} – {weekDays[6].monthName} {weekDays[6].dayNumber}
+            </span>
 
-        {/* 7-Day Grid */}
-        <div className="grid grid-cols-7 gap-1">
-          {weekDays.map((day) => {
-            const isSelected = selectedDate === day.dateStr;
-            const isToday = todayStr === day.dateStr;
-
-            return (
+            <div className="flex gap-1.5">
               <button
-                key={day.dateStr}
                 type="button"
-                onClick={() => setSelectedDate(day.dateStr)}
-                className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${
-                  isSelected
-                    ? 'bg-emerald-500 text-slate-950 font-bold shadow-md scale-105'
-                    : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
-                }`}
+                onClick={handleTodayClick}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded-md font-bold transition-colors"
               >
-                <span className="text-[10px] uppercase font-semibold opacity-80">{day.dayName}</span>
-                <span className="text-base font-extrabold my-0.5">{day.dayNumber}</span>
-                {isToday && (
-                  <span className={`text-[8px] px-1 rounded uppercase tracking-wider font-bold ${
-                    isSelected ? 'bg-slate-950 text-emerald-300' : 'bg-emerald-500/20 text-emerald-400'
-                  }`}>
-                    Today
-                  </span>
-                )}
+                Today
               </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {fetchingDay && (
-        <div className="text-center py-2 text-xs font-semibold text-slate-500 animate-pulse">
-          Loading entry for {selectedDate}...
-        </div>
-      )}
-
-      {success && (
-        <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-sm font-semibold flex items-center gap-2">
-          <span>✓</span> Entry saved for {selectedDate}!
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Project Name & Active Date */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Project Name / Site</label>
-            <input
-              type="text"
-              placeholder="e.g. Levin Renovation"
-              value={project}
-              onChange={handleProjectChange}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium focus:ring-2 focus:ring-emerald-500"
-              required
-            />
+              <button
+                type="button"
+                onClick={handleNextWeek}
+                className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
+              >
+                Next Week →
+              </button>
+            </div>
           </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Selected Date</label>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => {
-                setSelectedDate(e.target.value);
-                setCurrentMonday(getMonday(e.target.value));
-              }}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium focus:ring-2 focus:ring-emerald-500"
-              required
-            />
+
+          {/* 7-Day Grid */}
+          <div className="grid grid-cols-7 gap-1">
+            {weekDays.map((day) => {
+              const isSelected = selectedDate === day.dateStr;
+              const isToday = todayStr === day.dateStr;
+
+              return (
+                <button
+                  key={day.dateStr}
+                  type="button"
+                  onClick={() => setSelectedDate(day.dateStr)}
+                  className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${
+                    isSelected
+                      ? 'bg-emerald-500 text-slate-950 font-bold shadow-md scale-105'
+                      : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
+                  }`}
+                >
+                  <span className="text-[10px] uppercase font-semibold opacity-80">{day.dayName}</span>
+                  <span className="text-base font-extrabold my-0.5">{day.dayNumber}</span>
+                  {isToday && (
+                    <span className={`text-[8px] px-1 rounded uppercase tracking-wider font-bold ${
+                      isSelected ? 'bg-slate-950 text-emerald-300' : 'bg-emerald-500/20 text-emerald-400'
+                    }`}>
+                      Today
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Site Arrival & Exit Times */}
-        <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-          <span className="block text-xs font-bold text-slate-700 uppercase mb-2">On-Site Hours (Optional)</span>
-          <div className="grid grid-cols-2 gap-2 text-xs">
+        {fetchingDay && (
+          <div className="text-center py-2 text-xs font-semibold text-slate-500 animate-pulse">
+            Loading entry for {selectedDate}...
+          </div>
+        )}
+
+        {success && (
+          <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-sm font-semibold flex items-center gap-2">
+            <span>✓</span> Entry saved for {selectedDate}!
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Project Name & Active Date */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label className="text-slate-500 font-medium">Start Time</label>
-              <input 
-                type="time" 
-                value={startTime} 
-                onChange={(e) => setStartTime(e.target.value)} 
-                className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5" 
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                Project Name / Site <span className="text-[10px] text-emerald-600 lowercase font-normal">(saved for next time)</span>
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Levin Renovation"
+                value={project}
+                onChange={handleProjectChange}
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                required
               />
             </div>
             <div>
-              <label className="text-slate-500 font-medium">Time Finished</label>
-              <input 
-                type="time" 
-                value={timeFinished} 
-                onChange={(e) => setTimeFinished(e.target.value)} 
-                className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5" 
-              />
-            </div>
-            <div>
-              <label className="text-slate-500 font-medium">Time Left Site</label>
-              <input 
-                type="time" 
-                value={timeLeftSite} 
-                onChange={(e) => setTimeLeftSite(e.target.value)} 
-                className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5" 
-              />
-            </div>
-            <div>
-              <label className="text-slate-500 font-medium">Time Returned</label>
-              <input 
-                type="time" 
-                value={timeReturned} 
-                onChange={(e) => setTimeReturned(e.target.value)} 
-                className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5" 
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Selected Date</label>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => {
+                  setSelectedDate(e.target.value);
+                  setCurrentMonday(getMonday(e.target.value));
+                }}
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                required
               />
             </div>
           </div>
-        </div>
 
-        {/* Tasks Section */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-1">
-            <span className="text-xs font-bold text-slate-700 uppercase">Tasks Completed</span>
-            <span className="text-xs font-semibold text-emerald-700">Total: {totalHours} hrs</span>
-          </div>
-
-          {tasks.map((taskItem, index) => (
-            <div key={taskItem.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-3 relative">
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-bold text-slate-500 uppercase">Task #{index + 1}</span>
-                {tasks.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveTask(taskItem.id)}
-                    className="text-xs text-rose-600 hover:text-rose-800 font-semibold"
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-
-              {/* Category & Specific Task */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Category Group</label>
-                  <select
-                    value={taskItem.categoryGroup}
-                    onChange={(e) => handleTaskChange(taskItem.id, 'categoryGroup', e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800"
-                  >
-                    {Object.keys(TASK_CATEGORIES).map((group) => (
-                      <option key={group} value={group}>{group}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Task Undertaken</label>
-                  <select
-                    value={taskItem.taskName}
-                    onChange={(e) => handleTaskChange(taskItem.id, 'taskName', e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800"
-                  >
-                    {TASK_CATEGORIES[taskItem.categoryGroup].map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Hours & Travel Time */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Task Hours</label>
-                  <input
-                    type="number"
-                    step="0.25"
-                    placeholder="e.g. 4.0"
-                    value={taskItem.hours}
-                    onChange={(e) => handleTaskChange(taskItem.id, 'hours', e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Travel Time (Hrs)</label>
-                  <input
-                    type="number"
-                    step="0.25"
-                    placeholder="e.g. 0.5"
-                    value={taskItem.travelTime}
-                    onChange={(e) => handleTaskChange(taskItem.id, 'travelTime', e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
-
-              {/* Comments */}
+          {/* Site Arrival & Exit Times */}
+          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <span className="block text-xs font-bold text-slate-700 uppercase mb-2">On-Site Hours (Optional)</span>
+            <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Comments / Work Details</label>
-                <textarea
-                  rows="2"
-                  placeholder="Task specifics or notes..."
-                  value={taskItem.comments}
-                  onChange={(e) => handleTaskChange(taskItem.id, 'comments', e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                <label className="text-slate-500 font-medium">Start Time</label>
+                <input 
+                  type="time" 
+                  value={startTime} 
+                  onChange={(e) => setStartTime(e.target.value)} 
+                  className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5 text-slate-800 font-medium" 
+                />
+              </div>
+              <div>
+                <label className="text-slate-500 font-medium">Time Finished</label>
+                <input 
+                  type="time" 
+                  value={timeFinished} 
+                  onChange={(e) => setTimeFinished(e.target.value)} 
+                  className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5 text-slate-800 font-medium" 
+                />
+              </div>
+              <div>
+                <label className="text-slate-500 font-medium">Time Left Site</label>
+                <input 
+                  type="time" 
+                  value={timeLeftSite} 
+                  onChange={(e) => setTimeLeftSite(e.target.value)} 
+                  className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5 text-slate-800 font-medium" 
+                />
+              </div>
+              <div>
+                <label className="text-slate-500 font-medium">Time Returned</label>
+                <input 
+                  type="time" 
+                  value={timeReturned} 
+                  onChange={(e) => setTimeReturned(e.target.value)} 
+                  className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5 text-slate-800 font-medium" 
                 />
               </div>
             </div>
-          ))}
+          </div>
 
-          {/* Add Additional Task Button */}
+          {/* Tasks Section */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-1">
+              <span className="text-xs font-bold text-slate-700 uppercase">Tasks Completed</span>
+              <span className="text-xs font-semibold text-emerald-700">Total: {totalHours} hrs</span>
+            </div>
+
+            {tasks.map((taskItem, index) => (
+              <div key={taskItem.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-3 relative">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-500 uppercase">Task #{index + 1}</span>
+                  {tasks.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTask(taskItem.id)}
+                      className="text-xs text-rose-600 hover:text-rose-800 font-semibold"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+
+                {/* Category Group & Task Name Selection */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Category Group</label>
+                    <select
+                      value={taskItem.categoryGroup}
+                      onChange={(e) => handleTaskChange(taskItem.id, 'categoryGroup', e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800"
+                    >
+                      {Object.keys(TASK_CATEGORIES).map((group) => (
+                        <option key={group} value={group}>{group}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Task Undertaken</label>
+                    <select
+                      value={taskItem.taskName}
+                      onChange={(e) => handleTaskChange(taskItem.id, 'taskName', e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800"
+                    >
+                      {TASK_CATEGORIES[taskItem.categoryGroup]?.map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      )) || <option value={taskItem.taskName}>{taskItem.taskName}</option>}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Hours & Travel Time */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Task Hours</label>
+                    <input
+                      type="number"
+                      step="0.25"
+                      placeholder="e.g. 4.0"
+                      value={taskItem.hours}
+                      onChange={(e) => handleTaskChange(taskItem.id, 'hours', e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 font-bold text-slate-800"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Travel Time (Hrs)</label>
+                    <input
+                      type="number"
+                      step="0.25"
+                      placeholder="e.g. 0.5"
+                      value={taskItem.travelTime}
+                      onChange={(e) => handleTaskChange(taskItem.id, 'travelTime', e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 text-slate-800 font-medium"
+                    />
+                  </div>
+                </div>
+
+                {/* Comments */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Comments / Work Details</label>
+                  <textarea
+                    rows="2"
+                    placeholder="Task specifics or notes..."
+                    value={taskItem.comments}
+                    onChange={(e) => handleTaskChange(taskItem.id, 'comments', e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 font-medium"
+                  />
+                </div>
+              </div>
+            ))}
+
+            {/* Add Additional Task Button */}
+            <button
+              type="button"
+              onClick={handleAddTask}
+              className="w-full py-2 px-3 border-2 border-dashed border-emerald-600 text-emerald-700 font-bold rounded-lg hover:bg-emerald-50 text-sm transition-colors"
+            >
+              + Add Another Task
+            </button>
+          </div>
+
           <button
-            type="button"
-            onClick={handleAddTask}
-            className="w-full py-2 px-3 border-2 border-dashed border-emerald-600 text-emerald-700 font-bold rounded-lg hover:bg-emerald-50 text-sm transition-colors"
+            type="submit"
+            disabled={loading}
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors disabled:opacity-50 mt-4"
           >
-            + Add Another Task
+            {loading ? "Saving Entry..." : `Submit Entry for ${selectedDate}`}
           </button>
-        </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors disabled:opacity-50 mt-4"
-        >
-          {loading ? "Saving Entry..." : `Submit Entry for ${selectedDate}`}
-        </button>
-      </form>
+        </form>
+      </div>
     </div>
   );
 }
