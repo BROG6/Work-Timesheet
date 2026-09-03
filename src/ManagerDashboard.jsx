@@ -118,7 +118,7 @@ export default function ManagerDashboard({ userProfile }) {
       setUsers(userData);
     } catch (err) {
       console.error("Error fetching manager data:", err);
-    } finally {
+    } fontinally {
       setLoading(false);
     }
   };
@@ -227,7 +227,17 @@ export default function ManagerDashboard({ userProfile }) {
     return matchesUser && matchesProject && matchesDate;
   });
 
+  // Calculate work hours and total travel hours for current active filter
   const totalFilteredHours = filteredTimesheets.reduce((sum, t) => sum + (parseFloat(t.totalHours) || 0), 0);
+  
+  const totalFilteredTravelHours = filteredTimesheets.reduce((sum, t) => {
+    let entryTravel = 0;
+    if (t.tasks && Array.isArray(t.tasks)) {
+      entryTravel = t.tasks.reduce((tSum, tk) => tSum + (parseFloat(tk.travelTime) || 0), 0);
+    }
+    return sum + entryTravel;
+  }, 0);
+
   const todayStr = formatDate(new Date());
 
   // Export as DOCX in original template layout
@@ -449,7 +459,7 @@ export default function ManagerDashboard({ userProfile }) {
           <h1 className="text-xl font-bold">Manager Dashboard</h1>
           <p className="text-xs text-slate-400 font-medium mt-0.5">SJR Builders Work & Hours Overview</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={handleExportDOCX}
@@ -457,9 +467,17 @@ export default function ManagerDashboard({ userProfile }) {
           >
             Export Time Card (.docx)
           </button>
+          
+          {/* Work Hours Metric Badge */}
           <div className="bg-slate-800 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-700 font-semibold flex items-center gap-2">
-            <span>Weekly Hours Logged:</span>
+            <span>Work Hours:</span>
             <strong className="text-emerald-400 text-sm">{totalFilteredHours} hrs</strong>
+          </div>
+
+          {/* Travel Hours Metric Badge */}
+          <div className="bg-slate-800 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-700 font-semibold flex items-center gap-2">
+            <span>Travel Hours:</span>
+            <strong className="text-amber-400 text-sm">{totalFilteredTravelHours} hrs</strong>
           </div>
         </div>
       </div>
@@ -588,6 +606,7 @@ export default function ManagerDashboard({ userProfile }) {
         ) : (
           filteredTimesheets.map((entry) => {
             const staffDisplayName = userMap[entry.userId] || entry.userName || "Staff Member";
+            const entryTravelTotal = (entry.tasks || []).reduce((sum, tk) => sum + (parseFloat(tk.travelTime) || 0), 0);
 
             return (
               <div key={entry.id} className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
@@ -599,9 +618,14 @@ export default function ManagerDashboard({ userProfile }) {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-extrabold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200">
-                      {entry.totalHours || 0} Hours
+                    <span className="text-xs font-extrabold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                      Work: {entry.totalHours || 0} hrs
                     </span>
+                    {entryTravelTotal > 0 && (
+                      <span className="text-xs font-extrabold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                        Travel: {entryTravelTotal} hrs
+                      </span>
+                    )}
                     <select
                       value={entry.status || 'pending'}
                       onChange={(e) => handleStatusChange(entry.id, e.target.value)}
