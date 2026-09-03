@@ -316,7 +316,7 @@ export default function TimesheetEntry({ user, userProfile }) {
       setWeeklyHours(total);
     } catch (err) {
       console.warn("Could not retrieve weekly hours:", err);
-    } fontally {
+    } finally {
       setLoadingHours(false);
     }
   };
