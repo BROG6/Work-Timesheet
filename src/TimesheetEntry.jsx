@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from './firebaseConfig';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
@@ -52,7 +52,11 @@ const TASK_CATEGORIES = {
 };
 
 export default function TimesheetEntry({ user, userProfile }) {
-  const [project, setProject] = useState('');
+  // Load saved project from local storage or default to empty string
+  const [project, setProject] = useState(() => {
+    return localStorage.getItem(`sjr_last_project_${user.uid}`) || '';
+  });
+
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   
   // Site Time Tracking (Ordered: Start -> Finished -> Left Site -> Returned)
@@ -70,6 +74,13 @@ export default function TimesheetEntry({ user, userProfile }) {
   
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  // Whenever project name is edited, persist it locally for this worker
+  const handleProjectChange = (e) => {
+    const val = e.target.value;
+    setProject(val);
+    localStorage.setItem(`sjr_last_project_${user.uid}`, val);
+  };
 
   // Auto-update task dropdown when group changes
   const handleGroupChange = (e) => {
@@ -89,7 +100,7 @@ export default function TimesheetEntry({ user, userProfile }) {
       await addDoc(collection(db, 'timesheets'), {
         userId: user.uid,
         userName: userProfile?.name || user.email,
-        companyCode: userProfile?.companyCode || 'DEFAULT',
+        companyCode: userProfile?.companyCode || 'SJR Builders',
         project: project || "General / Unassigned",
         date: date,
         timeCardDetails: {
@@ -107,6 +118,7 @@ export default function TimesheetEntry({ user, userProfile }) {
         createdAt: serverTimestamp()
       });
 
+      // Clear task-specific inputs, but KEEP the project name persistent
       setHours('');
       setTravelTime('');
       setComments('');
@@ -142,7 +154,7 @@ export default function TimesheetEntry({ user, userProfile }) {
               type="text"
               placeholder="e.g. Levin Renovation"
               value={project}
-              onChange={(e) => setProject(e.target.value)}
+              onChange={handleProjectChange}
               className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium focus:ring-2 focus:ring-emerald-500"
               required
             />
