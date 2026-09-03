@@ -5,6 +5,7 @@ import { doc, getDoc, getDocFromCache } from 'firebase/firestore';
 import Auth from './Auth';
 import TimesheetEntry from './TimesheetEntry';
 import ManagerDashboard from './ManagerDashboard';
+import { useOnlineStatus } from './useOnlineStatus';
 
 export default function App() {
   const [user, setUser] = useState(null);
