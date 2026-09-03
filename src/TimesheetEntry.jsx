@@ -66,13 +66,18 @@ export default function TimesheetEntry({ user, userProfile }) {
   const [timeFinished, setTimeFinished] = useState('');
   const [timeLeftSite, setTimeLeftSite] = useState('');
   const [timeReturned, setTimeReturned] = useState('');
-  
-  // Work Task Selection
-  const [selectedGroup, setSelectedGroup] = useState("Framing & Envelope");
-  const [selectedTask, setSelectedTask] = useState("Wall Framing");
-  const [hours, setHours] = useState('');
-  const [travelTime, setTravelTime] = useState('');
-  const [comments, setComments] = useState('');
+
+  // Dynamic Array of Tasks for the Day
+  const [tasks, setTasks] = useState([
+    {
+      id: Date.now(),
+      categoryGroup: "Framing & Envelope",
+      taskName: "Wall Framing",
+      hours: '',
+      travelTime: '',
+      comments: ''
+    }
+  ]);
   
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -84,22 +89,59 @@ export default function TimesheetEntry({ user, userProfile }) {
     localStorage.setItem(`sjr_last_project_${user.uid}`, val);
   };
 
-  // Auto-update task dropdown when category group changes
-  const handleGroupChange = (e) => {
-    const group = e.target.value;
-    setSelectedGroup(group);
-    setSelectedTask(TASK_CATEGORIES[group][0]);
+  // Add a new task row to the form
+  const handleAddTask = () => {
+    setTasks((prevTasks) => [
+      ...prevTasks,
+      {
+        id: Date.now() + Math.random(),
+        categoryGroup: "Framing & Envelope",
+        taskName: "Wall Framing",
+        hours: '',
+        travelTime: '',
+        comments: ''
+      }
+    ]);
   };
+
+  // Remove a task row
+  const handleRemoveTask = (id) => {
+    if (tasks.length === 1) return; // Keep at least one task row
+    setTasks((prevTasks) => prevTasks.filter((t) => t.id !== id));
+  };
+
+  // Handle changes within specific task fields
+  const handleTaskChange = (id, field, value) => {
+    setTasks((prevTasks) =>
+      prevTasks.map((t) => {
+        if (t.id === id) {
+          const updated = { ...t, [field]: value };
+          // If group changes, default task to first item in group
+          if (field === 'categoryGroup') {
+            updated.taskName = TASK_CATEGORIES[value][0];
+          }
+          return updated;
+        }
+        return t;
+      })
+    );
+  };
+
+  // Calculate total task hours logged
+  const totalHours = tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!hours || parseFloat(hours) <= 0) return;
+    if (totalHours <= 0) {
+      alert("Please enter hours for at least one task.");
+      return;
+    }
 
     setLoading(true);
     setSuccess(false);
 
     try {
-      // Add document to Firestore (IndexedDB offline cache captures this if offline)
+      // Save entry to Firestore with multi-task support
       await addDoc(collection(db, 'timesheets'), {
         userId: user.uid,
         userName: userProfile?.name || user.email,
@@ -112,26 +154,43 @@ export default function TimesheetEntry({ user, userProfile }) {
           timeLeftSite,
           timeReturned
         },
-        taskCategoryGroup: selectedGroup,
-        taskName: selectedTask,
-        hours: parseFloat(hours),
-        travelTime: travelTime ? parseFloat(travelTime) : 0,
-        comments: comments,
+        tasks: tasks.map((t) => ({
+          taskCategoryGroup: t.categoryGroup,
+          taskName: t.taskName,
+          hours: parseFloat(t.hours) || 0,
+          travelTime: t.travelTime ? parseFloat(t.travelTime) : 0,
+          comments: t.comments
+        })),
+        totalHours: totalHours,
         status: 'pending',
         createdAt: serverTimestamp()
       });
 
-      // Clear entry form fields while retaining active project name
-      setHours('');
-      setTravelTime('');
-      setComments('');
+      // Reset task rows to single blank task, retaining active project name
+      setTasks([
+        {
+          id: Date.now(),
+          categoryGroup: "Framing & Envelope",
+          taskName: "Wall Framing",
+          hours: '',
+          travelTime: '',
+          comments: ''
+        }
+      ]);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3500);
     } catch (err) {
       console.warn("Offline or network delay caught during submission:", err);
-      setHours('');
-      setTravelTime('');
-      setComments('');
+      setTasks([
+        {
+          id: Date.now(),
+          categoryGroup: "Framing & Envelope",
+          taskName: "Wall Framing",
+          hours: '',
+          travelTime: '',
+          comments: ''
+        }
+      ]);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3500);
     } finally {
@@ -221,78 +280,112 @@ export default function TimesheetEntry({ user, userProfile }) {
           </div>
         </div>
 
-        {/* Work Category & Specific Task */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Category Group</label>
-            <select
-              value={selectedGroup}
-              onChange={handleGroupChange}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800"
-            >
-              {Object.keys(TASK_CATEGORIES).map((group) => (
-                <option key={group} value={group}>{group}</option>
-              ))}
-            </select>
+        {/* Tasks Section */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-1">
+            <span className="text-xs font-bold text-slate-700 uppercase">Tasks Completed</span>
+            <span className="text-xs font-semibold text-emerald-700">Total: {totalHours} hrs</span>
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Task Undertaken</label>
-            <select
-              value={selectedTask}
-              onChange={(e) => setSelectedTask(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800"
-            >
-              {TASK_CATEGORIES[selectedGroup].map((task) => (
-                <option key={task} value={task}>{task}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+          {tasks.map((taskItem, index) => (
+            <div key={taskItem.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-3 relative">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-slate-500 uppercase">Task #{index + 1}</span>
+                {tasks.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveTask(taskItem.id)}
+                    className="text-xs text-rose-600 hover:text-rose-800 font-semibold"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
 
-        {/* Task Hours & Travel Time */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Task Hours</label>
-            <input
-              type="number"
-              step="0.25"
-              placeholder="e.g. 7.5"
-              value={hours}
-              onChange={(e) => setHours(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium focus:ring-2 focus:ring-emerald-500"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Travel Time (Hrs)</label>
-            <input
-              type="number"
-              step="0.25"
-              placeholder="e.g. 1.0"
-              value={travelTime}
-              onChange={(e) => setTravelTime(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium focus:ring-2 focus:ring-emerald-500"
-            />
-          </div>
-        </div>
+              {/* Work Category & Specific Task */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Category Group</label>
+                  <select
+                    value={taskItem.categoryGroup}
+                    onChange={(e) => handleTaskChange(taskItem.id, 'categoryGroup', e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800"
+                  >
+                    {Object.keys(TASK_CATEGORIES).map((group) => (
+                      <option key={group} value={group}>{group}</option>
+                    ))}
+                  </select>
+                </div>
 
-        {/* Comments / Details */}
-        <div>
-          <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Comments / Work Details</label>
-          <textarea
-            rows="2"
-            placeholder="Required if selecting 'Other Work' or providing site specifics..."
-            value={comments}
-            onChange={(e) => setComments(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500"
-          />
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Task Undertaken</label>
+                  <select
+                    value={taskItem.taskName}
+                    onChange={(e) => handleTaskChange(taskItem.id, 'taskName', e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800"
+                  >
+                    {TASK_CATEGORIES[taskItem.categoryGroup].map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Task Hours & Travel Time */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Task Hours</label>
+                  <input
+                    type="number"
+                    step="0.25"
+                    placeholder="e.g. 4.0"
+                    value={taskItem.hours}
+                    onChange={(e) => handleTaskChange(taskItem.id, 'hours', e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Travel Time (Hrs)</label>
+                  <input
+                    type="number"
+                    step="0.25"
+                    placeholder="e.g. 0.5"
+                    value={taskItem.travelTime}
+                    onChange={(e) => handleTaskChange(taskItem.id, 'travelTime', e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {/* Comments / Details */}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Comments / Work Details</label>
+                <textarea
+                  rows="2"
+                  placeholder="Task specifics or notes..."
+                  value={taskItem.comments}
+                  onChange={(e) => handleTaskChange(taskItem.id, 'comments', e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+            </div>
+          ))}
+
+          {/* Add Additional Task Button */}
+          <button
+            type="button"
+            onClick={handleAddTask}
+            className="w-full py-2 px-3 border-2 border-dashed border-emerald-600 text-emerald-700 font-bold rounded-lg hover:bg-emerald-50 text-sm transition-colors"
+          >
+            + Add Another Task
+          </button>
         </div>
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors disabled:opacity-50"
+          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors disabled:opacity-50 mt-4"
         >
           {loading ? "Saving Entry..." : "Submit Time Card Entry"}
         </button>
