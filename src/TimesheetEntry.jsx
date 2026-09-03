@@ -134,7 +134,6 @@ function SiteAutoCompleteInput({ value, onChange, existingSites }) {
     }
 
     const queryText = value.toLowerCase().trim();
-    // Filter existing sites that contain or start with the typed letter(s)
     const matches = existingSites.filter((site) =>
       site.toLowerCase().includes(queryText)
     );
@@ -143,7 +142,6 @@ function SiteAutoCompleteInput({ value, onChange, existingSites }) {
     setIsOpen(matches.length > 0);
   }, [value, existingSites]);
 
-  // Close dropdown if user taps outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
@@ -163,7 +161,7 @@ function SiteAutoCompleteInput({ value, onChange, existingSites }) {
     <div ref={wrapperRef} className="relative w-full">
       <input
         type="text"
-        placeholder="e.g. Levin Renovation"
+        placeholder="e.g. Hamilton New Build"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => {
@@ -239,7 +237,6 @@ export default function TimesheetEntry({ user, userProfile }) {
   const [fetchingDay, setFetchingDay] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
 
-  // Load existing site names from Firestore (or local backup for offline autocomplete)
   useEffect(() => {
     async function fetchSites() {
       try {
@@ -277,7 +274,6 @@ export default function TimesheetEntry({ user, userProfile }) {
     fetchSites();
   }, []);
 
-  // Fetch weekly hours (handles cache seamlessly)
   const fetchStaffWeeklyHours = async () => {
     if (!userId) return;
     setLoadingHours(true);
@@ -328,7 +324,6 @@ export default function TimesheetEntry({ user, userProfile }) {
     }
   }, [userId]);
 
-  // Load selected date entry with local cache fallback
   useEffect(() => {
     let isMounted = true;
 
@@ -443,7 +438,6 @@ export default function TimesheetEntry({ user, userProfile }) {
 
       setWeeklyHours((prev) => prev + totalHours);
 
-      // Add to local site suggestions list if it's a new site
       if (project && !existingSites.includes(project)) {
         const updated = [...existingSites, project];
         setExistingSites(updated);
