@@ -71,7 +71,10 @@ function getMonday(d) {
 
 // Helper to format date into YYYY-MM-DD
 function formatDate(dateObj) {
-  return dateObj.toISOString().split('T')[0];
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const d = String(dateObj.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 // Helper to format date into DD/MM/YYYY for display/matching
@@ -128,8 +131,8 @@ export default function TimesheetEntry({ user, userProfile }) {
     return localStorage.getItem('last_site_name') || '';
   });
 
-  // Selected date state
-  const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
+  // Selected date state (Stored strictly as YYYY-MM-DD)
+  const [selectedDate, setSelectedDate] = useState(() => formatDate(new Date()));
 
   // Calendar week view state (tracks current Monday)
   const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()));
@@ -253,7 +256,7 @@ export default function TimesheetEntry({ user, userProfile }) {
           setTasks([DEFAULT_BLANK_TASK(selectedDate)]);
         }
       } catch (err) {
-        console.warn("Could not fetch date entry (offline or permission issue):", err);
+        console.warn("Could not fetch date entry:", err);
       } finally {
         if (isMounted) setFetchingDay(false);
       }
@@ -310,7 +313,7 @@ export default function TimesheetEntry({ user, userProfile }) {
       id: Date.now() + Math.random(),
       categoryGroup: "Framing & Envelope",
       taskName: "Wall Framing",
-      hours: '',
+      hours: '0',
       travelTime: '',
       comments: ''
     }]);
@@ -340,8 +343,9 @@ export default function TimesheetEntry({ user, userProfile }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (totalHours <= 0) {
-      alert("Please enter hours for at least one task.");
+      alert("Please enter valid task hours before submitting.");
       return;
     }
 
@@ -382,9 +386,8 @@ export default function TimesheetEntry({ user, userProfile }) {
       fetchStaffWeeklyHours();
       setTimeout(() => setSuccess(false), 3500);
     } catch (err) {
-      console.warn("Offline or network delay caught during submission:", err);
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3500);
+      console.error("Error submitting entry:", err);
+      alert("Failed to submit timesheet. Check your connection or console.");
     } finally {
       setLoading(false);
     }
@@ -518,8 +521,10 @@ export default function TimesheetEntry({ user, userProfile }) {
                 type="date"
                 value={selectedDate}
                 onChange={(e) => {
-                  setSelectedDate(e.target.value);
-                  setCurrentMonday(getMonday(e.target.value));
+                  if (e.target.value) {
+                    setSelectedDate(e.target.value);
+                    setCurrentMonday(getMonday(e.target.value));
+                  }
                 }}
                 className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium focus:ring-2 focus:ring-emerald-500 text-slate-800"
                 required
@@ -675,7 +680,7 @@ export default function TimesheetEntry({ user, userProfile }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors disabled:opacity-50 mt-4"
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors disabled:opacity-50 mt-4 cursor-pointer"
           >
             {loading ? "Saving Entry..." : `Submit Entry for ${displayDate(selectedDate)}`}
           </button>
