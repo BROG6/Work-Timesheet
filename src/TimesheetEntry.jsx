@@ -486,13 +486,13 @@ export default function TimesheetEntry({ user, userProfile }) {
 
         {fetchingDay && (
           <div className="text-center py-2 text-xs font-semibold text-slate-500 animate-pulse">
-            Loading entry for {selectedDate}...
+            Loading entry for {displayDate(selectedDate)}...
           </div>
         )}
 
         {success && (
           <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-sm font-semibold flex items-center gap-2">
-            <span>✓</span> Entry saved for {selectedDate}!
+            <span>✓</span> Entry saved for {displayDate(selectedDate)}!
           </div>
         )}
 
@@ -677,7 +677,7 @@ export default function TimesheetEntry({ user, userProfile }) {
             disabled={loading}
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors disabled:opacity-50 mt-4"
           >
-            {loading ? "Saving Entry..." : `Submit Entry for ${selectedDate}`}
+            {loading ? "Saving Entry..." : `Submit Entry for ${displayDate(selectedDate)}`}
           </button>
         </form>
       </div>
