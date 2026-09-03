@@ -94,17 +94,28 @@ function displayDate(dateStr) {
   return dateStr;
 }
 
-const DEFAULT_BLANK_TASK = () => ({
-  id: Date.now() + Math.random(),
-  categoryGroup: "Framing & Envelope",
-  taskName: "Wall Framing",
-  hours: '',
-  travelTime: '',
-  comments: ''
-});
+// Helper to check if a YYYY-MM-DD string is Friday
+function isFriday(dateStr) {
+  if (!dateStr) return false;
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const d = new Date(year, month - 1, day);
+  return d.getDay() === 5; // 5 is Friday
+}
+
+// Helper for default task based on Friday logic
+const DEFAULT_BLANK_TASK = (dateStr) => {
+  const isFri = isFriday(dateStr);
+  return {
+    id: Date.now() + Math.random(),
+    categoryGroup: "Framing & Envelope",
+    taskName: "Wall Framing",
+    hours: isFri ? '8' : '9.25',
+    travelTime: '',
+    comments: ''
+  };
+};
 
 export default function TimesheetEntry({ user, userProfile }) {
-  // Normalize user ID and profile details regardless of passed prop name
   const activeUser = user || userProfile;
   const userId = activeUser?.uid;
   const userName = userProfile?.name || activeUser?.name || activeUser?.email || 'Staff Member';
@@ -128,14 +139,14 @@ export default function TimesheetEntry({ user, userProfile }) {
   const [weekRangeStr, setWeekRangeStr] = useState('');
   const [loadingHours, setLoadingHours] = useState(true);
 
-  // Site Time Tracking
-  const [startTime, setStartTime] = useState('');
-  const [timeFinished, setTimeFinished] = useState('');
+  // Site Time Tracking with default state
+  const [startTime, setStartTime] = useState('07:00');
+  const [timeFinished, setTimeFinished] = useState(() => isFriday(formatDate(new Date())) ? '15:30' : '16:30');
   const [timeLeftSite, setTimeLeftSite] = useState('');
   const [timeReturned, setTimeReturned] = useState('');
 
   // Dynamic Array of Tasks for the Day
-  const [tasks, setTasks] = useState([DEFAULT_BLANK_TASK()]);
+  const [tasks, setTasks] = useState(() => [DEFAULT_BLANK_TASK(formatDate(new Date()))]);
 
   const [loading, setLoading] = useState(false);
   const [fetchingDay, setFetchingDay] = useState(false);
@@ -191,7 +202,7 @@ export default function TimesheetEntry({ user, userProfile }) {
     }
   }, [userId]);
 
-  // Load existing entry for the selected date whenever selectedDate or userId changes
+  // Load existing entry or set defaults for selected date
   useEffect(() => {
     let isMounted = true;
 
@@ -215,8 +226,8 @@ export default function TimesheetEntry({ user, userProfile }) {
 
           if (docData.project) setProject(docData.project);
           if (docData.timeCardDetails) {
-            setStartTime(docData.timeCardDetails.startTime || '');
-            setTimeFinished(docData.timeCardDetails.timeFinished || '');
+            setStartTime(docData.timeCardDetails.startTime || '07:00');
+            setTimeFinished(docData.timeCardDetails.timeFinished || (isFriday(selectedDate) ? '15:30' : '16:30'));
             setTimeLeftSite(docData.timeCardDetails.timeLeftSite || '');
             setTimeReturned(docData.timeCardDetails.timeReturned || '');
           }
@@ -227,18 +238,19 @@ export default function TimesheetEntry({ user, userProfile }) {
                 id: Date.now() + Math.random(),
                 categoryGroup: t.taskCategoryGroup || t.categoryGroup || "Framing & Envelope",
                 taskName: t.taskName || t.category || "Wall Framing",
-                hours: t.hours !== undefined ? String(t.hours) : '',
+                hours: t.hours !== undefined ? String(t.hours) : (isFriday(selectedDate) ? '8' : '9.25'),
                 travelTime: t.travelTime !== undefined ? String(t.travelTime) : '',
                 comments: t.comments || ''
               }))
             );
           }
         } else {
-          setStartTime('');
-          setTimeFinished('');
+          // Reset to requested default values if no entry exists for selected date
+          setStartTime('07:00');
+          setTimeFinished(isFriday(selectedDate) ? '15:30' : '16:30');
           setTimeLeftSite('');
           setTimeReturned('');
-          setTasks([DEFAULT_BLANK_TASK()]);
+          setTasks([DEFAULT_BLANK_TASK(selectedDate)]);
         }
       } catch (err) {
         console.warn("Could not fetch date entry (offline or permission issue):", err);
@@ -294,7 +306,14 @@ export default function TimesheetEntry({ user, userProfile }) {
   };
 
   const handleAddTask = () => {
-    setTasks((prevTasks) => [...prevTasks, DEFAULT_BLANK_TASK()]);
+    setTasks((prevTasks) => [...prevTasks, {
+      id: Date.now() + Math.random(),
+      categoryGroup: "Framing & Envelope",
+      taskName: "Wall Framing",
+      hours: '',
+      travelTime: '',
+      comments: ''
+    }]);
   };
 
   const handleRemoveTask = (id) => {
@@ -360,7 +379,7 @@ export default function TimesheetEntry({ user, userProfile }) {
       });
 
       setSuccess(true);
-      fetchStaffWeeklyHours(); // Update weekly total after submission
+      fetchStaffWeeklyHours();
       setTimeout(() => setSuccess(false), 3500);
     } catch (err) {
       console.warn("Offline or network delay caught during submission:", err);
