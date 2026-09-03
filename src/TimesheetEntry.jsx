@@ -39,7 +39,9 @@ const TASK_CATEGORIES = {
   ],
   "Exterior & Landscaping": [
     "Deck Framing & Decking",
-    "Driveway/Paths/Landscaping",
+    "Driveway/Paths/Landscaping"
+  ],
+  "Other Work": [
     "Other Work (Detail in comments)"
   ],
   "Leave & Training": [
@@ -97,7 +99,7 @@ export default function TimesheetEntry({ user, userProfile }) {
     setSuccess(false);
 
     try {
-      // Add document to Firestore (IndexedDB offline cache will capture this if offline)
+      // Add document to Firestore (IndexedDB offline cache captures this if offline)
       await addDoc(collection(db, 'timesheets'), {
         userId: user.uid,
         userName: userProfile?.name || user.email,
@@ -127,7 +129,6 @@ export default function TimesheetEntry({ user, userProfile }) {
       setTimeout(() => setSuccess(false), 3500);
     } catch (err) {
       console.warn("Offline or network delay caught during submission:", err);
-      // Fallback UI acknowledgment for offline writes saved to local cache
       setHours('');
       setTravelTime('');
       setComments('');
