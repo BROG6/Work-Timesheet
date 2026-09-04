@@ -156,13 +156,16 @@ function isFriday(dateStr) {
   return d.getDay() === 5;
 }
 
-// Helper to ensure full clean name without email fallback string
+// Fixed helper function: priority check for registered full name
 function getFormattedStaffName(user, userProfile) {
-  const possibleName = userProfile?.name || userProfile?.displayName || user?.displayName || userProfile?.fullName;
-  if (possibleName && !possibleName.includes('@')) {
-    return possibleName;
-  }
+  // Check profile fields saved at registration first
+  const explicitName = userProfile?.name || userProfile?.fullName || userProfile?.userName || user?.displayName;
   
+  if (explicitName && explicitName.trim() !== '' && !explicitName.includes('@')) {
+    return explicitName.trim();
+  }
+
+  // Fallback to formatted email prefix if name is missing
   const email = userProfile?.email || user?.email || '';
   if (email.includes('@')) {
     const handle = email.split('@')[0];
