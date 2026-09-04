@@ -80,6 +80,43 @@ const TASK_CATEGORIES = {
   ]
 };
 
+// Full list of predefined template tasks matching physical/blank timecards
+const ALL_TEMPLATE_TASKS = [
+  "Demolition",
+  "Profile/Set Up",
+  "Excavate/Footings",
+  "Boxing",
+  "Reinforcing",
+  "Polythene/Polystyrene",
+  "Concrete/Blockfill",
+  "Timber Floor Structure & Flooring",
+  "Structural Steel",
+  "Structural Connections",
+  "Wall Framing",
+  "Roof Framing and Purlins",
+  "Fascia and Soffits",
+  "C/Battens, Rab/Ecoply",
+  "Building Paper/Aliband",
+  "Exterior Windows/Doors",
+  "Exterior Cladding",
+  "Insulation",
+  "Ceiling Battens",
+  "Ceiling Linings",
+  "Interior Doors",
+  "Wall Linings",
+  "Scotia/Skirting/Architrave",
+  "Hardware/ Door Hardware",
+  "Shelving/Joinery",
+  "Deck Framing & Decking",
+  "Driveway/Paths/Landscaping",
+  "Other Work (Detail in comments)",
+  "Sick Leave",
+  "Annual Leave",
+  "Bereavement Leave",
+  "Training",
+  "Other Leave"
+];
+
 function getWednesday(d) {
   const date = new Date(d);
   const day = date.getDay(); // 0 = Sun, 1 = Mon, 2 = Tue, 3 = Wed, 4 = Thu, 5 = Fri, 6 = Sat
@@ -410,7 +447,7 @@ export default function TimesheetEntry({ user, userProfile }) {
     return {
       dateStr: formatDate(day),
       dayName: day.toLocaleDateString('en-NZ', { weekday: 'short' }),
-      dayNumber: day.getDate(),
+      dayNumber: String(day.getDate()).padStart(2, '0'),
       monthName: day.toLocaleDateString('en-NZ', { month: 'short' })
     };
   });
@@ -476,219 +513,219 @@ export default function TimesheetEntry({ user, userProfile }) {
     }
   };
 
-  // Export current day/week timesheet entry into a spreadsheet-formatted DOCX
+  // Export full weekly time card matrix into DOCX matching exact template layout
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
-      const formattedDate = displayDate(selectedDate);
-      const headerBgColor = "0F172A"; // Slate 900
-      const headerTextColor = "FFFFFF";
-      const tableBorderColor = "CBD5E1"; // Slate 300
-      const lightBgColor = "F8FAFC"; // Slate 50
+      const tableBorderColor = "94A3B8"; // Slate 400
+      const headerBgColor = "F1F5F9"; // Slate 100
 
-      const tableBorders = {
+      const thinBorder = {
         top: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
         bottom: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
         left: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
         right: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
-        insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
-        insideVertical: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
       };
 
-      // Header Row for Tasks Table
-      const taskTableRows = [
-        new TableRow({
-          tableHeader: true,
+      // Helper for clean table cells
+      const createCell = ({
+        text = "",
+        bold = false,
+        align = AlignmentType.LEFT,
+        widthPct = null,
+        colSpan = 1,
+        shading = null,
+        fontSize = 11
+      }) => {
+        return new TableCell({
+          columnSpan: colSpan,
+          width: widthPct ? { size: widthPct, type: WidthType.PERCENTAGE } : undefined,
+          shading: shading ? { fill: shading, type: ShadingType.CLEAR } : undefined,
+          borders: thinBorder,
+          margins: { top: 30, bottom: 30, left: 50, right: 50 },
           children: [
-            new TableCell({
-              width: { size: 5, type: WidthType.PERCENTAGE },
-              shading: { fill: headerBgColor, type: ShadingType.CLEAR },
-              children: [new Paragraph({ children: [new TextRun({ text: "#", bold: true, color: headerTextColor })], alignment: AlignmentType.CENTER })],
-            }),
-            new TableCell({
-              width: { size: 25, type: WidthType.PERCENTAGE },
-              shading: { fill: headerBgColor, type: ShadingType.CLEAR },
-              children: [new Paragraph({ children: [new TextRun({ text: "Category Group", bold: true, color: headerTextColor })] })],
-            }),
-            new TableCell({
-              width: { size: 25, type: WidthType.PERCENTAGE },
-              shading: { fill: headerBgColor, type: ShadingType.CLEAR },
-              children: [new Paragraph({ children: [new TextRun({ text: "Task Name", bold: true, color: headerTextColor })] })],
-            }),
-            new TableCell({
-              width: { size: 12, type: WidthType.PERCENTAGE },
-              shading: { fill: headerBgColor, type: ShadingType.CLEAR },
-              children: [new Paragraph({ children: [new TextRun({ text: "Hours", bold: true, color: headerTextColor })], alignment: AlignmentType.RIGHT })],
-            }),
-            new TableCell({
-              width: { size: 13, type: WidthType.PERCENTAGE },
-              shading: { fill: headerBgColor, type: ShadingType.CLEAR },
-              children: [new Paragraph({ children: [new TextRun({ text: "Travel (Hrs)", bold: true, color: headerTextColor })], alignment: AlignmentType.RIGHT })],
-            }),
-            new TableCell({
-              width: { size: 20, type: WidthType.PERCENTAGE },
-              shading: { fill: headerBgColor, type: ShadingType.CLEAR },
-              children: [new Paragraph({ children: [new TextRun({ text: "Comments", bold: true, color: headerTextColor })] })],
-            }),
-          ],
-        }),
-      ];
+            new Paragraph({
+              alignment: align,
+              children: [new TextRun({ text: String(text || ""), bold, size: fontSize })]
+            })
+          ]
+        });
+      };
 
-      // Populate Task Rows
-      tasks.forEach((task, idx) => {
-        const isEven = idx % 2 === 0;
-        const rowShading = isEven ? "FFFFFF" : lightBgColor;
+      // Days setup matching Wednesday to Tuesday schedule
+      const daysHeader = ["Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue"];
+      const activeDayIndex = weekDays.findIndex((d) => d.dateStr === selectedDate);
 
-        taskTableRows.push(
-          new TableRow({
-            children: [
-              new TableCell({
-                shading: { fill: rowShading, type: ShadingType.CLEAR },
-                children: [new Paragraph({ children: [new TextRun({ text: String(idx + 1) })], alignment: AlignmentType.CENTER })],
-              }),
-              new TableCell({
-                shading: { fill: rowShading, type: ShadingType.CLEAR },
-                children: [new Paragraph({ children: [new TextRun({ text: task.categoryGroup || '-' })] })],
-              }),
-              new TableCell({
-                shading: { fill: rowShading, type: ShadingType.CLEAR },
-                children: [new Paragraph({ children: [new TextRun({ text: task.taskName || '-' })] })],
-              }),
-              new TableCell({
-                shading: { fill: rowShading, type: ShadingType.CLEAR },
-                children: [new Paragraph({ children: [new TextRun({ text: String(task.hours || '0'), bold: true })], alignment: AlignmentType.RIGHT })],
-              }),
-              new TableCell({
-                shading: { fill: rowShading, type: ShadingType.CLEAR },
-                children: [new Paragraph({ children: [new TextRun({ text: String(task.travelTime || '0') })], alignment: AlignmentType.RIGHT })],
-              }),
-              new TableCell({
-                shading: { fill: rowShading, type: ShadingType.CLEAR },
-                children: [new Paragraph({ children: [new TextRun({ text: task.comments || '-' })] })],
-              }),
-            ],
-          })
-        );
-      });
+      // Extract day-by-day dates string array
+      const dateRowCells = weekDays.map((d) => d.dayNumber + '/' + (d.dateStr.split('-')[1] || ''));
 
-      // Total Row
-      taskTableRows.push(
+      // Build Table Rows
+      const tableRows = [];
+
+      // Row 1: Header (Day, Wed-Tue, Totals)
+      tableRows.push(
         new TableRow({
           children: [
-            new TableCell({
-              columnSpan: 3,
-              shading: { fill: "E2E8F0", type: ShadingType.CLEAR },
-              children: [new Paragraph({ children: [new TextRun({ text: "TOTAL HOURS", bold: true })], alignment: AlignmentType.RIGHT })],
-            }),
-            new TableCell({
-              shading: { fill: "E2E8F0", type: ShadingType.CLEAR },
-              children: [new Paragraph({ children: [new TextRun({ text: `${totalHours} hrs`, bold: true, color: "047857" })], alignment: AlignmentType.RIGHT })],
-            }),
-            new TableCell({
-              columnSpan: 2,
-              shading: { fill: "E2E8F0", type: ShadingType.CLEAR },
-              children: [new Paragraph({ text: "" })],
-            }),
-          ],
+            createCell({ text: "Day", bold: true, widthPct: 37, shading: headerBgColor }),
+            ...daysHeader.map((day) =>
+              createCell({ text: day, bold: true, align: AlignmentType.CENTER, widthPct: 8, shading: headerBgColor })
+            ),
+            createCell({ text: "Totals", bold: true, align: AlignmentType.RIGHT, widthPct: 7, shading: headerBgColor })
+          ]
         })
       );
 
+      // Row 2: Dates
+      tableRows.push(
+        new TableRow({
+          children: [
+            createCell({ text: "Date", bold: true, shading: headerBgColor }),
+            ...dateRowCells.map((dateVal) =>
+              createCell({ text: dateVal, align: AlignmentType.CENTER })
+            ),
+            createCell({ text: "", align: AlignmentType.CENTER })
+          ]
+        })
+      );
+
+      // Row 3-6: On-Site Time Breakdown
+      const timingRows = [
+        { label: "START TIME", val: startTime },
+        { label: "TIME LEFT SITE", val: timeLeftSite },
+        { label: "TIME RETURNED", val: timeReturned },
+        { label: "TIME FINISHED", val: timeFinished }
+      ];
+
+      timingRows.forEach((tRow) => {
+        const cells = [createCell({ text: tRow.label, bold: true })];
+        daysHeader.forEach((_, idx) => {
+          cells.push(createCell({
+            text: idx === activeDayIndex ? tRow.val : "",
+            align: AlignmentType.CENTER
+          }));
+        });
+        cells.push(createCell({ text: "" }));
+        tableRows.push(new TableRow({ children: cells }));
+      });
+
+      // Row 7+: Task Rows matching ALL_TEMPLATE_TASKS
+      ALL_TEMPLATE_TASKS.forEach((taskLabel) => {
+        const matchedTask = tasks.find(
+          (t) => (t.taskName || '').toLowerCase().trim() === taskLabel.toLowerCase().trim()
+        );
+        const hoursVal = matchedTask ? (parseFloat(matchedTask.hours) || 0) : 0;
+
+        const rowCells = [createCell({ text: taskLabel })];
+
+        daysHeader.forEach((_, idx) => {
+          rowCells.push(
+            createCell({
+              text: (idx === activeDayIndex && hoursVal > 0) ? String(hoursVal) : "",
+              align: AlignmentType.CENTER
+            })
+          );
+        });
+
+        // Totals column
+        rowCells.push(
+          createCell({
+            text: hoursVal > 0 ? String(hoursVal) : "",
+            bold: true,
+            align: AlignmentType.RIGHT
+          })
+        );
+
+        tableRows.push(new TableRow({ children: rowCells }));
+      });
+
+      // Total Hours Row
+      const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true, shading: "E2E8F0" })];
+      daysHeader.forEach((_, idx) => {
+        totalHoursCells.push(
+          createCell({
+            text: idx === activeDayIndex ? String(totalHours) : "",
+            bold: true,
+            align: AlignmentType.CENTER,
+            shading: "E2E8F0"
+          })
+        );
+      });
+      totalHoursCells.push(
+        createCell({ text: String(totalHours), bold: true, align: AlignmentType.RIGHT, shading: "E2E8F0" })
+      );
+      tableRows.push(new TableRow({ children: totalHoursCells }));
+
+      // Travel Time Row
+      const travelTimeTotal = tasks.reduce((sum, t) => sum + (parseFloat(t.travelTime) || 0), 0);
+      const travelCells = [createCell({ text: "Travel Time", bold: true })];
+      daysHeader.forEach((_, idx) => {
+        travelCells.push(
+          createCell({
+            text: (idx === activeDayIndex && travelTimeTotal > 0) ? String(travelTimeTotal) : "",
+            align: AlignmentType.CENTER
+          })
+        );
+      });
+      travelCells.push(
+        createCell({ text: travelTimeTotal > 0 ? String(travelTimeTotal) : "", align: AlignmentType.RIGHT })
+      );
+      tableRows.push(new TableRow({ children: travelCells }));
+
+      // Build Document
       const doc = new Document({
         sections: [
           {
             properties: {},
             children: [
-              // Title & Header Info
+              // Metadata Header Line
               new Paragraph({
-                children: [new TextRun({ text: "SJR BUILDERS - TIMESHEET REPORT", bold: true, size: 28, color: "0F172A" })],
-                alignment: AlignmentType.CENTER,
+                children: [
+                  new TextRun({ text: "Staff Member: ", bold: true, size: 22 }),
+                  new TextRun({ text: `${userName}\t\t\t\t`, size: 22 }),
+                  new TextRun({ text: "Project: ", bold: true, size: 22 }),
+                  new TextRun({ text: project || "General / Unassigned", size: 22 })
+                ],
+                spaceAfter: 180
               }),
-              new Paragraph({ text: "" }),
 
-              // General Summary Table (Spreadsheet Format)
+              // Main Time Card Grid
               new Table({
                 width: { size: 100, type: WidthType.PERCENTAGE },
-                borders: tableBorders,
+                rows: tableRows
+              }),
+
+              new Paragraph({ text: "", spaceAfter: 120 }),
+
+              // Comments Section Header
+              new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
                 rows: [
                   new TableRow({
                     children: [
-                      new TableCell({
-                        shading: { fill: "F1F5F9", type: ShadingType.CLEAR },
-                        width: { size: 25, type: WidthType.PERCENTAGE },
-                        children: [new Paragraph({ children: [new TextRun({ text: "Staff Member:", bold: true })] })],
-                      }),
-                      new TableCell({
-                        width: { size: 25, type: WidthType.PERCENTAGE },
-                        children: [new Paragraph({ children: [new TextRun({ text: userName })] })],
-                      }),
-                      new TableCell({
-                        shading: { fill: "F1F5F9", type: ShadingType.CLEAR },
-                        width: { size: 25, type: WidthType.PERCENTAGE },
-                        children: [new Paragraph({ children: [new TextRun({ text: "Date:", bold: true })] })],
-                      }),
-                      new TableCell({
-                        width: { size: 25, type: WidthType.PERCENTAGE },
-                        children: [new Paragraph({ children: [new TextRun({ text: formattedDate })] })],
-                      }),
-                    ],
+                      createCell({
+                        text: "COMMENTS / WORK DETAILS",
+                        bold: true,
+                        shading: "F1F5F9",
+                        colSpan: 9
+                      })
+                    ]
                   }),
                   new TableRow({
                     children: [
-                      new TableCell({
-                        shading: { fill: "F1F5F9", type: ShadingType.CLEAR },
-                        children: [new Paragraph({ children: [new TextRun({ text: "Project / Site:", bold: true })] })],
-                      }),
-                      new TableCell({
-                        children: [new Paragraph({ children: [new TextRun({ text: project || "General / Unassigned" })] })],
-                      }),
-                      new TableCell({
-                        shading: { fill: "F1F5F9", type: ShadingType.CLEAR },
-                        children: [new Paragraph({ children: [new TextRun({ text: "Weekly Total:", bold: true })] })],
-                      }),
-                      new TableCell({
-                        children: [new Paragraph({ children: [new TextRun({ text: `${weeklyHours} hrs` })] })],
-                      }),
-                    ],
-                  }),
-                  new TableRow({
-                    children: [
-                      new TableCell({
-                        shading: { fill: "F1F5F9", type: ShadingType.CLEAR },
-                        children: [new Paragraph({ children: [new TextRun({ text: "On-Site Times:", bold: true })] })],
-                      }),
-                      new TableCell({
-                        columnSpan: 3,
-                        children: [
-                          new Paragraph({
-                            children: [
-                              new TextRun({ text: `Start: ${startTime || '-'} | Finish: ${timeFinished || '-'} | Left Site: ${timeLeftSite || '-'} | Returned: ${timeReturned || '-'}` }),
-                            ],
-                          }),
-                        ],
-                      }),
-                    ],
-                  }),
-                ],
-              }),
-
-              new Paragraph({ text: "" }),
-              new Paragraph({
-                children: [new TextRun({ text: "Task Breakdown", bold: true, size: 22, color: "0F172A" })],
-              }),
-              new Paragraph({ text: "" }),
-
-              // Tasks Spreadsheet Table
-              new Table({
-                width: { size: 100, type: WidthType.PERCENTAGE },
-                borders: tableBorders,
-                rows: taskTableRows,
-              }),
-            ],
-          },
-        ],
+                      createCell({
+                        text: tasks.map(t => t.comments).filter(Boolean).join(" | ") || "If Other – please detail what type of work you were undertaking",
+                        colSpan: 9
+                      })
+                    ]
+                  })
+                ]
+              })
+            ]
+          }
+        ]
       });
 
-      // Generate blob and trigger direct browser download without file-saver dependency
+      // Browser Blob Download
       const safeUserName = (userName || 'Staff').replace(/[^a-zA-Z0-9_\-]/g, '_');
       const safeDate = (selectedDate || 'Date').replaceAll('/', '-');
 
@@ -696,7 +733,7 @@ export default function TimesheetEntry({ user, userProfile }) {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `Timesheet_${safeUserName}_${safeDate}.docx`;
+      link.download = `TimeCard_${safeUserName}_${safeDate}.docx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -704,7 +741,7 @@ export default function TimesheetEntry({ user, userProfile }) {
 
       setStatusMessage({
         type: 'success',
-        text: `Exported DOCX spreadsheet successfully!`
+        text: "Exported Time Card DOCX successfully!"
       });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
@@ -771,7 +808,7 @@ export default function TimesheetEntry({ user, userProfile }) {
             onClick={handleExportDocx}
             disabled={exportingDocx}
             className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-3 rounded-lg shadow transition-colors disabled:opacity-50 cursor-pointer"
-            title="Download DOCX Spreadsheet"
+            title="Download Time Card DOCX"
           >
             <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6zm10-10.5l-4-4 1.41-1.41L16 6.67V10.5z" />
