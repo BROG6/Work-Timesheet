@@ -12,6 +12,7 @@ export default function Auth({ user, setUser, setUserProfile }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [role, setRole] = useState('worker'); // 'worker' or 'manager'
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -25,11 +26,12 @@ export default function Auth({ user, setUser, setUserProfile }) {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const newUser = userCredential.user;
 
-      // Automatically default company to 'SJR Builders'
+      // Automatically default company to 'SJR Builders' and save selected role
       const profileData = {
-        name: name || 'Worker',
+        name: name || 'Staff Member',
         companyCode: 'SJR Builders',
-        role: 'worker',
+        companyId: 'SJR Builders',
+        role: role, // 'worker' or 'manager'
         createdAt: new Date().toISOString()
       };
 
@@ -65,6 +67,7 @@ export default function Auth({ user, setUser, setUserProfile }) {
         setUserProfile({
           name: loggedInUser.email,
           companyCode: 'SJR Builders',
+          companyId: 'SJR Builders',
           role: 'worker'
         });
       }
@@ -117,7 +120,7 @@ export default function Auth({ user, setUser, setUserProfile }) {
             <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Full Name</label>
             <input
               type="text"
-              placeholder="e.g. Jimmy"
+              placeholder="e.g. Jimmy Smith"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium focus:ring-2 focus:ring-emerald-500"
@@ -150,12 +153,26 @@ export default function Auth({ user, setUser, setUserProfile }) {
           />
         </div>
 
+        {isRegistering && (
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Account Role</label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="worker">Worker / Staff Member</option>
+              <option value="manager">Manager / Supervisor</option>
+            </select>
+          </div>
+        )}
+
         <button
           type="submit"
           disabled={loading}
           className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors disabled:opacity-50"
         >
-          {loading ? "Processing..." : isRegistering ? "Register Worker Account" : "Sign In"}
+          {loading ? "Processing..." : isRegistering ? "Register Account" : "Sign In"}
         </button>
       </form>
 
