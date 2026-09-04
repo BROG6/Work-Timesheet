@@ -128,7 +128,7 @@ export default function App() {
       {profile.role === 'manager' ? (
         <ManagerDashboard companyId={profile.companyId} />
       ) : (
-        <TimesheetEntry user={user} profile={profile} />
+        <TimesheetEntry user={user} userProfile={profile} />
       )}
     </div>
   );
