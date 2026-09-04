@@ -11,7 +11,7 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 
-// Export libraries for DOCX format
+// Import docx directly via Skypack CDN (bypasses local npm module resolution during Vercel build)
 import { 
   Document, 
   Packer, 
@@ -24,8 +24,7 @@ import {
   BorderStyle, 
   AlignmentType, 
   ShadingType 
-} from 'docx';
-import { saveAs } from 'file-saver';
+} from 'https://cdn.skypack.dev/docx';
 
 // Import logo directly from src/assets so Vite processes and bundles it
 import sjrLogo from './assets/logo.jpg';
@@ -689,9 +688,19 @@ export default function TimesheetEntry({ user, userProfile }) {
         ],
       });
 
+      // Generate blob and trigger direct browser download without file-saver dependency
+      const safeUserName = (userName || 'Staff').replace(/[^a-zA-Z0-9_\-]/g, '_');
+      const safeDate = (selectedDate || 'Date').replaceAll('/', '-');
+
       const blob = await Packer.toBlob(doc);
-      const filename = `Timesheet_${userName.replace(/\s+/g, '_')}_${selectedDate}.docx`;
-      saveAs(blob, filename);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Timesheet_${safeUserName}_${safeDate}.docx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
       setStatusMessage({
         type: 'success',
