@@ -11,6 +11,22 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 
+// Export libraries for DOCX format
+import { 
+  Document, 
+  Packer, 
+  Paragraph, 
+  TextRun, 
+  Table, 
+  TableRow, 
+  TableCell, 
+  WidthType, 
+  BorderStyle, 
+  AlignmentType, 
+  ShadingType 
+} from 'docx';
+import { saveAs } from 'file-saver';
+
 // Import logo directly from src/assets so Vite processes and bundles it
 import sjrLogo from './assets/logo.jpg';
 
@@ -231,6 +247,7 @@ export default function TimesheetEntry({ user, userProfile }) {
   const [tasks, setTasks] = useState(() => [DEFAULT_BLANK_TASK(formatDate(new Date()))]);
 
   const [loading, setLoading] = useState(false);
+  const [exportingDocx, setExportingDocx] = useState(false);
   const [fetchingDay, setFetchingDay] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
 
@@ -460,6 +477,238 @@ export default function TimesheetEntry({ user, userProfile }) {
     }
   };
 
+  // Export current day/week timesheet entry into a spreadsheet-formatted DOCX
+  const handleExportDocx = async () => {
+    setExportingDocx(true);
+    try {
+      const formattedDate = displayDate(selectedDate);
+      const headerBgColor = "0F172A"; // Slate 900
+      const headerTextColor = "FFFFFF";
+      const tableBorderColor = "CBD5E1"; // Slate 300
+      const lightBgColor = "F8FAFC"; // Slate 50
+
+      const tableBorders = {
+        top: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
+        bottom: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
+        left: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
+        right: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
+        insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
+        insideVertical: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
+      };
+
+      // Header Row for Tasks Table
+      const taskTableRows = [
+        new TableRow({
+          tableHeader: true,
+          children: [
+            new TableCell({
+              width: { size: 5, type: WidthType.PERCENTAGE },
+              shading: { fill: headerBgColor, type: ShadingType.CLEAR },
+              children: [new Paragraph({ children: [new TextRun({ text: "#", bold: true, color: headerTextColor })], alignment: AlignmentType.CENTER })],
+            }),
+            new TableCell({
+              width: { size: 25, type: WidthType.PERCENTAGE },
+              shading: { fill: headerBgColor, type: ShadingType.CLEAR },
+              children: [new Paragraph({ children: [new TextRun({ text: "Category Group", bold: true, color: headerTextColor })] })],
+            }),
+            new TableCell({
+              width: { size: 25, type: WidthType.PERCENTAGE },
+              shading: { fill: headerBgColor, type: ShadingType.CLEAR },
+              children: [new Paragraph({ children: [new TextRun({ text: "Task Name", bold: true, color: headerTextColor })] })],
+            }),
+            new TableCell({
+              width: { size: 12, type: WidthType.PERCENTAGE },
+              shading: { fill: headerBgColor, type: ShadingType.CLEAR },
+              children: [new Paragraph({ children: [new TextRun({ text: "Hours", bold: true, color: headerTextColor })], alignment: AlignmentType.RIGHT })],
+            }),
+            new TableCell({
+              width: { size: 13, type: WidthType.PERCENTAGE },
+              shading: { fill: headerBgColor, type: ShadingType.CLEAR },
+              children: [new Paragraph({ children: [new TextRun({ text: "Travel (Hrs)", bold: true, color: headerTextColor })], alignment: AlignmentType.RIGHT })],
+            }),
+            new TableCell({
+              width: { size: 20, type: WidthType.PERCENTAGE },
+              shading: { fill: headerBgColor, type: ShadingType.CLEAR },
+              children: [new Paragraph({ children: [new TextRun({ text: "Comments", bold: true, color: headerTextColor })] })],
+            }),
+          ],
+        }),
+      ];
+
+      // Populate Task Rows
+      tasks.forEach((task, idx) => {
+        const isEven = idx % 2 === 0;
+        const rowShading = isEven ? "FFFFFF" : lightBgColor;
+
+        taskTableRows.push(
+          new TableRow({
+            children: [
+              new TableCell({
+                shading: { fill: rowShading, type: ShadingType.CLEAR },
+                children: [new Paragraph({ children: [new TextRun({ text: String(idx + 1) })], alignment: AlignmentType.CENTER })],
+              }),
+              new TableCell({
+                shading: { fill: rowShading, type: ShadingType.CLEAR },
+                children: [new Paragraph({ children: [new TextRun({ text: task.categoryGroup || '-' })] })],
+              }),
+              new TableCell({
+                shading: { fill: rowShading, type: ShadingType.CLEAR },
+                children: [new Paragraph({ children: [new TextRun({ text: task.taskName || '-' })] })],
+              }),
+              new TableCell({
+                shading: { fill: rowShading, type: ShadingType.CLEAR },
+                children: [new Paragraph({ children: [new TextRun({ text: String(task.hours || '0'), bold: true })], alignment: AlignmentType.RIGHT })],
+              }),
+              new TableCell({
+                shading: { fill: rowShading, type: ShadingType.CLEAR },
+                children: [new Paragraph({ children: [new TextRun({ text: String(task.travelTime || '0') })], alignment: AlignmentType.RIGHT })],
+              }),
+              new TableCell({
+                shading: { fill: rowShading, type: ShadingType.CLEAR },
+                children: [new Paragraph({ children: [new TextRun({ text: task.comments || '-' })] })],
+              }),
+            ],
+          })
+        );
+      });
+
+      // Total Row
+      taskTableRows.push(
+        new TableRow({
+          children: [
+            new TableCell({
+              columnSpan: 3,
+              shading: { fill: "E2E8F0", type: ShadingType.CLEAR },
+              children: [new Paragraph({ children: [new TextRun({ text: "TOTAL HOURS", bold: true })], alignment: AlignmentType.RIGHT })],
+            }),
+            new TableCell({
+              shading: { fill: "E2E8F0", type: ShadingType.CLEAR },
+              children: [new Paragraph({ children: [new TextRun({ text: `${totalHours} hrs`, bold: true, color: "047857" })], alignment: AlignmentType.RIGHT })],
+            }),
+            new TableCell({
+              columnSpan: 2,
+              shading: { fill: "E2E8F0", type: ShadingType.CLEAR },
+              children: [new Paragraph({ text: "" })],
+            }),
+          ],
+        })
+      );
+
+      const doc = new Document({
+        sections: [
+          {
+            properties: {},
+            children: [
+              // Title & Header Info
+              new Paragraph({
+                children: [new TextRun({ text: "SJR BUILDERS - TIMESHEET REPORT", bold: true, size: 28, color: "0F172A" })],
+                alignment: AlignmentType.CENTER,
+              }),
+              new Paragraph({ text: "" }),
+
+              // General Summary Table (Spreadsheet Format)
+              new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                borders: tableBorders,
+                rows: [
+                  new TableRow({
+                    children: [
+                      new TableCell({
+                        shading: { fill: "F1F5F9", type: ShadingType.CLEAR },
+                        width: { size: 25, type: WidthType.PERCENTAGE },
+                        children: [new Paragraph({ children: [new TextRun({ text: "Staff Member:", bold: true })] })],
+                      }),
+                      new TableCell({
+                        width: { size: 25, type: WidthType.PERCENTAGE },
+                        children: [new Paragraph({ children: [new TextRun({ text: userName })] })],
+                      }),
+                      new TableCell({
+                        shading: { fill: "F1F5F9", type: ShadingType.CLEAR },
+                        width: { size: 25, type: WidthType.PERCENTAGE },
+                        children: [new Paragraph({ children: [new TextRun({ text: "Date:", bold: true })] })],
+                      }),
+                      new TableCell({
+                        width: { size: 25, type: WidthType.PERCENTAGE },
+                        children: [new Paragraph({ children: [new TextRun({ text: formattedDate })] })],
+                      }),
+                    ],
+                  }),
+                  new TableRow({
+                    children: [
+                      new TableCell({
+                        shading: { fill: "F1F5F9", type: ShadingType.CLEAR },
+                        children: [new Paragraph({ children: [new TextRun({ text: "Project / Site:", bold: true })] })],
+                      }),
+                      new TableCell({
+                        children: [new Paragraph({ children: [new TextRun({ text: project || "General / Unassigned" })] })],
+                      }),
+                      new TableCell({
+                        shading: { fill: "F1F5F9", type: ShadingType.CLEAR },
+                        children: [new Paragraph({ children: [new TextRun({ text: "Weekly Total:", bold: true })] })],
+                      }),
+                      new TableCell({
+                        children: [new Paragraph({ children: [new TextRun({ text: `${weeklyHours} hrs` })] })],
+                      }),
+                    ],
+                  }),
+                  new TableRow({
+                    children: [
+                      new TableCell({
+                        shading: { fill: "F1F5F9", type: ShadingType.CLEAR },
+                        children: [new Paragraph({ children: [new TextRun({ text: "On-Site Times:", bold: true })] })],
+                      }),
+                      new TableCell({
+                        columnSpan: 3,
+                        children: [
+                          new Paragraph({
+                            children: [
+                              new TextRun({ text: `Start: ${startTime || '-'} | Finish: ${timeFinished || '-'} | Left Site: ${timeLeftSite || '-'} | Returned: ${timeReturned || '-'}` }),
+                            ],
+                          }),
+                        ],
+                      }),
+                    ],
+                  }),
+                ],
+              }),
+
+              new Paragraph({ text: "" }),
+              new Paragraph({
+                children: [new TextRun({ text: "Task Breakdown", bold: true, size: 22, color: "0F172A" })],
+              }),
+              new Paragraph({ text: "" }),
+
+              // Tasks Spreadsheet Table
+              new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                borders: tableBorders,
+                rows: taskTableRows,
+              }),
+            ],
+          },
+        ],
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const filename = `Timesheet_${userName.replace(/\s+/g, '_')}_${selectedDate}.docx`;
+      saveAs(blob, filename);
+
+      setStatusMessage({
+        type: 'success',
+        text: `Exported DOCX spreadsheet successfully!`
+      });
+      setTimeout(() => setStatusMessage(null), 4000);
+    } catch (err) {
+      console.error("DOCX export error:", err);
+      setStatusMessage({
+        type: 'error',
+        text: "Failed to generate DOCX file."
+      });
+    } finally {
+      setExportingDocx(false);
+    }
+  };
+
   const todayStr = formatDate(new Date());
 
   return (
@@ -491,19 +740,35 @@ export default function TimesheetEntry({ user, userProfile }) {
 
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
         
-        {/* Header Bar with Logo */}
-        <div className="border-b border-slate-200 pb-3 mb-4 flex items-center gap-3">
-          <img 
-            src={sjrLogo} 
-            alt="SJR Builders Logo" 
-            className="h-10 w-auto object-contain"
-          />
-          <div>
-            <h2 className="text-xl font-bold text-slate-900 leading-tight">Weekly Time Card Entry</h2>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">
-              Logged for: <span className="text-slate-800 font-semibold">{userName}</span>
-            </p>
+        {/* Header Bar with Logo & DOCX Download Button */}
+        <div className="border-b border-slate-200 pb-3 mb-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <img 
+              src={sjrLogo} 
+              alt="SJR Builders Logo" 
+              className="h-10 w-auto object-contain"
+            />
+            <div>
+              <h2 className="text-xl font-bold text-slate-900 leading-tight">Weekly Time Card Entry</h2>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Logged for: <span className="text-slate-800 font-semibold">{userName}</span>
+              </p>
+            </div>
           </div>
+
+          {/* Download DOCX Button */}
+          <button
+            type="button"
+            onClick={handleExportDocx}
+            disabled={exportingDocx}
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-3 rounded-lg shadow transition-colors disabled:opacity-50 cursor-pointer"
+            title="Download DOCX Spreadsheet"
+          >
+            <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6zm10-10.5l-4-4 1.41-1.41L16 6.67V10.5z" />
+            </svg>
+            <span>{exportingDocx ? "Generating..." : "Download DOCX"}</span>
+          </button>
         </div>
 
         {/* 7-Day Navigation */}
