@@ -67,15 +67,9 @@ const TASK_CATEGORIES = {
 
 function getWednesday(d) {
   const date = new Date(d);
-  const day = date.getDay();
-  const diff = date.getDate() - day + (day < 3 ? -4 : 3);
-  return new Date(date.setDate(diff));
-}
-
-function getMonday(d) {
-  const date = new Date(d);
-  const day = date.getDay();
-  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  const day = date.getDay(); // 0 = Sun, 1 = Mon, 2 = Tue, 3 = Wed, 4 = Thu, 5 = Fri, 6 = Sat
+  // Calculate distance to the most recent Wednesday
+  const diff = date.getDate() - ((day + 4) % 7);
   return new Date(date.setDate(diff));
 }
 
@@ -223,7 +217,7 @@ export default function TimesheetEntry({ user, userProfile }) {
   });
 
   const [selectedDate, setSelectedDate] = useState(() => formatDate(new Date()));
-  const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()));
+  const [currentWednesday, setCurrentWednesday] = useState(() => getWednesday(new Date()));
 
   const [weeklyHours, setWeeklyHours] = useState(0);
   const [weekRangeStr, setWeekRangeStr] = useState('');
@@ -395,8 +389,8 @@ export default function TimesheetEntry({ user, userProfile }) {
   }, [selectedDate, userId]);
 
   const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const day = new Date(currentMonday);
-    day.setDate(currentMonday.getDate() + i);
+    const day = new Date(currentWednesday);
+    day.setDate(currentWednesday.getDate() + i);
     return {
       dateStr: formatDate(day),
       dayName: day.toLocaleDateString('en-NZ', { weekday: 'short' }),
@@ -518,9 +512,9 @@ export default function TimesheetEntry({ user, userProfile }) {
             <button
               type="button"
               onClick={() => {
-                const p = new Date(currentMonday);
+                const p = new Date(currentWednesday);
                 p.setDate(p.getDate() - 7);
-                setCurrentMonday(p);
+                setCurrentWednesday(p);
               }}
               className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
             >
@@ -535,7 +529,7 @@ export default function TimesheetEntry({ user, userProfile }) {
               <button
                 type="button"
                 onClick={() => {
-                  setCurrentMonday(getMonday(new Date()));
+                  setCurrentWednesday(getWednesday(new Date()));
                   setSelectedDate(todayStr);
                 }}
                 className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded-md font-bold transition-colors"
@@ -545,9 +539,9 @@ export default function TimesheetEntry({ user, userProfile }) {
               <button
                 type="button"
                 onClick={() => {
-                  const n = new Date(currentMonday);
+                  const n = new Date(currentWednesday);
                   n.setDate(n.getDate() + 7);
-                  setCurrentMonday(n);
+                  setCurrentWednesday(n);
                 }}
                 className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
               >
@@ -627,7 +621,7 @@ export default function TimesheetEntry({ user, userProfile }) {
                 onChange={(e) => {
                   if (e.target.value) {
                     setSelectedDate(e.target.value);
-                    setCurrentMonday(getMonday(e.target.value));
+                    setCurrentWednesday(getWednesday(e.target.value));
                   }
                 }}
                 className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500"
