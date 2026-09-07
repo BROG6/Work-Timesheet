@@ -23,7 +23,9 @@ import {
   WidthType, 
   BorderStyle, 
   AlignmentType, 
-  ShadingType 
+  ShadingType,
+  Header,
+  ImageRun
 } from 'https://cdn.skypack.dev/docx';
 
 // Import logo directly from src/assets so Vite processes and bundles it
@@ -535,7 +537,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     }
   };
 
-  // Export Weekly Time Cards: Generates exact replica DOCX file matching Blank Time Cards_2.docx
+  // Export Weekly Time Cards: Generates exact replica DOCX file matching Blank Time Cards_2.docx with header logo
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
@@ -571,6 +573,16 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           ]
         });
       };
+
+      // Fetch logo for docx header
+      let logoBuffer = null;
+      try {
+        const response = await fetch(sjrLogo);
+        const blob = await response.blob();
+        logoBuffer = await blob.arrayBuffer();
+      } catch (e) {
+        console.warn("Could not load logo for docx header:", e);
+      }
 
       const daysHeader = ["Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue"];
       const validWeekDates = weekDays.map((d) => d.dateStr);
@@ -778,7 +790,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           })
         );
 
-        // Compile Document
+        // Compile Document with Header Logo Integration
         const doc = new Document({
           sections: [
             {
@@ -787,6 +799,24 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   margin: { top: 500, bottom: 500, left: 500, right: 500 } // Narrow margins to fit all rows on one page
                 }
               },
+              headers: logoBuffer ? {
+                default: new Header({
+                  children: [
+                    new Paragraph({
+                      alignment: AlignmentType.RIGHT,
+                      children: [
+                        new ImageRun({
+                          data: logoBuffer,
+                          transformation: {
+                            width: 100,
+                            height: 35,
+                          },
+                        }),
+                      ],
+                    }),
+                  ],
+                }),
+              } : undefined,
               children: [
                 new Paragraph({
                   children: [
