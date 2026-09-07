@@ -108,7 +108,7 @@ const TASK_CATEGORIES = {
   ]
 };
 
-// Exact template tasks matching "Blank Time Cards_2.docx" layout
+// Exact template tasks matching layout
 const ALL_TEMPLATE_TASKS = [
   "Demolition",
   "Profile/Set Up",
@@ -143,7 +143,7 @@ const ALL_TEMPLATE_TASKS = [
   "Bereavement Leave",
   "Training",
   "Other Leave (please specify)",
-  " " // Blank row preceding TOTAL HOURS matching template layout
+  " " 
 ];
 
 function getWednesday(d) {
@@ -561,7 +561,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     }
   };
 
-  // DOCX Export Function: Fixed for clean Word XML parsing
+  // DOCX Export Function: Standardized XML formatting without tabbed ImageRun collisions
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
@@ -582,47 +582,27 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       };
 
       const createCell = ({
-        text = "",
+        text = " ",
         bold = false,
         align = AlignmentType.LEFT,
-        widthPct = null,
         colSpan = 1,
         shading = null,
-        fontSize = 16,
-        customChildren = null
+        fontSize = 16
       }) => {
-        const safeText = String(text || "").trim() === "" ? " " : String(text);
+        const rawText = String(text ?? "");
+        const safeText = rawText.trim() === "" ? " " : rawText;
 
         return new TableCell({
           columnSpan: colSpan,
-          width: widthPct ? { size: widthPct, type: WidthType.PERCENTAGE } : undefined,
           shading: shading ? { fill: shading, type: ShadingType.CLEAR } : undefined,
           borders: thinBorder,
           margins: { top: 15, bottom: 15, left: 30, right: 30 },
-          children: customChildren || [
+          children: [
             new Paragraph({
               alignment: align,
               children: [new TextRun({ text: safeText, bold, size: fontSize, font: "Arial" })]
             })
           ]
-        });
-      };
-
-      const createLogoRun = () => {
-        if (logoBytes) {
-          return new ImageRun({
-            data: logoBytes,
-            transformation: {
-              width: 130,
-              height: 52
-            }
-          });
-        }
-        return new TextRun({
-          text: "SJR BUILDERS",
-          bold: true,
-          size: 18,
-          font: "Arial"
         });
       };
 
@@ -690,11 +670,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         tableRows.push(
           new TableRow({
             children: [
-              createCell({ text: "Day", bold: true, widthPct: 37 }),
+              createCell({ text: "Day", bold: true }),
               ...daysHeader.map((day) =>
-                createCell({ text: day, bold: true, align: AlignmentType.CENTER, widthPct: 8 })
+                createCell({ text: day, bold: true, align: AlignmentType.CENTER })
               ),
-              createCell({ text: "Totals", bold: true, align: AlignmentType.RIGHT, widthPct: 7 })
+              createCell({ text: "Totals", bold: true, align: AlignmentType.RIGHT })
             ]
           })
         );
@@ -735,24 +715,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
         ALL_TEMPLATE_TASKS.forEach((taskLabel) => {
           let rowTaskTotal = 0;
-          let firstCell;
-
-          if (taskLabel === "Other (PTO)") {
-            firstCell = createCell({
-              customChildren: [
-                new Paragraph({
-                  children: [
-                    new TextRun({ text: "Other", size: 16, font: "Arial" }),
-                    new TextRun({ text: "\t\t\t\t\t\t(PTO)", size: 16, font: "Arial" })
-                  ]
-                })
-              ]
-            });
-          } else {
-            firstCell = createCell({ text: taskLabel });
-          }
-
-          const rowCells = [firstCell];
+          const rowCells = [createCell({ text: taskLabel })];
 
           weekDays.forEach((dayObj) => {
             const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
@@ -847,7 +810,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           );
         }
 
-        for (let i = allComments.length > 0 ? 1 : 0; i < 20; i++) {
+        for (let i = allComments.length > 0 ? 1 : 0; i < 15; i++) {
           commentRows.push(
             new TableRow({
               children: [createCell({ text: " ", colSpan: 9 })]
@@ -855,7 +818,32 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           );
         }
 
-        // Build DOCX document
+        // Section Elements: Keep logo images isolated in clean right-aligned paragraphs
+        const headerParagraphs = [
+          new Paragraph({
+            alignment: AlignmentType.LEFT,
+            children: [
+              new TextRun({ text: `Staff Member: ${userName}     Project: ${siteName}`, bold: true, size: 18, font: "Arial" })
+            ],
+            spaceAfter: 80
+          })
+        ];
+
+        if (logoBytes) {
+          headerParagraphs.unshift(
+            new Paragraph({
+              alignment: AlignmentType.RIGHT,
+              children: [
+                new ImageRun({
+                  data: logoBytes,
+                  transformation: { width: 130, height: 52 }
+                })
+              ],
+              spaceAfter: 60
+            })
+          );
+        }
+
         const doc = new Document({
           sections: [
             {
@@ -865,39 +853,18 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }
               },
               children: [
-                new Paragraph({
-                  alignment: AlignmentType.LEFT,
-                  children: [
-                    new TextRun({ text: "Staff Member:", bold: true, size: 18, font: "Arial" }),
-                    new TextRun({ text: `${userName}\t\t\t\t`, size: 18, font: "Arial" }),
-                    new TextRun({ text: "Project:", bold: true, size: 18, font: "Arial" }),
-                    new TextRun({ text: `${siteName}\t\t\t\t\t`, size: 18, font: "Arial" }),
-                    createLogoRun()
-                  ],
-                  spaceAfter: 80
-                }),
-
+                ...headerParagraphs,
                 new Table({
                   width: { size: 100, type: WidthType.PERCENTAGE },
                   rows: tableRows
                 }),
-
                 new Paragraph({
                   children: [
                     new TextRun({ text: "Version – August 2026", size: 14, font: "Arial", italic: true })
                   ],
                   spaceBefore: 60,
-                  spaceAfter: 180
+                  spaceAfter: 120
                 }),
-
-                new Paragraph({
-                  alignment: AlignmentType.RIGHT,
-                  children: [
-                    createLogoRun()
-                  ],
-                  spaceAfter: 60
-                }),
-
                 new Table({
                   width: { size: 100, type: WidthType.PERCENTAGE },
                   rows: commentRows
@@ -924,7 +891,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
       setStatusMessage({
         type: 'success',
-        text: `Exported ${sitesToExport.length} site time card(s) with embedded logo!`
+        text: `Exported ${sitesToExport.length} site time card(s) successfully!`
       });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
