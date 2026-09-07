@@ -391,7 +391,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       try {
         querySnapshot = await getDocs(q);
       } catch (e) {
-        querySnapshot = await getDocsFromCache(q);
+        querySnapshot = await getDocsFromCache(e);
       }
 
       const validWeekDates = Array.from({ length: 7 }, (_, i) => {
@@ -561,7 +561,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     }
   };
 
-  // DOCX Export Function: Standardized XML formatting without tabbed ImageRun collisions
+  // Robust DOCX Generator with STRICT Schema Enforcement
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
@@ -569,7 +569,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       try {
         logoBytes = await getLogoUint8Array(sjrLogo);
       } catch (err) {
-        console.warn("Could not load image file, falling back to text:", err);
+        console.warn("Could not load image file, skipping logo embedding:", err);
       }
 
       const tableBorderColor = "000000";
@@ -581,26 +581,39 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         right: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
       };
 
+      // Strict String Cleaner: Prevents invalid/empty text node corruptions in Word XML
+      const safeStr = (val) => {
+        if (val === null || val === undefined) return " ";
+        const str = String(val).trim();
+        return str === "" ? " " : str;
+      };
+
       const createCell = ({
         text = " ",
         bold = false,
         align = AlignmentType.LEFT,
         colSpan = 1,
         shading = null,
-        fontSize = 16
+        fontSize = 16,
+        widthPct = null
       }) => {
-        const rawText = String(text ?? "");
-        const safeText = rawText.trim() === "" ? " " : rawText;
-
         return new TableCell({
           columnSpan: colSpan,
+          width: widthPct ? { size: widthPct, type: WidthType.PERCENTAGE } : undefined,
           shading: shading ? { fill: shading, type: ShadingType.CLEAR } : undefined,
           borders: thinBorder,
-          margins: { top: 15, bottom: 15, left: 30, right: 30 },
+          margins: { top: 20, bottom: 20, left: 30, right: 30 },
           children: [
             new Paragraph({
               alignment: align,
-              children: [new TextRun({ text: safeText, bold, size: fontSize, font: "Arial" })]
+              children: [
+                new TextRun({
+                  text: safeStr(text),
+                  bold: Boolean(bold),
+                  size: fontSize,
+                  font: "Arial"
+                })
+              ]
             })
           ]
         });
@@ -627,13 +640,13 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         });
       }
 
-      const activeHasSaved = weeklyEntries.some(e => e.date === selectedDate);
+      const activeHasSaved = weeklyEntries.some((e) => e.date === selectedDate);
       if (!activeHasSaved && totalHours > 0) {
         weeklyEntries.push({
           project: project || "General / Unassigned",
           date: selectedDate,
           timeCardDetails: { startTime, timeFinished, timeLeftSite, timeReturned },
-          tasks: tasks.map(t => ({
+          tasks: tasks.map((t) => ({
             taskName: t.taskName,
             hours: parseFloat(t.hours) || 0,
             travelTime: parseFloat(t.travelTime) || 0,
@@ -662,6 +675,9 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }];
       }
 
+      // Column widths for 9 columns total: [Task Name (36%), Day 1..7 (8% each = 56%), Totals (8%)]
+      const colWidths = [36, 8, 8, 8, 8, 8, 8, 8, 8];
+
       for (const siteName of sitesToExport) {
         const siteEntries = siteMap[siteName];
         const tableRows = [];
@@ -670,11 +686,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         tableRows.push(
           new TableRow({
             children: [
-              createCell({ text: "Day", bold: true }),
-              ...daysHeader.map((day) =>
-                createCell({ text: day, bold: true, align: AlignmentType.CENTER })
+              createCell({ text: "Day", bold: true, widthPct: colWidths[0] }),
+              ...daysHeader.map((day, idx) =>
+                createCell({ text: day, bold: true, align: AlignmentType.CENTER, widthPct: colWidths[idx + 1] })
               ),
-              createCell({ text: "Totals", bold: true, align: AlignmentType.RIGHT })
+              createCell({ text: "Totals", bold: true, align: AlignmentType.RIGHT, widthPct: colWidths[8] })
             ]
           })
         );
@@ -683,9 +699,15 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         tableRows.push(
           new TableRow({
             children: [
-              createCell({ text: "Date", bold: true }),
-              ...weekDays.map((d) => createCell({ text: `${d.dayNumber}/${d.dateStr.split('-')[1] || ''}`, align: AlignmentType.CENTER })),
-              createCell({ text: " ", align: AlignmentType.CENTER })
+              createCell({ text: "Date", bold: true, widthPct: colWidths[0] }),
+              ...weekDays.map((d, idx) =>
+                createCell({
+                  text: `${d.dayNumber}/${d.dateStr.split('-')[1] || ''}`,
+                  align: AlignmentType.CENTER,
+                  widthPct: colWidths[idx + 1]
+                })
+              ),
+              createCell({ text: " ", align: AlignmentType.CENTER, widthPct: colWidths[8] })
             ]
           })
         );
@@ -699,13 +721,13 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         ];
 
         timingFields.forEach((tf) => {
-          const cells = [createCell({ text: tf.label, bold: true })];
-          weekDays.forEach((dayObj) => {
+          const cells = [createCell({ text: tf.label, bold: true, widthPct: colWidths[0] })];
+          weekDays.forEach((dayObj, idx) => {
             const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
             const val = entryForDay?.timeCardDetails?.[tf.key] || " ";
-            cells.push(createCell({ text: val, align: AlignmentType.CENTER }));
+            cells.push(createCell({ text: val, align: AlignmentType.CENTER, widthPct: colWidths[idx + 1] }));
           });
-          cells.push(createCell({ text: " " }));
+          cells.push(createCell({ text: " ", widthPct: colWidths[8] }));
           tableRows.push(new TableRow({ children: cells }));
         });
 
@@ -715,18 +737,19 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
         ALL_TEMPLATE_TASKS.forEach((taskLabel) => {
           let rowTaskTotal = 0;
-          const rowCells = [createCell({ text: taskLabel })];
+          const rowCells = [createCell({ text: taskLabel, widthPct: colWidths[0] })];
 
-          weekDays.forEach((dayObj) => {
+          weekDays.forEach((dayObj, idx) => {
             const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
             let dayTaskHours = 0;
 
             if (entryForDay?.tasks && taskLabel.trim() !== "") {
               entryForDay.tasks.forEach((t) => {
-                const nameMatches = (t.taskName || '').toLowerCase().trim() === taskLabel.toLowerCase().trim() ||
+                const nameMatches =
+                  (t.taskName || '').toLowerCase().trim() === taskLabel.toLowerCase().trim() ||
                   (taskLabel.startsWith("Other (PTO)") && (t.taskName || '').toLowerCase().includes("other work")) ||
                   (taskLabel.startsWith("Other Leave") && (t.taskName || '').toLowerCase().includes("other leave"));
-                
+
                 if (nameMatches) {
                   dayTaskHours += parseFloat(t.hours) || 0;
                 }
@@ -734,51 +757,79 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             }
 
             rowTaskTotal += dayTaskHours;
-            rowCells.push(createCell({
-              text: dayTaskHours > 0 ? String(dayTaskHours) : " ",
-              align: AlignmentType.CENTER
-            }));
+            rowCells.push(
+              createCell({
+                text: dayTaskHours > 0 ? String(dayTaskHours) : " ",
+                align: AlignmentType.CENTER,
+                widthPct: colWidths[idx + 1]
+              })
+            );
           });
 
           siteGrandTotalHours += rowTaskTotal;
-          rowCells.push(createCell({
-            text: rowTaskTotal > 0 ? String(rowTaskTotal) : " ",
-            bold: true,
-            align: AlignmentType.RIGHT
-          }));
+          rowCells.push(
+            createCell({
+              text: rowTaskTotal > 0 ? String(rowTaskTotal) : " ",
+              bold: true,
+              align: AlignmentType.RIGHT,
+              widthPct: colWidths[8]
+            })
+          );
 
           tableRows.push(new TableRow({ children: rowCells }));
         });
 
         // TOTAL HOURS Row
-        const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true })];
-        weekDays.forEach((dayObj) => {
+        const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true, widthPct: colWidths[0] })];
+        weekDays.forEach((dayObj, idx) => {
           const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
           let dayTotal = 0;
           if (entryForDay?.tasks) {
             dayTotal = entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
           }
-          totalHoursCells.push(createCell({
-            text: dayTotal > 0 ? String(dayTotal) : " ",
-            bold: true,
-            align: AlignmentType.CENTER
-          }));
+          totalHoursCells.push(
+            createCell({
+              text: dayTotal > 0 ? String(dayTotal) : " ",
+              bold: true,
+              align: AlignmentType.CENTER,
+              widthPct: colWidths[idx + 1]
+            })
+          );
         });
-        totalHoursCells.push(createCell({ text: String(siteGrandTotalHours), bold: true, align: AlignmentType.RIGHT }));
+        totalHoursCells.push(
+          createCell({
+            text: String(siteGrandTotalHours),
+            bold: true,
+            align: AlignmentType.RIGHT,
+            widthPct: colWidths[8]
+          })
+        );
         tableRows.push(new TableRow({ children: totalHoursCells }));
 
         // Travel Time Row
-        const travelCells = [createCell({ text: "Travel Time", bold: true })];
-        weekDays.forEach((dayObj) => {
+        const travelCells = [createCell({ text: "Travel Time", bold: true, widthPct: colWidths[0] })];
+        weekDays.forEach((dayObj, idx) => {
           const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
           let dayTravel = 0;
           if (entryForDay?.tasks) {
             dayTravel = entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.travelTime) || 0), 0);
           }
           siteGrandTravelTotal += dayTravel;
-          travelCells.push(createCell({ text: dayTravel > 0 ? String(dayTravel) : " ", align: AlignmentType.CENTER }));
+          travelCells.push(
+            createCell({
+              text: dayTravel > 0 ? String(dayTravel) : " ",
+              align: AlignmentType.CENTER,
+              widthPct: colWidths[idx + 1]
+            })
+          );
         });
-        travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : " ", align: AlignmentType.RIGHT }));
+        travelCells.push(
+          createCell({
+            text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : " ",
+            align: AlignmentType.RIGHT,
+            widthPct: colWidths[8]
+          })
+        );
         tableRows.push(new TableRow({ children: travelCells }));
 
         // Comments Section
@@ -795,42 +846,43 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
         const commentRows = [
           new TableRow({
-            children: [createCell({ text: "COMMENTS", bold: true, colSpan: 9 })]
+            children: [createCell({ text: "COMMENTS", bold: true, colSpan: 9, widthPct: 100 })]
           }),
           new TableRow({
-            children: [createCell({ text: "If Other – please detail what type of work you were undertaking", colSpan: 9, fontSize: 14 })]
+            children: [
+              createCell({
+                text: "If Other – please detail what type of work you were undertaking",
+                colSpan: 9,
+                fontSize: 14,
+                widthPct: 100
+              })
+            ]
           })
         ];
 
         if (allComments.length > 0) {
           commentRows.push(
             new TableRow({
-              children: [createCell({ text: allComments.join(" | "), colSpan: 9, fontSize: 14 })]
+              children: [
+                createCell({ text: allComments.join(" | "), colSpan: 9, fontSize: 14, widthPct: 100 })
+              ]
             })
           );
         }
 
-        for (let i = allComments.length > 0 ? 1 : 0; i < 15; i++) {
+        for (let i = allComments.length > 0 ? 1 : 0; i < 12; i++) {
           commentRows.push(
             new TableRow({
-              children: [createCell({ text: " ", colSpan: 9 })]
+              children: [createCell({ text: " ", colSpan: 9, widthPct: 100 })]
             })
           );
         }
 
-        // Section Elements: Keep logo images isolated in clean right-aligned paragraphs
-        const headerParagraphs = [
-          new Paragraph({
-            alignment: AlignmentType.LEFT,
-            children: [
-              new TextRun({ text: `Staff Member: ${userName}     Project: ${siteName}`, bold: true, size: 18, font: "Arial" })
-            ],
-            spaceAfter: 80
-          })
-        ];
+        // Section Elements: Keep image isolated from text elements
+        const headerElements = [];
 
         if (logoBytes) {
-          headerParagraphs.unshift(
+          headerElements.push(
             new Paragraph({
               alignment: AlignmentType.RIGHT,
               children: [
@@ -839,10 +891,25 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   transformation: { width: 130, height: 52 }
                 })
               ],
-              spaceAfter: 60
+              spaceAfter: 80
             })
           );
         }
+
+        headerElements.push(
+          new Paragraph({
+            alignment: AlignmentType.LEFT,
+            children: [
+              new TextRun({
+                text: `Staff Member: ${userName}     Project: ${siteName}`,
+                bold: true,
+                size: 18,
+                font: "Arial"
+              })
+            ],
+            spaceAfter: 120
+          })
+        );
 
         const doc = new Document({
           sections: [
@@ -853,16 +920,17 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }
               },
               children: [
-                ...headerParagraphs,
+                ...headerElements,
                 new Table({
                   width: { size: 100, type: WidthType.PERCENTAGE },
+                  columnWidths: [36, 8, 8, 8, 8, 8, 8, 8, 8],
                   rows: tableRows
                 }),
                 new Paragraph({
                   children: [
                     new TextRun({ text: "Version – August 2026", size: 14, font: "Arial", italic: true })
                   ],
-                  spaceBefore: 60,
+                  spaceBefore: 80,
                   spaceAfter: 120
                 }),
                 new Table({
