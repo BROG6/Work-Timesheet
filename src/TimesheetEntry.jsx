@@ -17,6 +17,7 @@ import {
   Packer, 
   Paragraph, 
   TextRun, 
+  ImageRun,
   Table, 
   TableRow, 
   TableCell, 
@@ -25,6 +26,22 @@ import {
   AlignmentType, 
   ShadingType 
 } from 'https://cdn.skypack.dev/docx';
+
+// Clean Base64 representation of SJR Builders Logo
+const SJR_LOGO_BASE64 = "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";
+
+// Helper to convert Base64 string to Uint8Array for docx ImageRun
+const base64ToUint8Array = (base64) => {
+  const base64Data = base64.includes(',') ? base64.split(',')[1] : base64;
+  const cleanBase64 = base64Data.replace(/[^A-Za-z0-9+/=]/g, '');
+  const binaryString = window.atob(cleanBase64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+};
 
 // Categorized Task List
 const TASK_CATEGORIES = {
@@ -530,7 +547,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     }
   };
 
-  // DOCX Export Function: Clean table generation without Base64 logo dependencies
+  // DOCX Export Function: Embeds Base64 logo directly into Word document
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
@@ -566,6 +583,29 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             })
           ]
         });
+      };
+
+      // Helper to build logo ImageRun directly from Base64
+      const createLogoRun = () => {
+        try {
+          const logoBytes = base64ToUint8Array(SJR_LOGO_BASE64);
+          return new ImageRun({
+            data: logoBytes,
+            transformation: {
+              width: 130,
+              height: 52 // Maintains 2.5:1 aspect ratio
+            }
+          });
+        } catch (e) {
+          console.warn("Could not process base64 logo, using text fallback:", e);
+          return new TextRun({
+            text: "SJR BUILDERS",
+            bold: true,
+            size: 18,
+            font: "Arial",
+            color: "D3D3D3"
+          });
+        }
       };
 
       const daysHeader = ["Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue"];
@@ -797,7 +837,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           );
         }
 
-        // Build DOCX document
+        // Build DOCX document with Embedded Base64 Logo
         const doc = new Document({
           sections: [
             {
@@ -807,16 +847,17 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }
               },
               children: [
-                // Clean Top Header Line
+                // Top Header Line & Embedded Base64 Logo Image
                 new Paragraph({
                   alignment: AlignmentType.LEFT,
                   children: [
-                    new TextRun({ text: "Staff Member: ", bold: true, size: 18, font: "Arial" }),
+                    new TextRun({ text: "Staff Member:", bold: true, size: 18, font: "Arial" }),
                     new TextRun({ text: `${userName}\t\t\t\t`, size: 18, font: "Arial" }),
-                    new TextRun({ text: "Project: ", bold: true, size: 18, font: "Arial" }),
-                    new TextRun({ text: `${siteName}`, size: 18, font: "Arial" })
+                    new TextRun({ text: "Project:", bold: true, size: 18, font: "Arial" }),
+                    new TextRun({ text: `${siteName}\t\t\t\t\t`, size: 18, font: "Arial" }),
+                    createLogoRun()
                   ],
-                  spaceAfter: 120
+                  spaceAfter: 80
                 }),
 
                 // Primary Time Card Table
@@ -832,6 +873,15 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   ],
                   spaceBefore: 60,
                   spaceAfter: 180
+                }),
+
+                // Bottom Comments Box Header Block with Embedded Base64 Logo
+                new Paragraph({
+                  alignment: AlignmentType.RIGHT,
+                  children: [
+                    createLogoRun()
+                  ],
+                  spaceAfter: 60
                 }),
 
                 // Comments Table
@@ -861,7 +911,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
       setStatusMessage({
         type: 'success',
-        text: `Exported ${sitesToExport.length} site time card(s)!`
+        text: `Exported ${sitesToExport.length} site time card(s) with embedded logo!`
       });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
@@ -908,11 +958,18 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         
         {/* Header Bar */}
         <div className="border-b border-slate-200 pb-3 mb-4 flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-bold text-slate-900 leading-tight">Weekly Time Card Entry</h2>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">
-              Logged for: <span className="text-slate-800 font-semibold">{userName}</span>
-            </p>
+          <div className="flex items-center gap-3">
+            <img 
+              src={sjrLogo} 
+              alt="SJR Builders Logo" 
+              className="h-10 w-auto object-contain"
+            />
+            <div>
+              <h2 className="text-xl font-bold text-slate-900 leading-tight">Weekly Time Card Entry</h2>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Logged for: <span className="text-slate-800 font-semibold">{userName}</span>
+              </p>
+            </div>
           </div>
 
           <button
