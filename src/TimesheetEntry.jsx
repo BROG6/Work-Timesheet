@@ -479,6 +479,13 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         right: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
       };
 
+      const borderless = {
+        top: { style: BorderStyle.NONE, size: 0, color: "auto" },
+        bottom: { style: BorderStyle.NONE, size: 0, color: "auto" },
+        left: { style: BorderStyle.NONE, size: 0, color: "auto" },
+        right: { style: BorderStyle.NONE, size: 0, color: "auto" },
+      };
+
       const createCell = ({ text = "", bold = false, align = AlignmentType.LEFT, widthPct = null, colSpan = 1, shading = null, fontSize = 22 }) => {
         return new TableCell({
           columnSpan: colSpan,
@@ -651,15 +658,41 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 page: { margin: { top: 500, bottom: 500, left: 500, right: 500 } }
               },
               children: [
-                new Paragraph({
-                  alignment: AlignmentType.LEFT,
-                  children: [
-                    new TextRun({ text: "Staff Member: ", size: 22, font: "Calibri" }),
-                    new TextRun({ text: userName, size: 22, font: "Calibri" }),
-                    new TextRun({ text: "        Project: ", size: 22, font: "Calibri" }),
-                    new TextRun({ text: siteName, size: 22, font: "Calibri" }),
-                  ],
-                  spaceAfter: 120
+                new Table({
+                  width: { size: 100, type: WidthType.PERCENTAGE },
+                  rows: [
+                    new TableRow({
+                      children: [
+                        new TableCell({
+                          borders: borderless,
+                          width: { size: 50, type: WidthType.PERCENTAGE },
+                          margins: { top: 0, bottom: 120, left: 0, right: 0 },
+                          children: [
+                            new Paragraph({
+                              children: [
+                                new TextRun({ text: "Staff Member: ", bold: false, size: 22, font: "Calibri" }),
+                                new TextRun({ text: userName, bold: false, size: 22, font: "Calibri" }),
+                              ]
+                            })
+                          ]
+                        }),
+                        new TableCell({
+                          borders: borderless,
+                          width: { size: 50, type: WidthType.PERCENTAGE },
+                          margins: { top: 0, bottom: 120, left: 0, right: 0 },
+                          children: [
+                            new Paragraph({
+                              alignment: AlignmentType.RIGHT,
+                              children: [
+                                new TextRun({ text: "Project: ", bold: false, size: 22, font: "Calibri" }),
+                                new TextRun({ text: siteName, bold: false, size: 22, font: "Calibri" }),
+                              ]
+                            })
+                          ]
+                        })
+                      ]
+                    })
+                  ]
                 }),
                 new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: tableRows })
               ]
