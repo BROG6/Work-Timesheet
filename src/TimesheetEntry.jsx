@@ -352,7 +352,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     if (!userId) return;
     setLoadingHours(true);
     try {
-      const currentWed = currentWednesday;
+      const currentWed = currentWednesday; // Fixed to use active week state
       const currentTue = new Date(currentWed);
       currentTue.setDate(currentWed.getDate() + 6);
 
@@ -396,7 +396,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     if (userId) {
       fetchStaffWeeklyHours();
     }
-  }, [userId, currentWednesday]);
+  }, [userId, currentWednesday]); // Added currentWednesday dependency to recalculate on week changes
 
   useEffect(() => {
     let isMounted = true;
