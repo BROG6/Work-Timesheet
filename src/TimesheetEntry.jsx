@@ -352,7 +352,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     if (!userId) return;
     setLoadingHours(true);
     try {
-      const currentWed = getWednesday(new Date());
+      const currentWed = currentWednesday;
       const currentTue = new Date(currentWed);
       currentTue.setDate(currentWed.getDate() + 6);
 
@@ -396,7 +396,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     if (userId) {
       fetchStaffWeeklyHours();
     }
-  }, [userId]);
+  }, [userId, currentWednesday]);
 
   useEffect(() => {
     let isMounted = true;
