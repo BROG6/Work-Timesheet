@@ -80,7 +80,7 @@ const TASK_CATEGORIES = {
   ]
 };
 
-// Full list of predefined template tasks matching physical/blank timecards
+// Exact template tasks matching "Blank Time Cards_2.docx" layout
 const ALL_TEMPLATE_TASKS = [
   "Demolition",
   "Profile/Set Up",
@@ -109,12 +109,13 @@ const ALL_TEMPLATE_TASKS = [
   "Shelving/Joinery",
   "Deck Framing & Decking",
   "Driveway/Paths/Landscaping",
-  "Other Work (Detail in comments)",
+  "Other (PTO)",
   "Sick Leave",
   "Annual Leave",
   "Bereavement Leave",
   "Training",
-  "Other Leave"
+  "Other Leave (please specify)",
+  "" // Blank row preceding TOTAL HOURS matching template layout
 ];
 
 function getWednesday(d) {
@@ -156,16 +157,14 @@ function isFriday(dateStr) {
   return d.getDay() === 5;
 }
 
-// Fixed helper function: priority check for registered full name
+// Priority check for registered staff name
 function getFormattedStaffName(user, userProfile) {
-  // Check profile fields saved at registration first
   const explicitName = userProfile?.name || userProfile?.fullName || userProfile?.userName || user?.displayName;
   
   if (explicitName && explicitName.trim() !== '' && !explicitName.includes('@')) {
     return explicitName.trim();
   }
 
-  // Fallback to formatted email prefix if name is missing
   const email = userProfile?.email || user?.email || '';
   if (email.includes('@')) {
     const handle = email.split('@')[0];
@@ -261,10 +260,12 @@ function SiteAutoCompleteInput({ value, onChange, existingSites }) {
   );
 }
 
-export default function TimesheetEntry({ user, userProfile }) {
-  const activeUser = user || userProfile;
+export default function TimesheetEntry({ user, userProfile, profile }) {
+  // Support both userProfile and profile prop aliases
+  const activeProfile = userProfile || profile;
+  const activeUser = user || activeProfile;
   const userId = activeUser?.uid;
-  const userName = getFormattedStaffName(user, userProfile);
+  const userName = getFormattedStaffName(user, activeProfile);
 
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [existingSites, setExistingSites] = useState([]);
@@ -488,7 +489,7 @@ export default function TimesheetEntry({ user, userProfile }) {
     const payload = {
       userId,
       userName,
-      companyCode: userProfile?.companyCode || 'SJR Builders',
+      companyCode: activeProfile?.companyCode || activeProfile?.companyId || 'SJR Builders',
       project: project || "General / Unassigned",
       date: selectedDate,
       timeCardDetails: { startTime, timeFinished, timeLeftSite, timeReturned },
@@ -534,12 +535,11 @@ export default function TimesheetEntry({ user, userProfile }) {
     }
   };
 
-  // Export Weekly Time Cards: Generates separate DOCX file per site worked during the week
+  // Export Weekly Time Cards: Generates exact replica DOCX file matching Blank Time Cards_2.docx
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
-      const tableBorderColor = "94A3B8"; // Slate 400
-      const headerBgColor = "F1F5F9"; // Slate 100
+      const tableBorderColor = "000000"; // Sharp, clean template borders
 
       const thinBorder = {
         top: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
@@ -555,18 +555,18 @@ export default function TimesheetEntry({ user, userProfile }) {
         widthPct = null,
         colSpan = 1,
         shading = null,
-        fontSize = 11
+        fontSize = 18 // 9pt font matching compact DOCX template sizing
       }) => {
         return new TableCell({
           columnSpan: colSpan,
           width: widthPct ? { size: widthPct, type: WidthType.PERCENTAGE } : undefined,
           shading: shading ? { fill: shading, type: ShadingType.CLEAR } : undefined,
           borders: thinBorder,
-          margins: { top: 30, bottom: 30, left: 50, right: 50 },
+          margins: { top: 20, bottom: 20, left: 40, right: 40 },
           children: [
             new Paragraph({
               alignment: align,
-              children: [new TextRun({ text: String(text || ""), bold, size: fontSize })]
+              children: [new TextRun({ text: String(text || ""), bold, size: fontSize, font: "Arial" })]
             })
           ]
         });
@@ -575,7 +575,6 @@ export default function TimesheetEntry({ user, userProfile }) {
       const daysHeader = ["Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue"];
       const validWeekDates = weekDays.map((d) => d.dateStr);
 
-      // Query database for all entries in the selected pay week
       let weeklyEntries = [];
       if (userId) {
         const q = query(collection(db, 'timesheets'), where('userId', '==', userId));
@@ -594,7 +593,6 @@ export default function TimesheetEntry({ user, userProfile }) {
         });
       }
 
-      // If unsaved active state is open for selected date, incorporate current form view
       const activeHasSaved = weeklyEntries.some(e => e.date === selectedDate);
       if (!activeHasSaved && totalHours > 0) {
         weeklyEntries.push({
@@ -610,7 +608,6 @@ export default function TimesheetEntry({ user, userProfile }) {
         });
       }
 
-      // Group week's entries by site/project
       const siteMap = {};
       weeklyEntries.forEach((entry) => {
         const siteName = entry.project || project || "General / Unassigned";
@@ -631,36 +628,35 @@ export default function TimesheetEntry({ user, userProfile }) {
         }];
       }
 
-      // Generate a distinct DOCX spreadsheet file per Site
       for (const siteName of sitesToExport) {
         const siteEntries = siteMap[siteName];
         const tableRows = [];
 
-        // Row 1: Header (Day, Wed-Tue, Totals)
+        // Row 1: Header (Day | Wed | Thu | Fri | Sat | Sun | Mon | Tue | Totals)
         tableRows.push(
           new TableRow({
             children: [
-              createCell({ text: "Day", bold: true, widthPct: 37, shading: headerBgColor }),
+              createCell({ text: "Day", bold: true, widthPct: 40 }),
               ...daysHeader.map((day) =>
-                createCell({ text: day, bold: true, align: AlignmentType.CENTER, widthPct: 8, shading: headerBgColor })
+                createCell({ text: day, bold: true, align: AlignmentType.CENTER, widthPct: 7.5 })
               ),
-              createCell({ text: "Totals", bold: true, align: AlignmentType.RIGHT, widthPct: 7, shading: headerBgColor })
+              createCell({ text: "Totals", bold: true, align: AlignmentType.RIGHT, widthPct: 8 })
             ]
           })
         );
 
-        // Row 2: Dates
+        // Row 2: Date Row
         tableRows.push(
           new TableRow({
             children: [
-              createCell({ text: "Date", bold: true, shading: headerBgColor }),
+              createCell({ text: "Date", bold: true }),
               ...weekDays.map((d) => createCell({ text: `${d.dayNumber}/${d.dateStr.split('-')[1] || ''}`, align: AlignmentType.CENTER })),
               createCell({ text: "", align: AlignmentType.CENTER })
             ]
           })
         );
 
-        // Rows 3-6: On-Site Time Breakdown
+        // Timing Breakdown Rows
         const timingFields = [
           { label: "START TIME", key: "startTime" },
           { label: "TIME LEFT SITE", key: "timeLeftSite" },
@@ -679,7 +675,7 @@ export default function TimesheetEntry({ user, userProfile }) {
           tableRows.push(new TableRow({ children: cells }));
         });
 
-        // Task Matrix Rows (33 Predefined Tasks)
+        // 34 Standard Template Rows
         let siteGrandTotalHours = 0;
         let siteGrandTravelTotal = 0;
 
@@ -691,9 +687,13 @@ export default function TimesheetEntry({ user, userProfile }) {
             const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
             let dayTaskHours = 0;
 
-            if (entryForDay?.tasks) {
+            if (entryForDay?.tasks && taskLabel !== "") {
               entryForDay.tasks.forEach((t) => {
-                if ((t.taskName || '').toLowerCase().trim() === taskLabel.toLowerCase().trim()) {
+                const nameMatches = (t.taskName || '').toLowerCase().trim() === taskLabel.toLowerCase().trim() ||
+                  (taskLabel.startsWith("Other (PTO)") && (t.taskName || '').toLowerCase().includes("other work")) ||
+                  (taskLabel.startsWith("Other Leave") && (t.taskName || '').toLowerCase().includes("other leave"));
+                
+                if (nameMatches) {
                   dayTaskHours += parseFloat(t.hours) || 0;
                 }
               });
@@ -716,8 +716,8 @@ export default function TimesheetEntry({ user, userProfile }) {
           tableRows.push(new TableRow({ children: rowCells }));
         });
 
-        // Total Hours Row
-        const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true, shading: "E2E8F0" })];
+        // TOTAL HOURS Row
+        const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true })];
         weekDays.forEach((dayObj) => {
           const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
           let dayTotal = 0;
@@ -727,11 +727,10 @@ export default function TimesheetEntry({ user, userProfile }) {
           totalHoursCells.push(createCell({
             text: dayTotal > 0 ? String(dayTotal) : "",
             bold: true,
-            align: AlignmentType.CENTER,
-            shading: "E2E8F0"
+            align: AlignmentType.CENTER
           }));
         });
-        totalHoursCells.push(createCell({ text: String(siteGrandTotalHours), bold: true, align: AlignmentType.RIGHT, shading: "E2E8F0" }));
+        totalHoursCells.push(createCell({ text: String(siteGrandTotalHours), bold: true, align: AlignmentType.RIGHT }));
         tableRows.push(new TableRow({ children: totalHoursCells }));
 
         // Travel Time Row
@@ -748,7 +747,7 @@ export default function TimesheetEntry({ user, userProfile }) {
         travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT }));
         tableRows.push(new TableRow({ children: travelCells }));
 
-        // Collect Comments across week
+        // Comments Section Matching Template Exactly
         const allComments = [];
         siteEntries.forEach((entry) => {
           if (entry.tasks) {
@@ -760,53 +759,54 @@ export default function TimesheetEntry({ user, userProfile }) {
           }
         });
 
-        // Assemble Site Document
+        tableRows.push(
+          new TableRow({
+            children: [createCell({ text: "COMMENTS", bold: true, colSpan: 9 })]
+          })
+        );
+
+        tableRows.push(
+          new TableRow({
+            children: [createCell({ text: "If Other – please detail what type of work you were undertaking", colSpan: 9, fontSize: 16 })]
+          })
+        );
+
+        // Comments text entry row
+        tableRows.push(
+          new TableRow({
+            children: [createCell({ text: allComments.length > 0 ? allComments.join(" | ") : "", colSpan: 9 })]
+          })
+        );
+
+        // Compile Document
         const doc = new Document({
           sections: [
             {
-              properties: {},
+              properties: {
+                page: {
+                  margin: { top: 500, bottom: 500, left: 500, right: 500 } // Narrow margins to fit all rows on one page
+                }
+              },
               children: [
                 new Paragraph({
                   children: [
-                    new TextRun({ text: "Staff Member: ", bold: true, size: 22 }),
-                    new TextRun({ text: `${userName}\t\t\t\t`, size: 22 }),
-                    new TextRun({ text: "Project / Site: ", bold: true, size: 22 }),
-                    new TextRun({ text: siteName, size: 22 })
+                    new TextRun({ text: "Staff Member: ", bold: true, size: 20, font: "Arial" }),
+                    new TextRun({ text: `${userName}\t\t\t\t\t\t\t\t`, size: 20, font: "Arial" }),
+                    new TextRun({ text: "Project: ", bold: true, size: 20, font: "Arial" }),
+                    new TextRun({ text: siteName, size: 20, font: "Arial" })
                   ],
-                  spaceAfter: 180
+                  spaceAfter: 120
                 }),
 
                 new Table({
                   width: { size: 100, type: WidthType.PERCENTAGE },
                   rows: tableRows
-                }),
-
-                new Paragraph({ text: "", spaceAfter: 120 }),
-
-                new Table({
-                  width: { size: 100, type: WidthType.PERCENTAGE },
-                  rows: [
-                    new TableRow({
-                      children: [
-                        createCell({ text: "COMMENTS / WORK DETAILS", bold: true, shading: "F1F5F9", colSpan: 9 })
-                      ]
-                    }),
-                    new TableRow({
-                      children: [
-                        createCell({
-                          text: allComments.length > 0 ? allComments.join(" | ") : "If Other – please detail what type of work you were undertaking",
-                          colSpan: 9
-                        })
-                      ]
-                    })
-                  ]
                 })
               ]
             }
           ]
         });
 
-        // Trigger Direct Browser Download per site file
         const safeUserName = userName.replace(/[^a-zA-Z0-9_\-]/g, '_');
         const safeSiteName = siteName.replace(/[^a-zA-Z0-9_\-]/g, '_');
         const weekStartStr = weekDays[0].dateStr;
@@ -824,7 +824,7 @@ export default function TimesheetEntry({ user, userProfile }) {
 
       setStatusMessage({
         type: 'success',
-        text: `Exported ${sitesToExport.length} site timesheet file(s) successfully!`
+        text: `Exported ${sitesToExport.length} site time card(s) matching exact template!`
       });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
