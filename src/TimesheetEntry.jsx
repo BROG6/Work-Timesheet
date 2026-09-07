@@ -1,31 +1,9 @@
 // src/TimesheetEntry.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebaseConfig';
-import { 
-  collection, 
-  addDoc, 
-  query, 
-  where, 
-  getDocs, 
-  getDocsFromCache,
-  serverTimestamp 
-} from 'firebase/firestore';
-
+import { collection, addDoc, query, where, getDocs, getDocsFromCache, serverTimestamp } from 'firebase/firestore';
 // Import docx directly via Skypack CDN (bypasses local npm module resolution during Vercel build)
-import { 
-  Document, 
-  Packer, 
-  Paragraph, 
-  TextRun, 
-  Table, 
-  TableRow, 
-  TableCell, 
-  WidthType, 
-  BorderStyle, 
-  AlignmentType, 
-  ShadingType 
-} from 'https://cdn.skypack.dev/docx';
-
+import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType, ShadingType } from 'https://cdn.skypack.dev/docx';
 // Import logo directly from src/assets so Vite processes and bundles it
 import sjrLogo from './assets/logo.jpg';
 
@@ -160,11 +138,9 @@ function isFriday(dateStr) {
 // Priority check for registered staff name
 function getFormattedStaffName(user, userProfile) {
   const explicitName = userProfile?.name || userProfile?.fullName || userProfile?.userName || user?.displayName;
-  
   if (explicitName && explicitName.trim() !== '' && !explicitName.includes('@')) {
     return explicitName.trim();
   }
-
   const email = userProfile?.email || user?.email || '';
   if (email.includes('@')) {
     const handle = email.split('@')[0];
@@ -174,7 +150,6 @@ function getFormattedStaffName(user, userProfile) {
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
       .join(' ');
   }
-
   return 'Staff Member';
 }
 
@@ -201,12 +176,8 @@ function SiteAutoCompleteInput({ value, onChange, existingSites }) {
       setIsOpen(false);
       return;
     }
-
     const queryText = value.toLowerCase().trim();
-    const matches = existingSites.filter((site) =>
-      site.toLowerCase().includes(queryText)
-    );
-
+    const matches = existingSites.filter((site) => site.toLowerCase().includes(queryText));
     setSuggestions(matches);
     setIsOpen(matches.length > 0);
   }, [value, existingSites]);
@@ -239,7 +210,6 @@ function SiteAutoCompleteInput({ value, onChange, existingSites }) {
         className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
         required
       />
-
       {isOpen && (
         <ul className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-lg text-sm">
           {suggestions.map((site, index) => (
@@ -261,7 +231,6 @@ function SiteAutoCompleteInput({ value, onChange, existingSites }) {
 }
 
 export default function TimesheetEntry({ user, userProfile, profile }) {
-  // Support both userProfile and profile prop aliases
   const activeProfile = userProfile || profile;
   const activeUser = user || activeProfile;
   const userId = activeUser?.uid;
@@ -273,10 +242,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
-
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
@@ -292,18 +259,14 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
   const [selectedDate, setSelectedDate] = useState(() => formatDate(new Date()));
   const [currentWednesday, setCurrentWednesday] = useState(() => getWednesday(new Date()));
-
   const [weeklyHours, setWeeklyHours] = useState(0);
   const [weekRangeStr, setWeekRangeStr] = useState('');
   const [loadingHours, setLoadingHours] = useState(true);
-
   const [startTime, setStartTime] = useState('07:00');
-  const [timeFinished, setTimeFinished] = useState(() => isFriday(formatDate(new Date())) ? '15:30' : '16:30');
+  const [timeFinished, setTimeFinished] = useState(() => (isFriday(formatDate(new Date())) ? '15:30' : '16:30'));
   const [timeLeftSite, setTimeLeftSite] = useState('');
   const [timeReturned, setTimeReturned] = useState('');
-
   const [tasks, setTasks] = useState(() => [DEFAULT_BLANK_TASK(formatDate(new Date()))]);
-
   const [loading, setLoading] = useState(false);
   const [exportingDocx, setExportingDocx] = useState(false);
   const [fetchingDay, setFetchingDay] = useState(false);
@@ -319,7 +282,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         } catch {
           querySnapshot = await getDocsFromCache(q);
         }
-
         const sitesSet = new Set();
         querySnapshot.forEach((doc) => {
           const data = doc.data();
@@ -327,7 +289,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             sitesSet.add(data.project.trim());
           }
         });
-
         const uniqueSitesList = Array.from(sitesSet);
         if (uniqueSitesList.length > 0) {
           localStorage.setItem('sjr_known_sites', JSON.stringify(uniqueSitesList));
@@ -342,7 +303,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         if (saved) setExistingSites(JSON.parse(saved));
       }
     }
-
     fetchSites();
   }, []);
 
@@ -353,27 +313,22 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       const currentWed = getWednesday(new Date());
       const currentTue = new Date(currentWed);
       currentTue.setDate(currentWed.getDate() + 6);
-
-      setWeekRangeStr(`${formatDisplayDate(currentWed)} â€“ ${formatDisplayDate(currentTue)}`);
-
-      const q = query(
-        collection(db, 'timesheets'),
-        where('userId', '==', userId)
-      );
-
+      setWeekRangeStr(`${formatDisplayDate(currentWed)} – ${formatDisplayDate(currentTue)}`);
+      
+      const q = query(collection(db, 'timesheets'), where('userId', '==', userId));
       let querySnapshot;
       try {
         querySnapshot = await getDocs(q);
       } catch (e) {
         querySnapshot = await getDocsFromCache(q);
       }
-
+      
       const validWeekDates = Array.from({ length: 7 }, (_, i) => {
         const d = new Date(currentWed);
         d.setDate(currentWed.getDate() + i);
         return formatDisplayDate(d);
       });
-
+      
       let total = 0;
       querySnapshot.forEach((doc) => {
         const data = doc.data();
@@ -381,7 +336,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           total += parseFloat(data.totalHours) || 0;
         }
       });
-
       setWeeklyHours(total);
     } catch (err) {
       console.warn("Could not retrieve weekly hours:", err);
@@ -398,30 +352,24 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
   useEffect(() => {
     let isMounted = true;
-
     async function loadDayEntry() {
       if (!userId || !selectedDate) return;
       setFetchingDay(true);
-
       try {
         const q = query(
           collection(db, 'timesheets'),
           where('userId', '==', userId),
           where('date', '==', selectedDate)
         );
-
         let querySnapshot;
         try {
           querySnapshot = await getDocs(q);
         } catch {
           querySnapshot = await getDocsFromCache(q);
         }
-
         if (!isMounted) return;
-
         if (!querySnapshot.empty) {
           const docData = querySnapshot.docs[querySnapshot.docs.length - 1].data();
-
           if (docData.project) setProject(docData.project);
           if (docData.timeCardDetails) {
             setStartTime(docData.timeCardDetails.startTime || '07:00');
@@ -429,7 +377,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             setTimeLeftSite(docData.timeCardDetails.timeLeftSite || '');
             setTimeReturned(docData.timeCardDetails.timeReturned || '');
           }
-
           if (docData.tasks?.length > 0) {
             setTasks(
               docData.tasks.map((t) => ({
@@ -455,9 +402,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         if (isMounted) setFetchingDay(false);
       }
     }
-
     loadDayEntry();
-
     return () => {
       isMounted = false;
     };
@@ -478,14 +423,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (totalHours <= 0) {
       alert("Please enter valid task hours before submitting.");
       return;
     }
-
     setLoading(true);
-
     const payload = {
       userId,
       userName,
@@ -507,40 +449,29 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
     try {
       await addDoc(collection(db, 'timesheets'), payload);
-
       setWeeklyHours((prev) => prev + totalHours);
-
       if (project && !existingSites.includes(project)) {
         const updated = [...existingSites, project];
         setExistingSites(updated);
         localStorage.setItem('sjr_known_sites', JSON.stringify(updated));
       }
-
       setStatusMessage({
         type: 'success',
-        text: isOnline
-          ? `Entry saved for ${displayDate(selectedDate)}!`
-          : `Saved locally! Will sync automatically when back online.`
+        text: isOnline ? `Entry saved for ${displayDate(selectedDate)}!` : `Saved locally! Will sync automatically when back online.`
       });
-
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
       console.error("Submission error:", err);
-      setStatusMessage({
-        type: 'error',
-        text: "Could not write entry locally. Check storage settings."
-      });
+      setStatusMessage({ type: 'error', text: "Could not write entry locally. Check storage settings." });
     } finally {
       setLoading(false);
     }
   };
 
-  // Export Weekly Time Cards: Generates exact replica DOCX file matching Blank Time Cards_2.docx
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
-      const tableBorderColor = "000000"; // Sharp, clean template borders
-
+      const tableBorderColor = "000000";
       const thinBorder = {
         top: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
         bottom: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
@@ -548,15 +479,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         right: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
       };
 
-      const createCell = ({
-        text = "",
-        bold = false,
-        align = AlignmentType.LEFT,
-        widthPct = null,
-        colSpan = 1,
-        shading = null,
-        fontSize = 18 // 9pt font matching compact DOCX template sizing
-      }) => {
+      const createCell = ({ text = "", bold = false, align = AlignmentType.LEFT, widthPct = null, colSpan = 1, shading = null, fontSize = 18 }) => {
         return new TableCell({
           columnSpan: colSpan,
           width: widthPct ? { size: widthPct, type: WidthType.PERCENTAGE } : undefined,
@@ -574,8 +497,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
       const daysHeader = ["Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue"];
       const validWeekDates = weekDays.map((d) => d.dateStr);
-
       let weeklyEntries = [];
+
       if (userId) {
         const q = query(collection(db, 'timesheets'), where('userId', '==', userId));
         let querySnapshot;
@@ -584,7 +507,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         } catch {
           querySnapshot = await getDocsFromCache(q);
         }
-
         querySnapshot.forEach((doc) => {
           const data = doc.data();
           if (validWeekDates.includes(data.date)) {
@@ -632,20 +554,16 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const siteEntries = siteMap[siteName];
         const tableRows = [];
 
-        // Row 1: Header (Day | Wed | Thu | Fri | Sat | Sun | Mon | Tue | Totals)
         tableRows.push(
           new TableRow({
             children: [
               createCell({ text: "Day", bold: true, widthPct: 40 }),
-              ...daysHeader.map((day) =>
-                createCell({ text: day, bold: true, align: AlignmentType.CENTER, widthPct: 7.5 })
-              ),
+              ...daysHeader.map((day) => createCell({ text: day, bold: true, align: AlignmentType.CENTER, widthPct: 7.5 })),
               createCell({ text: "Totals", bold: true, align: AlignmentType.RIGHT, widthPct: 8 })
             ]
           })
         );
 
-        // Row 2: Date Row
         tableRows.push(
           new TableRow({
             children: [
@@ -656,7 +574,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           })
         );
 
-        // Timing Breakdown Rows
         const timingFields = [
           { label: "START TIME", key: "startTime" },
           { label: "TIME LEFT SITE", key: "timeLeftSite" },
@@ -675,48 +592,34 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           tableRows.push(new TableRow({ children: cells }));
         });
 
-        // 34 Standard Template Rows
         let siteGrandTotalHours = 0;
         let siteGrandTravelTotal = 0;
 
         ALL_TEMPLATE_TASKS.forEach((taskLabel) => {
           let rowTaskTotal = 0;
           const rowCells = [createCell({ text: taskLabel })];
-
           weekDays.forEach((dayObj) => {
             const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
             let dayTaskHours = 0;
-
             if (entryForDay?.tasks && taskLabel !== "") {
               entryForDay.tasks.forEach((t) => {
-                const nameMatches = (t.taskName || '').toLowerCase().trim() === taskLabel.toLowerCase().trim() ||
+                const nameMatches =
+                  (t.taskName || '').toLowerCase().trim() === taskLabel.toLowerCase().trim() ||
                   (taskLabel.startsWith("Other (PTO)") && (t.taskName || '').toLowerCase().includes("other work")) ||
                   (taskLabel.startsWith("Other Leave") && (t.taskName || '').toLowerCase().includes("other leave"));
-                
                 if (nameMatches) {
                   dayTaskHours += parseFloat(t.hours) || 0;
                 }
               });
             }
-
             rowTaskTotal += dayTaskHours;
-            rowCells.push(createCell({
-              text: dayTaskHours > 0 ? String(dayTaskHours) : "",
-              align: AlignmentType.CENTER
-            }));
+            rowCells.push(createCell({ text: dayTaskHours > 0 ? String(dayTaskHours) : "", align: AlignmentType.CENTER }));
           });
-
           siteGrandTotalHours += rowTaskTotal;
-          rowCells.push(createCell({
-            text: rowTaskTotal > 0 ? String(rowTaskTotal) : "",
-            bold: true,
-            align: AlignmentType.RIGHT
-          }));
-
+          rowCells.push(createCell({ text: rowTaskTotal > 0 ? String(rowTaskTotal) : "", bold: true, align: AlignmentType.RIGHT }));
           tableRows.push(new TableRow({ children: rowCells }));
         });
 
-        // TOTAL HOURS Row
         const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true })];
         weekDays.forEach((dayObj) => {
           const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
@@ -724,16 +627,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           if (entryForDay?.tasks) {
             dayTotal = entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
           }
-          totalHoursCells.push(createCell({
-            text: dayTotal > 0 ? String(dayTotal) : "",
-            bold: true,
-            align: AlignmentType.CENTER
-          }));
+          totalHoursCells.push(createCell({ text: dayTotal > 0 ? String(dayTotal) : "", bold: true, align: AlignmentType.CENTER }));
         });
         totalHoursCells.push(createCell({ text: String(siteGrandTotalHours), bold: true, align: AlignmentType.RIGHT }));
         tableRows.push(new TableRow({ children: totalHoursCells }));
 
-        // Travel Time Row
         const travelCells = [createCell({ text: "Travel Time", bold: true })];
         weekDays.forEach((dayObj) => {
           const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
@@ -747,7 +645,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT }));
         tableRows.push(new TableRow({ children: travelCells }));
 
-        // Comments Section Matching Template Exactly
         const allComments = [];
         siteEntries.forEach((entry) => {
           if (entry.tasks) {
@@ -759,33 +656,15 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           }
         });
 
-        tableRows.push(
-          new TableRow({
-            children: [createCell({ text: "COMMENTS", bold: true, colSpan: 9 })]
-          })
-        );
+        tableRows.push(new TableRow({ children: [createCell({ text: "COMMENTS", bold: true, colSpan: 9 })] }));
+        tableRows.push(new TableRow({ children: [createCell({ text: "If Other – please detail what type of work you were undertaking", colSpan: 9, fontSize: 16 })] }));
+        tableRows.push(new TableRow({ children: [createCell({ text: allComments.length > 0 ? allComments.join(" | ") : "", colSpan: 9 })] }));
 
-        tableRows.push(
-          new TableRow({
-            children: [createCell({ text: "If Other â€“ please detail what type of work you were undertaking", colSpan: 9, fontSize: 16 })]
-          })
-        );
-
-        // Comments text entry row
-        tableRows.push(
-          new TableRow({
-            children: [createCell({ text: allComments.length > 0 ? allComments.join(" | ") : "", colSpan: 9 })]
-          })
-        );
-
-        // Compile Document
         const doc = new Document({
           sections: [
             {
               properties: {
-                page: {
-                  margin: { top: 500, bottom: 500, left: 500, right: 500 } // Narrow margins to fit all rows on one page
-                }
+                page: { margin: { top: 500, bottom: 500, left: 500, right: 500 } }
               },
               children: [
                 new Paragraph({
@@ -797,11 +676,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   ],
                   spaceAfter: 120
                 }),
-
-                new Table({
-                  width: { size: 100, type: WidthType.PERCENTAGE },
-                  rows: tableRows
-                })
+                new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: tableRows })
               ]
             }
           ]
@@ -810,7 +685,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const safeUserName = userName.replace(/[^a-zA-Z0-9_\-]/g, '_');
         const safeSiteName = siteName.replace(/[^a-zA-Z0-9_\-]/g, '_');
         const weekStartStr = weekDays[0].dateStr;
-
         const blob = await Packer.toBlob(doc);
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -822,17 +696,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         URL.revokeObjectURL(url);
       }
 
-      setStatusMessage({
-        type: 'success',
-        text: `Exported ${sitesToExport.length} site time card(s) matching exact template!`
-      });
+      setStatusMessage({ type: 'success', text: `Exported ${sitesToExport.length} site time card(s) matching exact template!` });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
       console.error("DOCX export error:", err);
-      setStatusMessage({
-        type: 'error',
-        text: "Failed to generate DOCX file."
-      });
+      setStatusMessage({ type: 'error', text: "Failed to generate DOCX file." });
     } finally {
       setExportingDocx(false);
     }
@@ -845,7 +713,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       {/* Network Connection Banner */}
       {!isOnline && (
         <div className="bg-amber-500 text-slate-950 px-4 py-2 rounded-lg text-xs font-bold flex items-center justify-between shadow">
-          <span>âš¡ Working Offline</span>
+          <span>⚡ Working Offline</span>
           <span className="font-medium text-[11px]">Saved locally & auto-syncs when online</span>
         </div>
       )}
@@ -868,15 +736,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-        
         {/* Header Bar with Logo & DOCX Download Button */}
         <div className="border-b border-slate-200 pb-3 mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <img 
-              src={sjrLogo} 
-              alt="SJR Builders Logo" 
-              className="h-10 w-auto object-contain"
-            />
+            <img src={sjrLogo} alt="SJR Builders Logo" className="h-10 w-auto object-contain" />
             <div>
               <h2 className="text-xl font-bold text-slate-900 leading-tight">Weekly Time Card Entry</h2>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
@@ -912,13 +775,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               }}
               className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
             >
-              â† Prev Week
+              ← Prev Week
             </button>
-            
             <span className="font-bold text-slate-200">
-              {weekDays[0].monthName} {weekDays[0].dayNumber} â€“ {weekDays[6].monthName} {weekDays[6].dayNumber}
+              {weekDays[0].monthName} {weekDays[0].dayNumber} – {weekDays[6].monthName} {weekDays[6].dayNumber}
             </span>
-
             <div className="flex gap-1.5">
               <button
                 type="button"
@@ -939,16 +800,14 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }}
                 className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
               >
-                Next Week â†’
+                Next Week →
               </button>
             </div>
           </div>
-
           <div className="grid grid-cols-7 gap-1">
             {weekDays.map((day) => {
               const isSelected = selectedDate === day.dateStr;
               const isToday = todayStr === day.dateStr;
-
               return (
                 <button
                   key={day.dateStr}
@@ -983,11 +842,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
         {statusMessage && (
           <div className={`mb-4 p-3 rounded-lg text-sm font-semibold flex items-center gap-2 ${
-            statusMessage.type === 'error'
-              ? 'bg-rose-50 border border-rose-200 text-rose-800'
-              : 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+            statusMessage.type === 'error' ? 'bg-rose-50 border border-rose-200 text-rose-800' : 'bg-emerald-50 border border-emerald-200 text-emerald-800'
           }`}>
-            <span>{statusMessage.type === 'error' ? 'âš ï¸' : 'âœ“'}</span> {statusMessage.text}
+            <span>{statusMessage.type === 'error' ? '⚠️' : '✓'}</span>
+            {statusMessage.text}
           </div>
         )}
 
@@ -1030,38 +888,38 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <label className="text-slate-500 font-medium">Start Time</label>
-                <input 
-                  type="time" 
-                  value={startTime} 
-                  onChange={(e) => setStartTime(e.target.value)} 
-                  className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5 text-slate-800 font-medium" 
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5 text-slate-800 font-medium"
                 />
               </div>
               <div>
                 <label className="text-slate-500 font-medium">Time Finished</label>
-                <input 
-                  type="time" 
-                  value={timeFinished} 
-                  onChange={(e) => setTimeFinished(e.target.value)} 
-                  className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5 text-slate-800 font-medium" 
+                <input
+                  type="time"
+                  value={timeFinished}
+                  onChange={(e) => setTimeFinished(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5 text-slate-800 font-medium"
                 />
               </div>
               <div>
                 <label className="text-slate-500 font-medium">Time Left Site</label>
-                <input 
-                  type="time" 
-                  value={timeLeftSite} 
-                  onChange={(e) => setTimeLeftSite(e.target.value)} 
-                  className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5 text-slate-800 font-medium" 
+                <input
+                  type="time"
+                  value={timeLeftSite}
+                  onChange={(e) => setTimeLeftSite(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5 text-slate-800 font-medium"
                 />
               </div>
               <div>
                 <label className="text-slate-500 font-medium">Time Returned</label>
-                <input 
-                  type="time" 
-                  value={timeReturned} 
-                  onChange={(e) => setTimeReturned(e.target.value)} 
-                  className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5 text-slate-800 font-medium" 
+                <input
+                  type="time"
+                  value={timeReturned}
+                  onChange={(e) => setTimeReturned(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5 text-slate-800 font-medium"
                 />
               </div>
             </div>
@@ -1088,7 +946,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                     </button>
                   )}
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Category Group</label>
@@ -1096,11 +953,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                       value={taskItem.categoryGroup}
                       onChange={(e) => {
                         const val = e.target.value;
-                        setTasks((prev) => prev.map((t) => t.id === taskItem.id ? {
-                          ...t,
-                          categoryGroup: val,
-                          taskName: TASK_CATEGORIES[val][0]
-                        } : t));
+                        setTasks((prev) =>
+                          prev.map((t) =>
+                            t.id === taskItem.id ? { ...t, categoryGroup: val, taskName: TASK_CATEGORIES[val][0] } : t
+                          )
+                        );
                       }}
                       className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800"
                     >
@@ -1109,14 +966,15 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                       ))}
                     </select>
                   </div>
-
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Task Undertaken</label>
                     <select
                       value={taskItem.taskName}
                       onChange={(e) => {
                         const val = e.target.value;
-                        setTasks((prev) => prev.map((t) => t.id === taskItem.id ? { ...t, taskName: val } : t));
+                        setTasks((prev) =>
+                          prev.map((t) => (t.id === taskItem.id ? { ...t, taskName: val } : t))
+                        );
                       }}
                       className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800"
                     >
@@ -1126,7 +984,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                     </select>
                   </div>
                 </div>
-
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Task Hours</label>
@@ -1136,7 +993,9 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                       value={taskItem.hours}
                       onChange={(e) => {
                         const val = e.target.value;
-                        setTasks((prev) => prev.map((t) => t.id === taskItem.id ? { ...t, hours: val } : t));
+                        setTasks((prev) =>
+                          prev.map((t) => (t.id === taskItem.id ? { ...t, hours: val } : t))
+                        );
                       }}
                       className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500"
                       required
@@ -1150,13 +1009,14 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                       value={taskItem.travelTime}
                       onChange={(e) => {
                         const val = e.target.value;
-                        setTasks((prev) => prev.map((t) => t.id === taskItem.id ? { ...t, travelTime: val } : t));
+                        setTasks((prev) =>
+                          prev.map((t) => (t.id === taskItem.id ? { ...t, travelTime: val } : t))
+                        );
                       }}
                       className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
                 </div>
-
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Comments / Work Details</label>
                   <textarea
@@ -1164,7 +1024,9 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                     value={taskItem.comments}
                     onChange={(e) => {
                       const val = e.target.value;
-                      setTasks((prev) => prev.map((t) => t.id === taskItem.id ? { ...t, comments: val } : t));
+                      setTasks((prev) =>
+                        prev.map((t) => (t.id === taskItem.id ? { ...t, comments: val } : t))
+                      );
                     }}
                     className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500"
                   />
@@ -1174,14 +1036,19 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
             <button
               type="button"
-              onClick={() => setTasks((prev) => [...prev, {
-                id: Date.now() + Math.random(),
-                categoryGroup: "Framing & Envelope",
-                taskName: "Wall Framing",
-                hours: '0',
-                travelTime: '',
-                comments: ''
-              }])}
+              onClick={() =>
+                setTasks((prev) => [
+                  ...prev,
+                  {
+                    id: Date.now() + Math.random(),
+                    categoryGroup: "Framing & Envelope",
+                    taskName: "Wall Framing",
+                    hours: '0',
+                    travelTime: '',
+                    comments: ''
+                  }
+                ])
+              }
               className="w-full py-2 px-3 border-2 border-dashed border-emerald-600 text-emerald-700 font-bold rounded-lg hover:bg-emerald-50 text-sm transition-colors"
             >
               + Add Another Task
