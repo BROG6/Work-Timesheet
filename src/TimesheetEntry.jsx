@@ -143,7 +143,7 @@ const ALL_TEMPLATE_TASKS = [
   "Bereavement Leave",
   "Training",
   "Other Leave (please specify)",
-  " " 
+  ""
 ];
 
 function getWednesday(d) {
@@ -561,7 +561,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     }
   };
 
-  // Robust DOCX Generator with STRICT Schema Enforcement
+  // Schema-Compliant DOCX Generator
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
@@ -581,15 +581,13 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         right: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
       };
 
-      // Strict String Cleaner: Prevents invalid/empty text node corruptions in Word XML
-      const safeStr = (val) => {
-        if (val === null || val === undefined) return " ";
-        const str = String(val).trim();
-        return str === "" ? " " : str;
+      const safeText = (val) => {
+        if (val === null || val === undefined) return "";
+        return String(val).trim();
       };
 
       const createCell = ({
-        text = " ",
+        text = "",
         bold = false,
         align = AlignmentType.LEFT,
         colSpan = 1,
@@ -597,23 +595,24 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         fontSize = 16,
         widthPct = null
       }) => {
+        const strVal = safeText(text);
         return new TableCell({
           columnSpan: colSpan,
           width: widthPct ? { size: widthPct, type: WidthType.PERCENTAGE } : undefined,
           shading: shading ? { fill: shading, type: ShadingType.CLEAR } : undefined,
           borders: thinBorder,
-          margins: { top: 20, bottom: 20, left: 30, right: 30 },
+          padding: { top: 40, bottom: 40, left: 60, right: 60 },
           children: [
             new Paragraph({
               alignment: align,
-              children: [
+              children: strVal.length > 0 ? [
                 new TextRun({
-                  text: safeStr(text),
+                  text: strVal,
                   bold: Boolean(bold),
                   size: fontSize,
                   font: "Arial"
                 })
-              ]
+              ] : []
             })
           ]
         });
@@ -675,7 +674,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }];
       }
 
-      // Column widths for 9 columns total: [Task Name (36%), Day 1..7 (8% each = 56%), Totals (8%)]
+      // Column widths array (9 Columns): [36%, 8%, 8%, 8%, 8%, 8%, 8%, 8%, 8%]
       const colWidths = [36, 8, 8, 8, 8, 8, 8, 8, 8];
 
       for (const siteName of sitesToExport) {
@@ -707,7 +706,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   widthPct: colWidths[idx + 1]
                 })
               ),
-              createCell({ text: " ", align: AlignmentType.CENTER, widthPct: colWidths[8] })
+              createCell({ text: "", align: AlignmentType.CENTER, widthPct: colWidths[8] })
             ]
           })
         );
@@ -724,10 +723,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           const cells = [createCell({ text: tf.label, bold: true, widthPct: colWidths[0] })];
           weekDays.forEach((dayObj, idx) => {
             const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
-            const val = entryForDay?.timeCardDetails?.[tf.key] || " ";
+            const val = entryForDay?.timeCardDetails?.[tf.key] || "";
             cells.push(createCell({ text: val, align: AlignmentType.CENTER, widthPct: colWidths[idx + 1] }));
           });
-          cells.push(createCell({ text: " ", widthPct: colWidths[8] }));
+          cells.push(createCell({ text: "", widthPct: colWidths[8] }));
           tableRows.push(new TableRow({ children: cells }));
         });
 
@@ -759,7 +758,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             rowTaskTotal += dayTaskHours;
             rowCells.push(
               createCell({
-                text: dayTaskHours > 0 ? String(dayTaskHours) : " ",
+                text: dayTaskHours > 0 ? String(dayTaskHours) : "",
                 align: AlignmentType.CENTER,
                 widthPct: colWidths[idx + 1]
               })
@@ -769,7 +768,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           siteGrandTotalHours += rowTaskTotal;
           rowCells.push(
             createCell({
-              text: rowTaskTotal > 0 ? String(rowTaskTotal) : " ",
+              text: rowTaskTotal > 0 ? String(rowTaskTotal) : "",
               bold: true,
               align: AlignmentType.RIGHT,
               widthPct: colWidths[8]
@@ -789,7 +788,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           }
           totalHoursCells.push(
             createCell({
-              text: dayTotal > 0 ? String(dayTotal) : " ",
+              text: dayTotal > 0 ? String(dayTotal) : "",
               bold: true,
               align: AlignmentType.CENTER,
               widthPct: colWidths[idx + 1]
@@ -817,7 +816,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           siteGrandTravelTotal += dayTravel;
           travelCells.push(
             createCell({
-              text: dayTravel > 0 ? String(dayTravel) : " ",
+              text: dayTravel > 0 ? String(dayTravel) : "",
               align: AlignmentType.CENTER,
               widthPct: colWidths[idx + 1]
             })
@@ -825,14 +824,14 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         });
         travelCells.push(
           createCell({
-            text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : " ",
+            text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "",
             align: AlignmentType.RIGHT,
             widthPct: colWidths[8]
           })
         );
         tableRows.push(new TableRow({ children: travelCells }));
 
-        // Comments Section
+        // Comments Section Table
         const allComments = [];
         siteEntries.forEach((entry) => {
           if (entry.tasks) {
@@ -870,17 +869,16 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           );
         }
 
-        for (let i = allComments.length > 0 ? 1 : 0; i < 12; i++) {
+        for (let i = allComments.length > 0 ? 1 : 0; i < 10; i++) {
           commentRows.push(
             new TableRow({
-              children: [createCell({ text: " ", colSpan: 9, widthPct: 100 })]
+              children: [createCell({ text: "", colSpan: 9, widthPct: 100 })]
             })
           );
         }
 
-        // Section Elements: Keep image isolated from text elements
+        // Header Structure
         const headerElements = [];
-
         if (logoBytes) {
           headerElements.push(
             new Paragraph({
@@ -911,6 +909,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           })
         );
 
+        // Construct Final Document
         const doc = new Document({
           sections: [
             {
@@ -923,7 +922,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 ...headerElements,
                 new Table({
                   width: { size: 100, type: WidthType.PERCENTAGE },
-                  columnWidths: [36, 8, 8, 8, 8, 8, 8, 8, 8],
+                  columnWidths: [3600, 800, 800, 800, 800, 800, 800, 800, 800],
                   rows: tableRows
                 }),
                 new Paragraph({
@@ -935,6 +934,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }),
                 new Table({
                   width: { size: 100, type: WidthType.PERCENTAGE },
+                  columnWidths: [10000],
                   rows: commentRows
                 })
               ]
