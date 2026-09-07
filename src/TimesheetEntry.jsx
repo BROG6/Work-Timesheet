@@ -479,7 +479,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         right: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
       };
 
-      const createCell = ({ text = "", bold = false, align = AlignmentType.LEFT, widthPct = null, colSpan = 1, shading = null, fontSize = 18 }) => {
+      const createCell = ({ text = "", bold = false, align = AlignmentType.LEFT, widthPct = null, colSpan = 1, shading = null, fontSize = 22 }) => {
         return new TableCell({
           columnSpan: colSpan,
           width: widthPct ? { size: widthPct, type: WidthType.PERCENTAGE } : undefined,
@@ -489,7 +489,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           children: [
             new Paragraph({
               alignment: align,
-              children: [new TextRun({ text: String(text || ""), bold, size: fontSize, font: "Arial" })]
+              children: [new TextRun({ text: String(text || ""), bold, size: fontSize, font: "Calibri" })]
             })
           ]
         });
@@ -641,7 +641,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         });
 
         tableRows.push(new TableRow({ children: [createCell({ text: "COMMENTS", bold: true, colSpan: 9 })] }));
-        tableRows.push(new TableRow({ children: [createCell({ text: "If Other – please detail what type of work you were undertaking", colSpan: 9, fontSize: 16 })] }));
+        tableRows.push(new TableRow({ children: [createCell({ text: "If Other – please detail what type of work you were undertaking", colSpan: 9, fontSize: 20 })] }));
         tableRows.push(new TableRow({ children: [createCell({ text: allComments.length > 0 ? allComments.join(" | ") : "", colSpan: 9 })] }));
 
         const doc = new Document({
@@ -654,16 +654,16 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 new Paragraph({
                   alignment: AlignmentType.LEFT,
                   children: [
-                    new TextRun({ text: "Staff Member: ", bold: true, size: 22, font: "Arial" }),
-                    new TextRun({ text: userName, size: 22, font: "Arial" }),
+                    new TextRun({ text: "Staff Member: ", bold: true, size: 22, font: "Calibri" }),
+                    new TextRun({ text: userName, size: 22, font: "Calibri" }),
                   ],
                   spaceAfter: 60
                 }),
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
                   children: [
-                    new TextRun({ text: "Project: ", bold: true, size: 22, font: "Arial" }),
-                    new TextRun({ text: siteName, size: 22, font: "Arial" })
+                    new TextRun({ text: "Project: ", bold: true, size: 22, font: "Calibri" }),
+                    new TextRun({ text: siteName, size: 22, font: "Calibri" })
                   ],
                   spaceAfter: 160
                 }),
