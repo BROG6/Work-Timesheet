@@ -654,18 +654,12 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 new Paragraph({
                   alignment: AlignmentType.LEFT,
                   children: [
-                    new TextRun({ text: "Staff Member: ", bold: true, size: 22, font: "Calibri" }),
+                    new TextRun({ text: "Staff Member: ", size: 22, font: "Calibri" }),
                     new TextRun({ text: userName, size: 22, font: "Calibri" }),
+                    new TextRun({ text: "        Project: ", size: 22, font: "Calibri" }),
+                    new TextRun({ text: siteName, size: 22, font: "Calibri" }),
                   ],
-                  spaceAfter: 60
-                }),
-                new Paragraph({
-                  alignment: AlignmentType.CENTER,
-                  children: [
-                    new TextRun({ text: "Project: ", bold: true, size: 22, font: "Calibri" }),
-                    new TextRun({ text: siteName, size: 22, font: "Calibri" })
-                  ],
-                  spaceAfter: 160
+                  spaceAfter: 120
                 }),
                 new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: tableRows })
               ]
