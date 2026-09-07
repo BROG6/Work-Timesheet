@@ -17,6 +17,7 @@ import {
   Packer, 
   Paragraph, 
   TextRun, 
+  ImageRun,
   Table, 
   TableRow, 
   TableCell, 
@@ -533,10 +534,19 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     }
   };
 
-  // Export Weekly Time Cards: Screenshot-matched layout generator
+  // Export Weekly Time Cards: Incorporates embedded logo image matching screenshot
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
+      // 1. Fetch & convert logo image into an ArrayBuffer for docx ImageRun
+      let logoBuffer = null;
+      try {
+        const response = await fetch(sjrLogo);
+        logoBuffer = await response.arrayBuffer();
+      } catch (e) {
+        console.warn("Could not load sjrLogo image buffer, falling back to text:", e);
+      }
+
       const tableBorderColor = "000000";
 
       const thinBorder = {
@@ -568,6 +578,26 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               children: [new TextRun({ text: String(text || ""), bold, size: fontSize, font: "Arial" })]
             })
           ]
+        });
+      };
+
+      // Helper to build logo run or styled text fallback
+      const createLogoRun = () => {
+        if (logoBuffer) {
+          return new ImageRun({
+            data: logoBuffer,
+            transformation: {
+              width: 110,
+              height: 35
+            }
+          });
+        }
+        return new TextRun({
+          text: "SJR BUILDERS",
+          bold: true,
+          size: 18,
+          font: "Arial",
+          color: "D3D3D3"
         });
       };
 
@@ -631,7 +661,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const siteEntries = siteMap[siteName];
         const tableRows = [];
 
-        // Row 1: Day | Wed | Thu | Fri | Sat | Sun | Mon | Tue | Totals
+        // Row 1: Header
         tableRows.push(
           new TableRow({
             children: [
@@ -644,7 +674,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           })
         );
 
-        // Row 2: Date Row
+        // Row 2: Date
         tableRows.push(
           new TableRow({
             children: [
@@ -655,7 +685,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           })
         );
 
-        // Timing Breakdown Rows
+        // Timing Rows
         const timingFields = [
           { label: "START TIME", key: "startTime" },
           { label: "TIME LEFT SITE", key: "timeLeftSite" },
@@ -763,7 +793,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT }));
         tableRows.push(new TableRow({ children: travelCells }));
 
-        // Bottom Comments Block Table
+        // Comments Section
         const allComments = [];
         siteEntries.forEach((entry) => {
           if (entry.tasks) {
@@ -784,7 +814,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           })
         ];
 
-        // Fill comments row followed by blank lines matching screenshot lines
         if (allComments.length > 0) {
           commentRows.push(
             new TableRow({
@@ -801,7 +830,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           );
         }
 
-        // Build Full DOCX Page Layout
+        // Build DOCX document with Embedded Logo Images
         const doc = new Document({
           sections: [
             {
@@ -811,19 +840,20 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }
               },
               children: [
-                // Top Header Line & Right-Aligned Logo Box
+                // Top Header Line & Embedded Top-Right Logo Image
                 new Paragraph({
+                  alignment: AlignmentType.LEFT,
                   children: [
                     new TextRun({ text: "Staff Member:", bold: true, size: 18, font: "Arial" }),
-                    new TextRun({ text: `${userName}\t\t\t\t\t`, size: 18, font: "Arial" }),
+                    new TextRun({ text: `${userName}\t\t\t\t`, size: 18, font: "Arial" }),
                     new TextRun({ text: "Project:", bold: true, size: 18, font: "Arial" }),
-                    new TextRun({ text: `${siteName}\t\t\t\t\t\t`, size: 18, font: "Arial" }),
-                    new TextRun({ text: "SJR BUILDERS", bold: true, size: 18, font: "Arial", color: "D3D3D3" })
+                    new TextRun({ text: `${siteName}\t\t\t\t\t`, size: 18, font: "Arial" }),
+                    createLogoRun()
                   ],
                   spaceAfter: 80
                 }),
 
-                // Main Table
+                // Primary Table
                 new Table({
                   width: { size: 100, type: WidthType.PERCENTAGE },
                   rows: tableRows
@@ -835,13 +865,14 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                     new TextRun({ text: "Version – August 2026", size: 14, font: "Arial", italic: true })
                   ],
                   spaceBefore: 60,
-                  spaceAfter: 200
+                  spaceAfter: 180
                 }),
 
-                // Bottom Comments Box Header Block
+                // Bottom Comments Box Header Block with Embedded Logo Image
                 new Paragraph({
+                  alignment: AlignmentType.RIGHT,
                   children: [
-                    new TextRun({ text: "\t\t\t\t\t\t\t\t\t\t\t\t\t\tSJR BUILDERS", bold: true, size: 18, font: "Arial", color: "D3D3D3" })
+                    createLogoRun()
                   ],
                   spaceAfter: 60
                 }),
@@ -872,7 +903,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
       setStatusMessage({
         type: 'success',
-        text: `Exported ${sitesToExport.length} site time card(s) matching exact template!`
+        text: `Exported ${sitesToExport.length} site time card(s) with embedded logo!`
       });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
