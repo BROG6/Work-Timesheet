@@ -27,34 +27,26 @@ import {
   ShadingType 
 } from 'https://cdn.skypack.dev/docx';
 
-// Import logo for UI view and DOCX embedding
+// Import logo for UI view
 import sjrLogo from './assets/logo.jpg';
 
-// Helper: Converts imported image asset directly to Uint8Array at runtime via HTML5 Canvas
-const getLogoUint8Array = (imageSrc) => {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "Anonymous";
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0);
+// Base64 Data URI representing SJR BUILDERS Logo (Replace with your full base64 string)
+const SJR_LOGO_BASE64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP...[REPLACE_WITH_YOUR_FULL_BASE64_STRING]";
 
-      const dataURL = canvas.toDataURL("image/jpeg");
-      const cleanBase64 = dataURL.replace(/^data:image\/(png|jpg|jpeg);base64,/, "");
+// Helper to convert Base64 Data URI to Uint8Array for docx ImageRun
+const base64ToUint8Array = (base64) => {
+  // Clean whitespace, trailing quotes, or newline artifacts
+  const cleanBase64 = base64
+    .replace(/^data:image\/\w+;base64,/, '')
+    .replace(/[^A-Za-z0-9+/=]/g, '');
 
-      const binaryString = window.atob(cleanBase64);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      resolve(bytes);
-    };
-    img.onerror = (err) => reject(err);
-    img.src = imageSrc;
-  });
+  const binaryString = window.atob(cleanBase64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
 };
 
 // Categorized Task List
@@ -108,7 +100,7 @@ const TASK_CATEGORIES = {
   ]
 };
 
-// Exact template tasks matching layout
+// Exact template tasks matching "Blank Time Cards_2.docx" layout
 const ALL_TEMPLATE_TASKS = [
   "Demolition",
   "Profile/Set Up",
@@ -143,7 +135,7 @@ const ALL_TEMPLATE_TASKS = [
   "Bereavement Leave",
   "Training",
   "Other Leave (please specify)",
-  ""
+  "" // Blank row preceding TOTAL HOURS matching template layout
 ];
 
 function getWednesday(d) {
@@ -391,7 +383,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       try {
         querySnapshot = await getDocs(q);
       } catch (e) {
-        querySnapshot = await getDocsFromCache(e);
+        querySnapshot = await getDocsFromCache(q);
       }
 
       const validWeekDates = Array.from({ length: 7 }, (_, i) => {
@@ -561,17 +553,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     }
   };
 
-  // Schema-Compliant DOCX Generator
+  // DOCX Export Function: Embeds Base64 logo directly into Word document
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
-      let logoBytes = null;
-      try {
-        logoBytes = await getLogoUint8Array(sjrLogo);
-      } catch (err) {
-        console.warn("Could not load image file, skipping logo embedding:", err);
-      }
-
       const tableBorderColor = "000000";
 
       const thinBorder = {
@@ -581,41 +566,52 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         right: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
       };
 
-      const safeText = (val) => {
-        if (val === null || val === undefined) return "";
-        return String(val).trim();
-      };
-
       const createCell = ({
         text = "",
         bold = false,
         align = AlignmentType.LEFT,
+        widthPct = null,
         colSpan = 1,
         shading = null,
         fontSize = 16,
-        widthPct = null
+        customChildren = null
       }) => {
-        const strVal = safeText(text);
         return new TableCell({
           columnSpan: colSpan,
           width: widthPct ? { size: widthPct, type: WidthType.PERCENTAGE } : undefined,
           shading: shading ? { fill: shading, type: ShadingType.CLEAR } : undefined,
           borders: thinBorder,
-          padding: { top: 40, bottom: 40, left: 60, right: 60 },
-          children: [
+          margins: { top: 15, bottom: 15, left: 30, right: 30 },
+          children: customChildren || [
             new Paragraph({
               alignment: align,
-              children: strVal.length > 0 ? [
-                new TextRun({
-                  text: strVal,
-                  bold: Boolean(bold),
-                  size: fontSize,
-                  font: "Arial"
-                })
-              ] : []
+              children: [new TextRun({ text: String(text || ""), bold, size: fontSize, font: "Arial" })]
             })
           ]
         });
+      };
+
+      // Helper to build logo ImageRun directly from Base64
+      const createLogoRun = () => {
+        try {
+          const logoBytes = base64ToUint8Array(SJR_LOGO_BASE64);
+          return new ImageRun({
+            data: logoBytes,
+            transformation: {
+              width: 130,
+              height: 52 // Maintains 2.5:1 aspect ratio
+            }
+          });
+        } catch (e) {
+          console.warn("Could not process base64 logo, using text fallback:", e);
+          return new TextRun({
+            text: "SJR BUILDERS",
+            bold: true,
+            size: 18,
+            font: "Arial",
+            color: "D3D3D3"
+          });
+        }
       };
 
       const daysHeader = ["Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue"];
@@ -639,13 +635,13 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         });
       }
 
-      const activeHasSaved = weeklyEntries.some((e) => e.date === selectedDate);
+      const activeHasSaved = weeklyEntries.some(e => e.date === selectedDate);
       if (!activeHasSaved && totalHours > 0) {
         weeklyEntries.push({
           project: project || "General / Unassigned",
           date: selectedDate,
           timeCardDetails: { startTime, timeFinished, timeLeftSite, timeReturned },
-          tasks: tasks.map((t) => ({
+          tasks: tasks.map(t => ({
             taskName: t.taskName,
             hours: parseFloat(t.hours) || 0,
             travelTime: parseFloat(t.travelTime) || 0,
@@ -674,39 +670,30 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }];
       }
 
-      // Column widths array (9 Columns): [36%, 8%, 8%, 8%, 8%, 8%, 8%, 8%, 8%]
-      const colWidths = [36, 8, 8, 8, 8, 8, 8, 8, 8];
-
       for (const siteName of sitesToExport) {
         const siteEntries = siteMap[siteName];
         const tableRows = [];
 
-        // Header Row
+        // Row 1: Header
         tableRows.push(
           new TableRow({
             children: [
-              createCell({ text: "Day", bold: true, widthPct: colWidths[0] }),
-              ...daysHeader.map((day, idx) =>
-                createCell({ text: day, bold: true, align: AlignmentType.CENTER, widthPct: colWidths[idx + 1] })
+              createCell({ text: "Day", bold: true, widthPct: 40 }),
+              ...daysHeader.map((day) =>
+                createCell({ text: day, bold: true, align: AlignmentType.CENTER, widthPct: 7.5 })
               ),
-              createCell({ text: "Totals", bold: true, align: AlignmentType.RIGHT, widthPct: colWidths[8] })
+              createCell({ text: "Totals", bold: true, align: AlignmentType.RIGHT, widthPct: 8 })
             ]
           })
         );
 
-        // Date Row
+        // Row 2: Date
         tableRows.push(
           new TableRow({
             children: [
-              createCell({ text: "Date", bold: true, widthPct: colWidths[0] }),
-              ...weekDays.map((d, idx) =>
-                createCell({
-                  text: `${d.dayNumber}/${d.dateStr.split('-')[1] || ''}`,
-                  align: AlignmentType.CENTER,
-                  widthPct: colWidths[idx + 1]
-                })
-              ),
-              createCell({ text: "", align: AlignmentType.CENTER, widthPct: colWidths[8] })
+              createCell({ text: "Date", bold: true }),
+              ...weekDays.map((d) => createCell({ text: `${d.dayNumber}/${d.dateStr.split('-')[1] || ''}`, align: AlignmentType.CENTER })),
+              createCell({ text: "", align: AlignmentType.CENTER })
             ]
           })
         );
@@ -720,13 +707,13 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         ];
 
         timingFields.forEach((tf) => {
-          const cells = [createCell({ text: tf.label, bold: true, widthPct: colWidths[0] })];
-          weekDays.forEach((dayObj, idx) => {
+          const cells = [createCell({ text: tf.label, bold: true })];
+          weekDays.forEach((dayObj) => {
             const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
             const val = entryForDay?.timeCardDetails?.[tf.key] || "";
-            cells.push(createCell({ text: val, align: AlignmentType.CENTER, widthPct: colWidths[idx + 1] }));
+            cells.push(createCell({ text: val, align: AlignmentType.CENTER }));
           });
-          cells.push(createCell({ text: "", widthPct: colWidths[8] }));
+          cells.push(createCell({ text: "" }));
           tableRows.push(new TableRow({ children: cells }));
         });
 
@@ -736,19 +723,35 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
         ALL_TEMPLATE_TASKS.forEach((taskLabel) => {
           let rowTaskTotal = 0;
-          const rowCells = [createCell({ text: taskLabel, widthPct: colWidths[0] })];
+          let firstCell;
 
-          weekDays.forEach((dayObj, idx) => {
+          if (taskLabel === "Other (PTO)") {
+            firstCell = createCell({
+              customChildren: [
+                new Paragraph({
+                  children: [
+                    new TextRun({ text: "Other", size: 16, font: "Arial" }),
+                    new TextRun({ text: "\t\t\t\t\t\t(PTO)", size: 16, font: "Arial" })
+                  ]
+                })
+              ]
+            });
+          } else {
+            firstCell = createCell({ text: taskLabel });
+          }
+
+          const rowCells = [firstCell];
+
+          weekDays.forEach((dayObj) => {
             const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
             let dayTaskHours = 0;
 
-            if (entryForDay?.tasks && taskLabel.trim() !== "") {
+            if (entryForDay?.tasks && taskLabel !== "") {
               entryForDay.tasks.forEach((t) => {
-                const nameMatches =
-                  (t.taskName || '').toLowerCase().trim() === taskLabel.toLowerCase().trim() ||
+                const nameMatches = (t.taskName || '').toLowerCase().trim() === taskLabel.toLowerCase().trim() ||
                   (taskLabel.startsWith("Other (PTO)") && (t.taskName || '').toLowerCase().includes("other work")) ||
                   (taskLabel.startsWith("Other Leave") && (t.taskName || '').toLowerCase().includes("other leave"));
-
+                
                 if (nameMatches) {
                   dayTaskHours += parseFloat(t.hours) || 0;
                 }
@@ -756,82 +759,54 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             }
 
             rowTaskTotal += dayTaskHours;
-            rowCells.push(
-              createCell({
-                text: dayTaskHours > 0 ? String(dayTaskHours) : "",
-                align: AlignmentType.CENTER,
-                widthPct: colWidths[idx + 1]
-              })
-            );
+            rowCells.push(createCell({
+              text: dayTaskHours > 0 ? String(dayTaskHours) : "",
+              align: AlignmentType.CENTER
+            }));
           });
 
           siteGrandTotalHours += rowTaskTotal;
-          rowCells.push(
-            createCell({
-              text: rowTaskTotal > 0 ? String(rowTaskTotal) : "",
-              bold: true,
-              align: AlignmentType.RIGHT,
-              widthPct: colWidths[8]
-            })
-          );
+          rowCells.push(createCell({
+            text: rowTaskTotal > 0 ? String(rowTaskTotal) : "",
+            bold: true,
+            align: AlignmentType.RIGHT
+          }));
 
           tableRows.push(new TableRow({ children: rowCells }));
         });
 
         // TOTAL HOURS Row
-        const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true, widthPct: colWidths[0] })];
-        weekDays.forEach((dayObj, idx) => {
+        const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true })];
+        weekDays.forEach((dayObj) => {
           const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
           let dayTotal = 0;
           if (entryForDay?.tasks) {
             dayTotal = entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
           }
-          totalHoursCells.push(
-            createCell({
-              text: dayTotal > 0 ? String(dayTotal) : "",
-              bold: true,
-              align: AlignmentType.CENTER,
-              widthPct: colWidths[idx + 1]
-            })
-          );
-        });
-        totalHoursCells.push(
-          createCell({
-            text: String(siteGrandTotalHours),
+          totalHoursCells.push(createCell({
+            text: dayTotal > 0 ? String(dayTotal) : "",
             bold: true,
-            align: AlignmentType.RIGHT,
-            widthPct: colWidths[8]
-          })
-        );
+            align: AlignmentType.CENTER
+          }));
+        });
+        totalHoursCells.push(createCell({ text: String(siteGrandTotalHours), bold: true, align: AlignmentType.RIGHT }));
         tableRows.push(new TableRow({ children: totalHoursCells }));
 
         // Travel Time Row
-        const travelCells = [createCell({ text: "Travel Time", bold: true, widthPct: colWidths[0] })];
-        weekDays.forEach((dayObj, idx) => {
+        const travelCells = [createCell({ text: "Travel Time", bold: true })];
+        weekDays.forEach((dayObj) => {
           const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
           let dayTravel = 0;
           if (entryForDay?.tasks) {
             dayTravel = entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.travelTime) || 0), 0);
           }
           siteGrandTravelTotal += dayTravel;
-          travelCells.push(
-            createCell({
-              text: dayTravel > 0 ? String(dayTravel) : "",
-              align: AlignmentType.CENTER,
-              widthPct: colWidths[idx + 1]
-            })
-          );
+          travelCells.push(createCell({ text: dayTravel > 0 ? String(dayTravel) : "", align: AlignmentType.CENTER }));
         });
-        travelCells.push(
-          createCell({
-            text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "",
-            align: AlignmentType.RIGHT,
-            widthPct: colWidths[8]
-          })
-        );
+        travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT }));
         tableRows.push(new TableRow({ children: travelCells }));
 
-        // Comments Section Table
+        // Comments Section
         const allComments = [];
         siteEntries.forEach((entry) => {
           if (entry.tasks) {
@@ -845,71 +820,30 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
         const commentRows = [
           new TableRow({
-            children: [createCell({ text: "COMMENTS", bold: true, colSpan: 9, widthPct: 100 })]
+            children: [createCell({ text: "COMMENTS", bold: true, colSpan: 9 })]
           }),
           new TableRow({
-            children: [
-              createCell({
-                text: "If Other – please detail what type of work you were undertaking",
-                colSpan: 9,
-                fontSize: 14,
-                widthPct: 100
-              })
-            ]
+            children: [createCell({ text: "If Other – please detail what type of work you were undertaking", colSpan: 9, fontSize: 14 })]
           })
         ];
 
         if (allComments.length > 0) {
           commentRows.push(
             new TableRow({
-              children: [
-                createCell({ text: allComments.join(" | "), colSpan: 9, fontSize: 14, widthPct: 100 })
-              ]
+              children: [createCell({ text: allComments.join(" | "), colSpan: 9, fontSize: 14 })]
             })
           );
         }
 
-        for (let i = allComments.length > 0 ? 1 : 0; i < 10; i++) {
+        for (let i = allComments.length > 0 ? 1 : 0; i < 20; i++) {
           commentRows.push(
             new TableRow({
-              children: [createCell({ text: "", colSpan: 9, widthPct: 100 })]
+              children: [createCell({ text: "", colSpan: 9 })]
             })
           );
         }
 
-        // Header Structure
-        const headerElements = [];
-        if (logoBytes) {
-          headerElements.push(
-            new Paragraph({
-              alignment: AlignmentType.RIGHT,
-              children: [
-                new ImageRun({
-                  data: logoBytes,
-                  transformation: { width: 130, height: 52 }
-                })
-              ],
-              spaceAfter: 80
-            })
-          );
-        }
-
-        headerElements.push(
-          new Paragraph({
-            alignment: AlignmentType.LEFT,
-            children: [
-              new TextRun({
-                text: `Staff Member: ${userName}     Project: ${siteName}`,
-                bold: true,
-                size: 18,
-                font: "Arial"
-              })
-            ],
-            spaceAfter: 120
-          })
-        );
-
-        // Construct Final Document
+        // Build DOCX document with Embedded Base64 Logo
         const doc = new Document({
           sections: [
             {
@@ -919,22 +853,46 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }
               },
               children: [
-                ...headerElements,
+                // Top Header Line & Embedded Base64 Logo Image
+                new Paragraph({
+                  alignment: AlignmentType.LEFT,
+                  children: [
+                    new TextRun({ text: "Staff Member:", bold: true, size: 18, font: "Arial" }),
+                    new TextRun({ text: `${userName}\t\t\t\t`, size: 18, font: "Arial" }),
+                    new TextRun({ text: "Project:", bold: true, size: 18, font: "Arial" }),
+                    new TextRun({ text: `${siteName}\t\t\t\t\t`, size: 18, font: "Arial" }),
+                    createLogoRun()
+                  ],
+                  spaceAfter: 80
+                }),
+
+                // Primary Time Card Table
                 new Table({
                   width: { size: 100, type: WidthType.PERCENTAGE },
-                  columnWidths: [3600, 800, 800, 800, 800, 800, 800, 800, 800],
                   rows: tableRows
                 }),
+
+                // Version Stamp
                 new Paragraph({
                   children: [
                     new TextRun({ text: "Version – August 2026", size: 14, font: "Arial", italic: true })
                   ],
-                  spaceBefore: 80,
-                  spaceAfter: 120
+                  spaceBefore: 60,
+                  spaceAfter: 180
                 }),
+
+                // Bottom Comments Box Header Block with Embedded Base64 Logo
+                new Paragraph({
+                  alignment: AlignmentType.RIGHT,
+                  children: [
+                    createLogoRun()
+                  ],
+                  spaceAfter: 60
+                }),
+
+                // Comments Table
                 new Table({
                   width: { size: 100, type: WidthType.PERCENTAGE },
-                  columnWidths: [10000],
                   rows: commentRows
                 })
               ]
@@ -959,7 +917,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
       setStatusMessage({
         type: 'success',
-        text: `Exported ${sitesToExport.length} site time card(s) successfully!`
+        text: `Exported ${sitesToExport.length} site time card(s) with embedded logo!`
       });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
