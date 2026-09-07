@@ -26,6 +26,9 @@ import {
   ShadingType 
 } from 'https://cdn.skypack.dev/docx';
 
+// Import logo directly from src/assets so Vite processes and bundles it
+import sjrLogo from './assets/logo.jpg';
+
 // Categorized Task List
 const TASK_CATEGORIES = {
   "Site Setup & Earthworks": [
@@ -66,18 +69,18 @@ const TASK_CATEGORIES = {
     "Driveway/Paths/Landscaping"
   ],
   "Other Work": [
-    "Other (PTO)"
+    "Other Work (Detail in comments)"
   ],
   "Leave & Training": [
     "Sick Leave",
     "Annual Leave",
     "Bereavement Leave",
     "Training",
-    "Other Leave (please specify)"
+    "Other Leave"
   ]
 };
 
-// Exact template tasks matching visual reference layout
+// Exact template tasks matching "Blank Time Cards_2.docx" layout
 const ALL_TEMPLATE_TASKS = [
   "Demolition",
   "Profile/Set Up",
@@ -154,6 +157,7 @@ function isFriday(dateStr) {
   return d.getDay() === 5;
 }
 
+// Priority check for registered staff name
 function getFormattedStaffName(user, userProfile) {
   const explicitName = userProfile?.name || userProfile?.fullName || userProfile?.userName || user?.displayName;
   
@@ -257,6 +261,7 @@ function SiteAutoCompleteInput({ value, onChange, existingSites }) {
 }
 
 export default function TimesheetEntry({ user, userProfile, profile }) {
+  // Support both userProfile and profile prop aliases
   const activeProfile = userProfile || profile;
   const activeUser = user || activeProfile;
   const userId = activeUser?.uid;
@@ -345,11 +350,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     if (!userId) return;
     setLoadingHours(true);
     try {
-      const currentWed = currentWednesday;
+      const currentWed = getWednesday(new Date());
       const currentTue = new Date(currentWed);
       currentTue.setDate(currentWed.getDate() + 6);
 
-      setWeekRangeStr(`${formatDisplayDate(currentWed)} – ${formatDisplayDate(currentTue)}`);
+      setWeekRangeStr(`${formatDisplayDate(currentWed)} â€“ ${formatDisplayDate(currentTue)}`);
 
       const q = query(
         collection(db, 'timesheets'),
@@ -389,7 +394,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     if (userId) {
       fetchStaffWeeklyHours();
     }
-  }, [userId, currentWednesday]);
+  }, [userId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -530,10 +535,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     }
   };
 
+  // Export Weekly Time Cards: Generates exact replica DOCX file matching Blank Time Cards_2.docx
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
-      const tableBorderColor = "000000";
+      const tableBorderColor = "000000"; // Sharp, clean template borders
 
       const thinBorder = {
         top: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
@@ -549,7 +555,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         widthPct = null,
         colSpan = 1,
         shading = null,
-        fontSize = 18
+        fontSize = 18 // 9pt font matching compact DOCX template sizing
       }) => {
         return new TableCell({
           columnSpan: colSpan,
@@ -626,6 +632,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const siteEntries = siteMap[siteName];
         const tableRows = [];
 
+        // Row 1: Header (Day | Wed | Thu | Fri | Sat | Sun | Mon | Tue | Totals)
         tableRows.push(
           new TableRow({
             children: [
@@ -638,6 +645,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           })
         );
 
+        // Row 2: Date Row
         tableRows.push(
           new TableRow({
             children: [
@@ -648,6 +656,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           })
         );
 
+        // Timing Breakdown Rows
         const timingFields = [
           { label: "START TIME", key: "startTime" },
           { label: "TIME LEFT SITE", key: "timeLeftSite" },
@@ -666,6 +675,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           tableRows.push(new TableRow({ children: cells }));
         });
 
+        // 34 Standard Template Rows
         let siteGrandTotalHours = 0;
         let siteGrandTravelTotal = 0;
 
@@ -706,6 +716,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           tableRows.push(new TableRow({ children: rowCells }));
         });
 
+        // TOTAL HOURS Row
         const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true })];
         weekDays.forEach((dayObj) => {
           const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
@@ -722,6 +733,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         totalHoursCells.push(createCell({ text: String(siteGrandTotalHours), bold: true, align: AlignmentType.RIGHT }));
         tableRows.push(new TableRow({ children: totalHoursCells }));
 
+        // Travel Time Row
         const travelCells = [createCell({ text: "Travel Time", bold: true })];
         weekDays.forEach((dayObj) => {
           const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
@@ -735,6 +747,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT }));
         tableRows.push(new TableRow({ children: travelCells }));
 
+        // Comments Section Matching Template Exactly
         const allComments = [];
         siteEntries.forEach((entry) => {
           if (entry.tasks) {
@@ -754,22 +767,24 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
         tableRows.push(
           new TableRow({
-            children: [createCell({ text: "If Other – please detail what type of work you were undertaking", colSpan: 9, fontSize: 16 })]
+            children: [createCell({ text: "If Other â€“ please detail what type of work you were undertaking", colSpan: 9, fontSize: 16 })]
           })
         );
 
+        // Comments text entry row
         tableRows.push(
           new TableRow({
             children: [createCell({ text: allComments.length > 0 ? allComments.join(" | ") : "", colSpan: 9 })]
           })
         );
 
+        // Compile Document
         const doc = new Document({
           sections: [
             {
               properties: {
                 page: {
-                  margin: { top: 500, bottom: 500, left: 500, right: 500 }
+                  margin: { top: 500, bottom: 500, left: 500, right: 500 } // Narrow margins to fit all rows on one page
                 }
               },
               children: [
@@ -827,13 +842,15 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
   return (
     <div className="max-w-xl mx-auto space-y-4 my-4">
+      {/* Network Connection Banner */}
       {!isOnline && (
         <div className="bg-amber-500 text-slate-950 px-4 py-2 rounded-lg text-xs font-bold flex items-center justify-between shadow">
-          <span>⚡ Working Offline</span>
+          <span>âš¡ Working Offline</span>
           <span className="font-medium text-[11px]">Saved locally & auto-syncs when online</span>
         </div>
       )}
 
+      {/* Weekly Hours Banner */}
       <div className="bg-slate-900 text-white p-5 rounded-xl shadow-sm border border-slate-800 flex justify-between items-center">
         <div>
           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
@@ -851,14 +868,24 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+        
+        {/* Header Bar with Logo & DOCX Download Button */}
         <div className="border-b border-slate-200 pb-3 mb-4 flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-bold text-slate-900 leading-tight">Weekly Time Card Entry</h2>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">
-              Logged for: <span className="text-slate-800 font-semibold">{userName}</span>
-            </p>
+          <div className="flex items-center gap-3">
+            <img 
+              src={sjrLogo} 
+              alt="SJR Builders Logo" 
+              className="h-10 w-auto object-contain"
+            />
+            <div>
+              <h2 className="text-xl font-bold text-slate-900 leading-tight">Weekly Time Card Entry</h2>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Logged for: <span className="text-slate-800 font-semibold">{userName}</span>
+              </p>
+            </div>
           </div>
 
+          {/* Download DOCX Button */}
           <button
             type="button"
             onClick={handleExportDocx}
@@ -873,6 +900,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           </button>
         </div>
 
+        {/* 7-Day Navigation */}
         <div className="bg-slate-900 text-white p-3 rounded-xl mb-5 shadow-inner">
           <div className="flex items-center justify-between mb-3 text-xs">
             <button
@@ -884,11 +912,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               }}
               className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
             >
-              ← Prev Week
+              â† Prev Week
             </button>
             
             <span className="font-bold text-slate-200">
-              {weekDays[0].monthName} {weekDays[0].dayNumber} – {weekDays[6].monthName} {weekDays[6].dayNumber}
+              {weekDays[0].monthName} {weekDays[0].dayNumber} â€“ {weekDays[6].monthName} {weekDays[6].dayNumber}
             </span>
 
             <div className="flex gap-1.5">
@@ -911,7 +939,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }}
                 className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
               >
-                Next Week →
+                Next Week â†’
               </button>
             </div>
           </div>
@@ -959,7 +987,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               ? 'bg-rose-50 border border-rose-200 text-rose-800'
               : 'bg-emerald-50 border border-emerald-200 text-emerald-800'
           }`}>
-            <span>{statusMessage.type === 'error' ? '⚠️' : '✓'}</span> {statusMessage.text}
+            <span>{statusMessage.type === 'error' ? 'âš ï¸' : 'âœ“'}</span> {statusMessage.text}
           </div>
         )}
 
@@ -996,6 +1024,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             </div>
           </div>
 
+          {/* On-Site Hours */}
           <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
             <span className="block text-xs font-bold text-slate-700 uppercase mb-2">On-Site Hours (Optional)</span>
             <div className="grid grid-cols-2 gap-2 text-xs">
@@ -1038,6 +1067,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             </div>
           </div>
 
+          {/* Tasks List */}
           <div className="space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200 pb-1">
               <span className="text-xs font-bold text-slate-700 uppercase">Tasks Completed</span>
