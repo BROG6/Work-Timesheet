@@ -27,26 +27,34 @@ import {
   ShadingType 
 } from 'https://cdn.skypack.dev/docx';
 
-// Import logo for UI view
+// Import logo for UI view and DOCX embedding
 import sjrLogo from './assets/logo.jpg';
 
-// Base64 Data URI representing SJR BUILDERS Logo (Replace with your full base64 string)
-const SJR_LOGO_BASE64 = "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAPAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=";
+// Helper: Converts imported image asset directly to Uint8Array at runtime via HTML5 Canvas
+const getLogoUint8Array = (imageSrc) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
 
-// Helper to convert Base64 Data URI to Uint8Array for docx ImageRun
-const base64ToUint8Array = (base64) => {
-  // Clean whitespace, trailing quotes, or newline artifacts
-  const cleanBase64 = base64
-    .replace(/^data:image\/\w+;base64,/, '')
-    .replace(/[^A-Za-z0-9+/=]/g, '');
+      const dataURL = canvas.toDataURL("image/jpeg");
+      const cleanBase64 = dataURL.replace(/^data:image\/(png|jpg|jpeg);base64,/, "");
 
-  const binaryString = window.atob(cleanBase64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
+      const binaryString = window.atob(cleanBase64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      resolve(bytes);
+    };
+    img.onerror = (err) => reject(err);
+    img.src = imageSrc;
+  });
 };
 
 // Categorized Task List
@@ -553,10 +561,18 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     }
   };
 
-  // DOCX Export Function: Embeds Base64 logo directly into Word document
+  // DOCX Export Function: Generates Uint8Array from imported image dynamically
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
+      // Load logo image as Uint8Array bytes dynamically via Canvas
+      let logoBytes = null;
+      try {
+        logoBytes = await getLogoUint8Array(sjrLogo);
+      } catch (err) {
+        console.warn("Could not load image file, falling back to text:", err);
+      }
+
       const tableBorderColor = "000000";
 
       const thinBorder = {
@@ -591,10 +607,9 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         });
       };
 
-      // Helper to build logo ImageRun directly from Base64
+      // Helper to return ImageRun or fall back to TextRun
       const createLogoRun = () => {
-        try {
-          const logoBytes = base64ToUint8Array(SJR_LOGO_BASE64);
+        if (logoBytes) {
           return new ImageRun({
             data: logoBytes,
             transformation: {
@@ -602,16 +617,13 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               height: 52 // Maintains 2.5:1 aspect ratio
             }
           });
-        } catch (e) {
-          console.warn("Could not process base64 logo, using text fallback:", e);
-          return new TextRun({
-            text: "SJR BUILDERS",
-            bold: true,
-            size: 18,
-            font: "Arial",
-            color: "D3D3D3"
-          });
         }
+        return new TextRun({
+          text: "SJR BUILDERS",
+          bold: true,
+          size: 18,
+          font: "Arial"
+        });
       };
 
       const daysHeader = ["Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue"];
@@ -843,7 +855,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           );
         }
 
-        // Build DOCX document with Embedded Base64 Logo
+        // Build DOCX document with Embedded Logo
         const doc = new Document({
           sections: [
             {
@@ -853,7 +865,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }
               },
               children: [
-                // Top Header Line & Embedded Base64 Logo Image
+                // Top Header Line & Embedded Logo Image
                 new Paragraph({
                   alignment: AlignmentType.LEFT,
                   children: [
@@ -881,7 +893,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   spaceAfter: 180
                 }),
 
-                // Bottom Comments Box Header Block with Embedded Base64 Logo
+                // Bottom Comments Box Header Block with Embedded Logo
                 new Paragraph({
                   alignment: AlignmentType.RIGHT,
                   children: [
