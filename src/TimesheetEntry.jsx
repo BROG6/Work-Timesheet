@@ -27,8 +27,23 @@ import {
   ShadingType 
 } from 'https://cdn.skypack.dev/docx';
 
-// Import logo
+// Import logo for UI view
 import sjrLogo from './assets/logo.jpg';
+
+// Base64 Data URI representing your SJR BUILDERS / BUILDING PERFECTION JPG
+const SJR_LOGO_BASE64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP...[PASTE_YOUR_FULL_BASE64_STRING_HERE]";
+
+// Helper to convert Base64 Data URI to Uint8Array for docx ImageRun
+const base64ToUint8Array = (base64) => {
+  const base64Data = base64.replace(/^data:image\/\w+;base64,/, '');
+  const binaryString = window.atob(base64Data);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+};
 
 // Categorized Task List
 const TASK_CATEGORIES = {
@@ -534,19 +549,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     }
   };
 
-  // Export Weekly Time Cards: Incorporates embedded logo image matching screenshot
+  // Option 3 DOCX Export: Embeds base64 logo directly into Word document
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
-      // 1. Fetch & convert logo image into an ArrayBuffer for docx ImageRun
-      let logoBuffer = null;
-      try {
-        const response = await fetch(sjrLogo);
-        logoBuffer = await response.arrayBuffer();
-      } catch (e) {
-        console.warn("Could not load sjrLogo image buffer, falling back to text:", e);
-      }
-
       const tableBorderColor = "000000";
 
       const thinBorder = {
@@ -581,24 +587,27 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         });
       };
 
-      // Helper to build logo run or styled text fallback
+      // Helper to build logo ImageRun directly from Base64
       const createLogoRun = () => {
-        if (logoBuffer) {
+        try {
+          const logoBytes = base64ToUint8Array(SJR_LOGO_BASE64);
           return new ImageRun({
-            data: logoBuffer,
+            data: logoBytes,
             transformation: {
-              width: 110,
-              height: 35
+              width: 130,
+              height: 52 // Maintains original 2.5:1 aspect ratio
             }
           });
+        } catch (e) {
+          console.warn("Could not process base64 logo, using text fallback:", e);
+          return new TextRun({
+            text: "SJR BUILDERS",
+            bold: true,
+            size: 18,
+            font: "Arial",
+            color: "D3D3D3"
+          });
         }
-        return new TextRun({
-          text: "SJR BUILDERS",
-          bold: true,
-          size: 18,
-          font: "Arial",
-          color: "D3D3D3"
-        });
       };
 
       const daysHeader = ["Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue"];
@@ -830,7 +839,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           );
         }
 
-        // Build DOCX document with Embedded Logo Images
+        // Build DOCX document with Option 3 Embedded Base64 Logo
         const doc = new Document({
           sections: [
             {
@@ -840,7 +849,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }
               },
               children: [
-                // Top Header Line & Embedded Top-Right Logo Image
+                // Top Header Line & Embedded Base64 Logo Image
                 new Paragraph({
                   alignment: AlignmentType.LEFT,
                   children: [
@@ -853,7 +862,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   spaceAfter: 80
                 }),
 
-                // Primary Table
+                // Primary Time Card Table
                 new Table({
                   width: { size: 100, type: WidthType.PERCENTAGE },
                   rows: tableRows
@@ -868,7 +877,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   spaceAfter: 180
                 }),
 
-                // Bottom Comments Box Header Block with Embedded Logo Image
+                // Bottom Comments Box Header Block with Embedded Base64 Logo
                 new Paragraph({
                   alignment: AlignmentType.RIGHT,
                   children: [
@@ -877,6 +886,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   spaceAfter: 60
                 }),
 
+                // Comments Table
                 new Table({
                   width: { size: 100, type: WidthType.PERCENTAGE },
                   rows: commentRows
