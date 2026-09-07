@@ -23,9 +23,7 @@ import {
   WidthType, 
   BorderStyle, 
   AlignmentType, 
-  ShadingType,
-  Header,
-  ImageRun
+  ShadingType 
 } from 'https://cdn.skypack.dev/docx';
 
 // Import logo directly from src/assets so Vite processes and bundles it
@@ -352,11 +350,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     if (!userId) return;
     setLoadingHours(true);
     try {
-      const currentWed = currentWednesday; // Fixed to use active week state
+      const currentWed = getWednesday(new Date());
       const currentTue = new Date(currentWed);
       currentTue.setDate(currentWed.getDate() + 6);
 
-      setWeekRangeStr(`${formatDisplayDate(currentWed)} – ${formatDisplayDate(currentTue)}`);
+      setWeekRangeStr(`${formatDisplayDate(currentWed)} â€“ ${formatDisplayDate(currentTue)}`);
 
       const q = query(
         collection(db, 'timesheets'),
@@ -396,7 +394,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     if (userId) {
       fetchStaffWeeklyHours();
     }
-  }, [userId, currentWednesday]); // Added currentWednesday dependency to recalculate on week changes
+  }, [userId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -537,7 +535,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     }
   };
 
-  // Export Weekly Time Cards: Generates exact replica DOCX file matching Blank Time Cards_2.docx with header logo
+  // Export Weekly Time Cards: Generates exact replica DOCX file matching Blank Time Cards_2.docx
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
@@ -573,16 +571,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           ]
         });
       };
-
-      // Fetch logo for docx header
-      let logoBuffer = null;
-      try {
-        const response = await fetch(sjrLogo);
-        const blob = await response.blob();
-        logoBuffer = await blob.arrayBuffer();
-      } catch (e) {
-        console.warn("Could not load logo for docx header:", e);
-      }
 
       const daysHeader = ["Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue"];
       const validWeekDates = weekDays.map((d) => d.dateStr);
@@ -779,7 +767,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
         tableRows.push(
           new TableRow({
-            children: [createCell({ text: "If Other – please detail what type of work you were undertaking", colSpan: 9, fontSize: 16 })]
+            children: [createCell({ text: "If Other â€“ please detail what type of work you were undertaking", colSpan: 9, fontSize: 16 })]
           })
         );
 
@@ -790,7 +778,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           })
         );
 
-        // Compile Document with Header Logo Integration
+        // Compile Document
         const doc = new Document({
           sections: [
             {
@@ -799,24 +787,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   margin: { top: 500, bottom: 500, left: 500, right: 500 } // Narrow margins to fit all rows on one page
                 }
               },
-              headers: logoBuffer ? {
-                default: new Header({
-                  children: [
-                    new Paragraph({
-                      alignment: AlignmentType.RIGHT,
-                      children: [
-                        new ImageRun({
-                          data: logoBuffer,
-                          transformation: {
-                            width: 100,
-                            height: 35,
-                          },
-                        }),
-                      ],
-                    }),
-                  ],
-                }),
-              } : undefined,
               children: [
                 new Paragraph({
                   children: [
@@ -875,7 +845,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       {/* Network Connection Banner */}
       {!isOnline && (
         <div className="bg-amber-500 text-slate-950 px-4 py-2 rounded-lg text-xs font-bold flex items-center justify-between shadow">
-          <span>⚡ Working Offline</span>
+          <span>âš¡ Working Offline</span>
           <span className="font-medium text-[11px]">Saved locally & auto-syncs when online</span>
         </div>
       )}
@@ -942,11 +912,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               }}
               className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
             >
-              ← Prev Week
+              â† Prev Week
             </button>
             
             <span className="font-bold text-slate-200">
-              {weekDays[0].monthName} {weekDays[0].dayNumber} – {weekDays[6].monthName} {weekDays[6].dayNumber}
+              {weekDays[0].monthName} {weekDays[0].dayNumber} â€“ {weekDays[6].monthName} {weekDays[6].dayNumber}
             </span>
 
             <div className="flex gap-1.5">
@@ -969,7 +939,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }}
                 className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
               >
-                Next Week →
+                Next Week â†’
               </button>
             </div>
           </div>
@@ -1017,7 +987,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               ? 'bg-rose-50 border border-rose-200 text-rose-800'
               : 'bg-emerald-50 border border-emerald-200 text-emerald-800'
           }`}>
-            <span>{statusMessage.type === 'error' ? '⚠️' : '✓'}</span> {statusMessage.text}
+            <span>{statusMessage.type === 'error' ? 'âš ï¸' : 'âœ“'}</span> {statusMessage.text}
           </div>
         )}
 
