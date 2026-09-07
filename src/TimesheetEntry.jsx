@@ -11,7 +11,7 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 
-// Import docx directly via Skypack CDN (bypasses local npm module resolution during Vercel build)
+// Import docx via Skypack CDN
 import { 
   Document, 
   Packer, 
@@ -26,7 +26,7 @@ import {
   ShadingType 
 } from 'https://cdn.skypack.dev/docx';
 
-// Import logo directly from src/assets so Vite processes and bundles it
+// Import logo
 import sjrLogo from './assets/logo.jpg';
 
 // Categorized Task List
@@ -120,7 +120,7 @@ const ALL_TEMPLATE_TASKS = [
 
 function getWednesday(d) {
   const date = new Date(d);
-  const day = date.getDay(); // 0 = Sun, 1 = Mon, 2 = Tue, 3 = Wed, 4 = Thu, 5 = Fri, 6 = Sat
+  const day = date.getDay(); 
   const diff = date.getDate() - ((day + 4) % 7);
   return new Date(date.setDate(diff));
 }
@@ -157,7 +157,6 @@ function isFriday(dateStr) {
   return d.getDay() === 5;
 }
 
-// Priority check for registered staff name
 function getFormattedStaffName(user, userProfile) {
   const explicitName = userProfile?.name || userProfile?.fullName || userProfile?.userName || user?.displayName;
   
@@ -261,7 +260,6 @@ function SiteAutoCompleteInput({ value, onChange, existingSites }) {
 }
 
 export default function TimesheetEntry({ user, userProfile, profile }) {
-  // Support both userProfile and profile prop aliases
   const activeProfile = userProfile || profile;
   const activeUser = user || activeProfile;
   const userId = activeUser?.uid;
@@ -385,7 +383,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       setWeeklyHours(total);
     } catch (err) {
       console.warn("Could not retrieve weekly hours:", err);
-    } finally {
+    } fontally {
       setLoadingHours(false);
     }
   };
@@ -535,11 +533,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     }
   };
 
-  // Export Weekly Time Cards: Generates exact replica DOCX file matching Blank Time Cards_2.docx
+  // Export Weekly Time Cards: Screenshot-matched layout generator
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
-      const tableBorderColor = "000000"; // Sharp, clean template borders
+      const tableBorderColor = "000000";
 
       const thinBorder = {
         top: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
@@ -555,15 +553,16 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         widthPct = null,
         colSpan = 1,
         shading = null,
-        fontSize = 18 // 9pt font matching compact DOCX template sizing
+        fontSize = 16,
+        customChildren = null
       }) => {
         return new TableCell({
           columnSpan: colSpan,
           width: widthPct ? { size: widthPct, type: WidthType.PERCENTAGE } : undefined,
           shading: shading ? { fill: shading, type: ShadingType.CLEAR } : undefined,
           borders: thinBorder,
-          margins: { top: 20, bottom: 20, left: 40, right: 40 },
-          children: [
+          margins: { top: 15, bottom: 15, left: 30, right: 30 },
+          children: customChildren || [
             new Paragraph({
               alignment: align,
               children: [new TextRun({ text: String(text || ""), bold, size: fontSize, font: "Arial" })]
@@ -632,7 +631,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const siteEntries = siteMap[siteName];
         const tableRows = [];
 
-        // Row 1: Header (Day | Wed | Thu | Fri | Sat | Sun | Mon | Tue | Totals)
+        // Row 1: Day | Wed | Thu | Fri | Sat | Sun | Mon | Tue | Totals
         tableRows.push(
           new TableRow({
             children: [
@@ -675,13 +674,30 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           tableRows.push(new TableRow({ children: cells }));
         });
 
-        // 34 Standard Template Rows
+        // Task Rows
         let siteGrandTotalHours = 0;
         let siteGrandTravelTotal = 0;
 
         ALL_TEMPLATE_TASKS.forEach((taskLabel) => {
           let rowTaskTotal = 0;
-          const rowCells = [createCell({ text: taskLabel })];
+          let firstCell;
+
+          if (taskLabel === "Other (PTO)") {
+            firstCell = createCell({
+              customChildren: [
+                new Paragraph({
+                  children: [
+                    new TextRun({ text: "Other", size: 16, font: "Arial" }),
+                    new TextRun({ text: "\t\t\t\t\t\t(PTO)", size: 16, font: "Arial" })
+                  ]
+                })
+              ]
+            });
+          } else {
+            firstCell = createCell({ text: taskLabel });
+          }
+
+          const rowCells = [firstCell];
 
           weekDays.forEach((dayObj) => {
             const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
@@ -747,7 +763,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT }));
         tableRows.push(new TableRow({ children: travelCells }));
 
-        // Comments Section Matching Template Exactly
+        // Bottom Comments Block Table
         const allComments = [];
         siteEntries.forEach((entry) => {
           if (entry.tasks) {
@@ -759,48 +775,80 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           }
         });
 
-        tableRows.push(
+        const commentRows = [
           new TableRow({
             children: [createCell({ text: "COMMENTS", bold: true, colSpan: 9 })]
-          })
-        );
-
-        tableRows.push(
+          }),
           new TableRow({
-            children: [createCell({ text: "If Other – please detail what type of work you were undertaking", colSpan: 9, fontSize: 16 })]
+            children: [createCell({ text: "If Other – please detail what type of work you were undertaking", colSpan: 9, fontSize: 14 })]
           })
-        );
+        ];
 
-        // Comments text entry row
-        tableRows.push(
-          new TableRow({
-            children: [createCell({ text: allComments.length > 0 ? allComments.join(" | ") : "", colSpan: 9 })]
-          })
-        );
+        // Fill comments row followed by blank lines matching screenshot lines
+        if (allComments.length > 0) {
+          commentRows.push(
+            new TableRow({
+              children: [createCell({ text: allComments.join(" | "), colSpan: 9, fontSize: 14 })]
+            })
+          );
+        }
 
-        // Compile Document
+        for (let i = allComments.length > 0 ? 1 : 0; i < 20; i++) {
+          commentRows.push(
+            new TableRow({
+              children: [createCell({ text: "", colSpan: 9 })]
+            })
+          );
+        }
+
+        // Build Full DOCX Page Layout
         const doc = new Document({
           sections: [
             {
               properties: {
                 page: {
-                  margin: { top: 500, bottom: 500, left: 500, right: 500 } // Narrow margins to fit all rows on one page
+                  margin: { top: 400, bottom: 400, left: 400, right: 400 }
                 }
               },
               children: [
+                // Top Header Line & Right-Aligned Logo Box
                 new Paragraph({
                   children: [
-                    new TextRun({ text: "Staff Member: ", bold: true, size: 20, font: "Arial" }),
-                    new TextRun({ text: `${userName}\t\t\t\t\t\t\t\t`, size: 20, font: "Arial" }),
-                    new TextRun({ text: "Project: ", bold: true, size: 20, font: "Arial" }),
-                    new TextRun({ text: siteName, size: 20, font: "Arial" })
+                    new TextRun({ text: "Staff Member:", bold: true, size: 18, font: "Arial" }),
+                    new TextRun({ text: `${userName}\t\t\t\t\t`, size: 18, font: "Arial" }),
+                    new TextRun({ text: "Project:", bold: true, size: 18, font: "Arial" }),
+                    new TextRun({ text: `${siteName}\t\t\t\t\t\t`, size: 18, font: "Arial" }),
+                    new TextRun({ text: "SJR BUILDERS", bold: true, size: 18, font: "Arial", color: "D3D3D3" })
                   ],
-                  spaceAfter: 120
+                  spaceAfter: 80
+                }),
+
+                // Main Table
+                new Table({
+                  width: { size: 100, type: WidthType.PERCENTAGE },
+                  rows: tableRows
+                }),
+
+                // Version Stamp
+                new Paragraph({
+                  children: [
+                    new TextRun({ text: "Version – August 2026", size: 14, font: "Arial", italic: true })
+                  ],
+                  spaceBefore: 60,
+                  spaceAfter: 200
+                }),
+
+                // Bottom Comments Box Header Block
+                new Paragraph({
+                  children: [
+                    new TextRun({ text: "\t\t\t\t\t\t\t\t\t\t\t\t\t\tSJR BUILDERS", bold: true, size: 18, font: "Arial", color: "D3D3D3" })
+                  ],
+                  spaceAfter: 60
                 }),
 
                 new Table({
                   width: { size: 100, type: WidthType.PERCENTAGE },
-                  rows: tableRows
+                  rows: commentRows
                 })
               ]
             }
@@ -869,7 +917,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
         
-        {/* Header Bar with Logo & DOCX Download Button */}
+        {/* Header Bar */}
         <div className="border-b border-slate-200 pb-3 mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <img 
@@ -885,7 +933,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             </div>
           </div>
 
-          {/* Download DOCX Button */}
           <button
             type="button"
             onClick={handleExportDocx}
