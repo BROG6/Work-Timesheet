@@ -515,24 +515,17 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         });
       }
 
-      const activeHasSaved = weeklyEntries.some(e => e.date === selectedDate);
-      if (!activeHasSaved && totalHours > 0) {
-        weeklyEntries.push({
-          project: project || "General / Unassigned",
-          date: selectedDate,
-          timeCardDetails: { startTime, timeFinished, timeLeftSite, timeReturned },
-          tasks: tasks.map(t => ({
-            taskName: t.taskName,
-            hours: parseFloat(t.hours) || 0,
-            travelTime: parseFloat(t.travelTime) || 0,
-            comments: t.comments
-          }))
-        });
+      // Restrict export exclusively to entries submitted and saved in Firestore
+      if (weeklyEntries.length === 0) {
+        setStatusMessage({ type: 'error', text: "No submitted entries found for this week to export." });
+        setTimeout(() => setStatusMessage(null), 4000);
+        setExportingDocx(false);
+        return;
       }
 
       const siteMap = {};
       weeklyEntries.forEach((entry) => {
-        const siteName = entry.project || project || "General / Unassigned";
+        const siteName = entry.project || "General / Unassigned";
         if (!siteMap[siteName]) {
           siteMap[siteName] = [];
         }
@@ -540,15 +533,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       });
 
       const sitesToExport = Object.keys(siteMap);
-      if (sitesToExport.length === 0) {
-        sitesToExport.push(project || "General / Unassigned");
-        siteMap[project || "General / Unassigned"] = [{
-          project: project || "General / Unassigned",
-          date: selectedDate,
-          timeCardDetails: { startTime, timeFinished, timeLeftSite, timeReturned },
-          tasks
-        }];
-      }
 
       for (const siteName of sitesToExport) {
         const siteEntries = siteMap[siteName];
