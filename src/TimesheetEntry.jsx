@@ -652,7 +652,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               },
               children: [
                 new Paragraph({
-                  alignment: AlignmentType.CENTER,
+                  alignment: AlignmentType.LEFT,
                   children: [
                     new TextRun({ text: "Staff Member: ", bold: true, size: 22, font: "Arial" }),
                     new TextRun({ text: userName, size: 22, font: "Arial" }),
