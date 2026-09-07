@@ -652,13 +652,20 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               },
               children: [
                 new Paragraph({
+                  alignment: AlignmentType.CENTER,
                   children: [
-                    new TextRun({ text: "Staff Member: ", bold: true, size: 20, font: "Arial" }),
-                    new TextRun({ text: `${userName}\t\t\t\t\t\t\t\t`, size: 20, font: "Arial" }),
-                    new TextRun({ text: "Project: ", bold: true, size: 20, font: "Arial" }),
-                    new TextRun({ text: siteName, size: 20, font: "Arial" })
+                    new TextRun({ text: "Staff Member: ", bold: true, size: 22, font: "Arial" }),
+                    new TextRun({ text: userName, size: 22, font: "Arial" }),
                   ],
-                  spaceAfter: 120
+                  spaceAfter: 60
+                }),
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  children: [
+                    new TextRun({ text: "Project: ", bold: true, size: 22, font: "Arial" }),
+                    new TextRun({ text: siteName, size: 22, font: "Arial" })
+                  ],
+                  spaceAfter: 160
                 }),
                 new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: tableRows })
               ]
