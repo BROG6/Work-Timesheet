@@ -31,7 +31,7 @@ import {
 import sjrLogo from './assets/logo.jpg';
 
 // Base64 Data URI representing SJR BUILDERS Logo (Replace with your full base64 string)
-const SJR_LOGO_BASE64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP...[REPLACE_WITH_YOUR_FULL_BASE64_STRING]";
+const SJR_LOGO_BASE64 = "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAPAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=";
 
 // Helper to convert Base64 Data URI to Uint8Array for docx ImageRun
 const base64ToUint8Array = (base64) => {
