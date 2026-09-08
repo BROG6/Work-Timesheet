@@ -8,7 +8,6 @@ import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, Width
 import sjrLogo from './assets/logo.jpg';
 import logo2 from './assets/logo2.jpg';
 
-
 // Categorized Task List
 const TASK_CATEGORIES = {
   "Site Setup & Earthworks": [
