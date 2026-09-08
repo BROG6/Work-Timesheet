@@ -146,7 +146,6 @@ function isFriday(dateStr) {
   return d.getDay() === 5;
 }
 
-// Priority check for registered staff name
 function getFormattedStaffName(user, userProfile) {
   const explicitName = userProfile?.name || userProfile?.fullName || userProfile?.userName || user?.displayName;
   if (explicitName && explicitName.trim() !== '' && !explicitName.includes('@')) {
@@ -482,7 +481,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
-      // 1. Load Logo 2 images for Page 1 & Page 2 headers
       let logo2ImageRunP1 = null;
       let logo2ImageRunP2 = null;
       if (logo2) {
@@ -503,7 +501,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }
       }
 
-      // 2. Setup border formatting
       const tableBorderColor = "000000";
       const thinBorder = {
         top: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
@@ -570,7 +567,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const siteEntries = siteMap[siteName];
         const tableRows = [];
 
-        // --- PAGE 1: HEADER & TIMESHEET TABLE ---
+        // --- PAGE 1: TIMESHEET TABLE ---
         tableRows.push(
           new TableRow({
             children: [
@@ -664,7 +661,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT }));
         tableRows.push(new TableRow({ children: travelCells }));
 
-        // Header Table Page 1
+        // Header Table Page 1 with added top spacing (spaceBefore) to lower staff info & logo
         const topHeaderTableP1 = new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           borders: {
@@ -682,6 +679,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   width: { size: 40, type: WidthType.PERCENTAGE },
                   children: [
                     new Paragraph({
+                      spaceBefore: 200, // Lowers "Staff Member" slightly
                       children: [
                         new TextRun({ text: "Staff Member: ", bold: true, size: 20, font: "Calibri" }),
                         new TextRun({ text: userName, size: 20, font: "Calibri" }),
@@ -693,6 +691,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   width: { size: 35, type: WidthType.PERCENTAGE },
                   children: [
                     new Paragraph({
+                      spaceBefore: 200, // Lowers "Project" slightly
                       children: [
                         new TextRun({ text: "Project: ", bold: true, size: 20, font: "Calibri" }),
                         new TextRun({ text: siteName, size: 20, font: "Calibri" }),
@@ -705,6 +704,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   children: [
                     new Paragraph({
                       alignment: AlignmentType.RIGHT,
+                      spaceBefore: 120, // Lowers the logo slightly
                       children: logo2ImageRunP1 ? [logo2ImageRunP1] : [],
                     }),
                   ],
@@ -751,6 +751,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   children: [
                     new Paragraph({
                       alignment: AlignmentType.RIGHT,
+                      spaceBefore: 200, // Lowers logo on page 2 slightly
                       children: logo2ImageRunP2 ? [logo2ImageRunP2] : [],
                     }),
                   ],
@@ -796,12 +797,12 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           rows: commentRows
         });
 
-        // Build Complete 2-Page Document
+        // Build Complete 2-Page Document with slightly larger top margin (540 dxa)
         const doc = new Document({
           sections: [
             {
               properties: {
-                page: { margin: { top: 400, bottom: 400, left: 400, right: 400 } }
+                page: { margin: { top: 540, bottom: 400, left: 400, right: 400 } }
               },
               children: [
                 topHeaderTableP1,
