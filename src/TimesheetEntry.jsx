@@ -925,6 +925,53 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         tableRows.push(new TableRow({ children: [createCell({ text: "If Other – please detail what type of work you were undertaking", colSpan: 9, fontSize: 20 })] }));
         tableRows.push(new TableRow({ children: [createCell({ text: allComments.length > 0 ? allComments.join(" | ") : "", colSpan: 9 })] }));
 
+                // 2. Build Header Table for Staff Details & Logo 2
+        const topHeaderTable = new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          borders: {
+            top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+            bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+            left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+            right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+            insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+            insideVertical: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+          },
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({
+                  width: { size: 60, type: WidthType.PERCENTAGE },
+                  children: [
+                    new Paragraph({
+                      children: [
+                        new TextRun({ text: "Staff Member: ", bold: true, size: 22, font: "Calibri" }),
+                        new TextRun({ text: userName, size: 22, font: "Calibri" }),
+                      ],
+                    }),
+                    new Paragraph({
+                      children: [
+                        new TextRun({ text: "Project: ", bold: true, size: 22, font: "Calibri" }),
+                        new TextRun({ text: siteName, size: 22, font: "Calibri" }),
+                      ],
+                      spaceBefore: 60,
+                    }),
+                  ],
+                }),
+                new TableCell({
+                  width: { size: 40, type: WidthType.PERCENTAGE },
+                  children: [
+                    new Paragraph({
+                      alignment: AlignmentType.RIGHT,
+                      children: logo2ImageRun ? [logo2ImageRun] : [],
+                    }),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        });
+
+        // 3. Assemble Word Document
         const doc = new Document({
           sections: [
             {
@@ -932,17 +979,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 page: { margin: { top: 500, bottom: 500, left: 500, right: 500 } }
               },
               children: [
-                new Paragraph({
-                  alignment: AlignmentType.LEFT,
-                  children: [
-                    new TextRun({ text: "Staff Member: ", bold: false, size: 22, font: "Calibri" }),
-                    new TextRun({ text: userName, bold: false, size: 22, font: "Calibri" }),
-                    new TextRun({ text: "                                ", size: 22, font: "Calibri" }),
-                    new TextRun({ text: "Project: ", bold: false, size: 22, font: "Calibri" }),
-                    new TextRun({ text: siteName, bold: false, size: 22, font: "Calibri" }),
-                  ],
-                  spaceAfter: 140
-                }),
+                topHeaderTable,
+                new Paragraph({ text: "", spaceAfter: 100 }),
                 new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: tableRows })
               ]
             }
