@@ -6,6 +6,8 @@ import { collection, addDoc, query, where, getDocs, getDocsFromCache, serverTime
 import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType, ShadingType } from 'https://cdn.skypack.dev/docx';
 // Import logo directly from src/assets so Vite processes and bundles it
 import sjrLogo from './assets/logo.jpg';
+import logo2 from './assets/logo2.jpg';
+
 
 // Categorized Task List
 const TASK_CATEGORIES = {
