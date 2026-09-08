@@ -104,9 +104,12 @@ const ALL_TEMPLATE_TASKS = [
   "Bereavement Leave",
   "Training",
   "Other Leave (please specify)",
-  "", // Blank Row 1 (Matches original template spacing)
-  ""  // Blank Row 2 (Matches original template spacing)
+  "", // Blank Row 1
+  ""  // Blank Row 2
 ];
+
+// Fixed percentage widths for 9 columns: Column 0 = 40%, Columns 1-8 = 7.5% each
+const TABLE_COL_WIDTHS = [40, 7.5, 7.5, 7.5, 7.5, 7.5, 7.5, 7.5, 7.5];
 
 function getWednesday(d) {
   const date = new Date(d);
@@ -489,12 +492,12 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           const logoData = await getLogoUint8Array(logo2);
           logo2ImageRunP1 = new ImageRun({
             data: logoData,
-            transformation: { width: 130, height: 50 },
+            transformation: { width: 120, height: 45 },
             type: "jpg",
           });
           logo2ImageRunP2 = new ImageRun({
             data: logoData,
-            transformation: { width: 130, height: 50 },
+            transformation: { width: 120, height: 45 },
             type: "jpg",
           });
         } catch (e) {
@@ -510,13 +513,13 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         right: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
       };
 
-      const createCell = ({ text = "", bold = false, align = AlignmentType.LEFT, widthPct = null, colSpan = 1, shading = null, fontSize = 18 }) => {
+      // Helper function with EXPLICIT cell width applied to EVERY cell in EVERY row
+      const createCell = ({ text = "", bold = false, align = AlignmentType.LEFT, colIdx = 0, fontSize = 18 }) => {
+        const widthPct = TABLE_COL_WIDTHS[colIdx] || 7.5;
         return new TableCell({
-          columnSpan: colSpan,
-          width: widthPct ? { size: widthPct, type: WidthType.PERCENTAGE } : undefined,
-          shading: shading ? { fill: shading, type: ShadingType.CLEAR } : undefined,
+          width: { size: widthPct, type: WidthType.PERCENTAGE },
           borders: thinBorder,
-          margins: { top: 30, bottom: 30, left: 40, right: 40 },
+          margins: { top: 25, bottom: 25, left: 30, right: 30 },
           children: [
             new Paragraph({
               alignment: align,
@@ -569,22 +572,24 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const tableRows = [];
 
         // --- PAGE 1: TIMESHEET TABLE ---
+        // Row 1: Header Day Names
         tableRows.push(
           new TableRow({
             children: [
-              createCell({ text: "Day", bold: true, widthPct: 40 }),
-              ...daysHeader.map((day) => createCell({ text: day, bold: true, align: AlignmentType.CENTER, widthPct: 7.5 })),
-              createCell({ text: "Totals", bold: true, align: AlignmentType.RIGHT, widthPct: 7.5 })
+              createCell({ text: "Day", bold: true, colIdx: 0 }),
+              ...daysHeader.map((day, idx) => createCell({ text: day, bold: true, align: AlignmentType.CENTER, colIdx: idx + 1 })),
+              createCell({ text: "Totals", bold: true, align: AlignmentType.RIGHT, colIdx: 8 })
             ]
           })
         );
 
+        // Row 2: Header Dates
         tableRows.push(
           new TableRow({
             children: [
-              createCell({ text: "Date", bold: true }),
-              ...weekDays.map((d) => createCell({ text: `${d.dayNumber}/${d.dateStr.split('-')[1] || ''}`, align: AlignmentType.CENTER })),
-              createCell({ text: "", align: AlignmentType.CENTER })
+              createCell({ text: "Date", bold: true, colIdx: 0 }),
+              ...weekDays.map((d, idx) => createCell({ text: `${d.dayNumber}/${d.dateStr.split('-')[1] || ''}`, align: AlignmentType.CENTER, colIdx: idx + 1 })),
+              createCell({ text: "", align: AlignmentType.CENTER, colIdx: 8 })
             ]
           })
         );
@@ -597,13 +602,13 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         ];
 
         timingFields.forEach((tf) => {
-          const cells = [createCell({ text: tf.label, bold: true })];
-          weekDays.forEach((dayObj) => {
+          const cells = [createCell({ text: tf.label, bold: true, colIdx: 0 })];
+          weekDays.forEach((dayObj, idx) => {
             const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
             const val = entryForDay?.timeCardDetails?.[tf.key] || "";
-            cells.push(createCell({ text: val, align: AlignmentType.CENTER }));
+            cells.push(createCell({ text: val, align: AlignmentType.CENTER, colIdx: idx + 1 }));
           });
-          cells.push(createCell({ text: "" }));
+          cells.push(createCell({ text: "", colIdx: 8 }));
           tableRows.push(new TableRow({ children: cells }));
         });
 
@@ -612,8 +617,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
         ALL_TEMPLATE_TASKS.forEach((taskLabel) => {
           let rowTaskTotal = 0;
-          const rowCells = [createCell({ text: taskLabel })];
-          weekDays.forEach((dayObj) => {
+          const rowCells = [createCell({ text: taskLabel, colIdx: 0 })];
+          weekDays.forEach((dayObj, idx) => {
             const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
             let dayTaskHours = 0;
             if (entryForDay?.tasks && taskLabel !== "") {
@@ -628,41 +633,41 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               });
             }
             rowTaskTotal += dayTaskHours;
-            rowCells.push(createCell({ text: dayTaskHours > 0 ? String(dayTaskHours) : "", align: AlignmentType.CENTER }));
+            rowCells.push(createCell({ text: dayTaskHours > 0 ? String(dayTaskHours) : "", align: AlignmentType.CENTER, colIdx: idx + 1 }));
           });
           siteGrandTotalHours += rowTaskTotal;
-          rowCells.push(createCell({ text: rowTaskTotal > 0 ? String(rowTaskTotal) : "", bold: true, align: AlignmentType.RIGHT }));
+          rowCells.push(createCell({ text: rowTaskTotal > 0 ? String(rowTaskTotal) : "", bold: true, align: AlignmentType.RIGHT, colIdx: 8 }));
           tableRows.push(new TableRow({ children: rowCells }));
         });
 
         // TOTAL HOURS Row
-        const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true })];
-        weekDays.forEach((dayObj) => {
+        const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true, colIdx: 0 })];
+        weekDays.forEach((dayObj, idx) => {
           const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
           let dayTotal = 0;
           if (entryForDay?.tasks) {
             dayTotal = entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
           }
-          totalHoursCells.push(createCell({ text: dayTotal > 0 ? String(dayTotal) : "", bold: true, align: AlignmentType.CENTER }));
+          totalHoursCells.push(createCell({ text: dayTotal > 0 ? String(dayTotal) : "", bold: true, align: AlignmentType.CENTER, colIdx: idx + 1 }));
         });
-        totalHoursCells.push(createCell({ text: String(siteGrandTotalHours), bold: true, align: AlignmentType.RIGHT }));
+        totalHoursCells.push(createCell({ text: String(siteGrandTotalHours), bold: true, align: AlignmentType.RIGHT, colIdx: 8 }));
         tableRows.push(new TableRow({ children: totalHoursCells }));
 
         // Travel Time Row
-        const travelCells = [createCell({ text: "Travel Time", bold: true })];
-        weekDays.forEach((dayObj) => {
+        const travelCells = [createCell({ text: "Travel Time", bold: true, colIdx: 0 })];
+        weekDays.forEach((dayObj, idx) => {
           const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
           let dayTravel = 0;
           if (entryForDay?.tasks) {
             dayTravel = entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.travelTime) || 0), 0);
           }
           siteGrandTravelTotal += dayTravel;
-          travelCells.push(createCell({ text: dayTravel > 0 ? String(dayTravel) : "", align: AlignmentType.CENTER }));
+          travelCells.push(createCell({ text: dayTravel > 0 ? String(dayTravel) : "", align: AlignmentType.CENTER, colIdx: idx + 1 }));
         });
-        travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT }));
+        travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT, colIdx: 8 }));
         tableRows.push(new TableRow({ children: travelCells }));
 
-        // Top Header Table Page 1
+        // Top Header Table Page 1 (Broadened Staff & Project columns so names do not wrap onto 2 lines)
         const topHeaderTableP1 = new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           borders: {
@@ -677,32 +682,32 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             new TableRow({
               children: [
                 new TableCell({
-                  width: { size: 40, type: WidthType.PERCENTAGE },
-                  margins: { top: 60, bottom: 40, left: 0, right: 0 },
+                  width: { size: 45, type: WidthType.PERCENTAGE },
+                  margins: { top: 40, bottom: 20, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       children: [
-                        new TextRun({ text: "Staff Member: ", bold: true, size: 20, font: "Calibri" }),
-                        new TextRun({ text: userName, size: 20, font: "Calibri" }),
+                        new TextRun({ text: "Staff Member: ", bold: true, size: 19, font: "Calibri" }),
+                        new TextRun({ text: userName, size: 19, font: "Calibri" }),
                       ],
                     }),
                   ],
                 }),
                 new TableCell({
                   width: { size: 35, type: WidthType.PERCENTAGE },
-                  margins: { top: 60, bottom: 40, left: 0, right: 0 },
+                  margins: { top: 40, bottom: 20, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       children: [
-                        new TextRun({ text: "Project: ", bold: true, size: 20, font: "Calibri" }),
-                        new TextRun({ text: siteName, size: 20, font: "Calibri" }),
+                        new TextRun({ text: "Project: ", bold: true, size: 19, font: "Calibri" }),
+                        new TextRun({ text: siteName, size: 19, font: "Calibri" }),
                       ],
                     }),
                   ],
                 }),
                 new TableCell({
-                  width: { size: 25, type: WidthType.PERCENTAGE },
-                  margins: { top: 0, bottom: 40, left: 0, right: 0 },
+                  width: { size: 20, type: WidthType.PERCENTAGE },
+                  margins: { top: 0, bottom: 20, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       alignment: AlignmentType.RIGHT,
@@ -720,12 +725,12 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           children: [
             new TextRun({
               text: "Version – August 2026",
-              size: 15,
+              size: 14,
               italic: true,
               color: "555555"
             })
           ],
-          spaceBefore: 60,
+          spaceBefore: 40,
           spaceAfter: 0
         });
 
@@ -744,13 +749,13 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             new TableRow({
               children: [
                 new TableCell({
-                  width: { size: 70, type: WidthType.PERCENTAGE },
-                  margins: { top: 0, bottom: 40, left: 0, right: 0 },
+                  width: { size: 75, type: WidthType.PERCENTAGE },
+                  margins: { top: 0, bottom: 20, left: 0, right: 0 },
                   children: [new Paragraph({ text: "" })],
                 }),
                 new TableCell({
-                  width: { size: 30, type: WidthType.PERCENTAGE },
-                  margins: { top: 0, bottom: 40, left: 0, right: 0 },
+                  width: { size: 25, type: WidthType.PERCENTAGE },
+                  margins: { top: 0, bottom: 20, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       alignment: AlignmentType.RIGHT,
@@ -774,24 +779,28 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           }
         });
 
+        const commentCell = ({ text = "", bold = false, fontSize = 18 }) => {
+          return new TableCell({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: thinBorder,
+            margins: { top: 25, bottom: 25, left: 30, right: 30 },
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: String(text || ""), bold, size: fontSize, font: "Calibri" })]
+              })
+            ]
+          });
+        };
+
         const commentRows = [
-          new TableRow({
-            children: [createCell({ text: "COMMENTS", bold: true, fontSize: 22 })]
-          }),
-          new TableRow({
-            children: [createCell({ text: "If Other – please detail what type of work you were undertaking", fontSize: 18 })]
-          })
+          new TableRow({ children: [commentCell({ text: "COMMENTS", bold: true, fontSize: 22 })] }),
+          new TableRow({ children: [commentCell({ text: "If Other – please detail what type of work you were undertaking", fontSize: 18 })] })
         ];
 
-        // Generate 15 lined comments rows matching original template grid
         const TOTAL_COMMENT_ROWS = 15;
         for (let i = 0; i < TOTAL_COMMENT_ROWS; i++) {
           const commentText = allComments[i] || "";
-          commentRows.push(
-            new TableRow({
-              children: [createCell({ text: commentText, fontSize: 20 })]
-            })
-          );
+          commentRows.push(new TableRow({ children: [commentCell({ text: commentText, fontSize: 20 })] }));
         }
 
         const commentsTable = new Table({
@@ -807,7 +816,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               },
               children: [
                 topHeaderTableP1,
-                new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: tableRows }),
+                new Table({
+                  width: { size: 100, type: WidthType.PERCENTAGE },
+                  rows: tableRows
+                }),
                 versionParagraph,
                 new Paragraph({ children: [new PageBreak()] }),
                 topHeaderTableP2,
