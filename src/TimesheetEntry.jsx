@@ -18,7 +18,7 @@ async function getLogoUint8Array(imageSource) {
   return new Uint8Array(arrayBuffer);
 }
 
-// Categorized Task List
+// Categorized Task List for App Selector
 const TASK_CATEGORIES = {
   "Site Setup & Earthworks": [
     "Demolition",
@@ -69,7 +69,7 @@ const TASK_CATEGORIES = {
   ]
 };
 
-// Exact template tasks matching "Blank Time Cards_2.docx" layout
+// Exact template tasks matching "Blank Time Cards_2.docx" layout (Including 2 blank rows before TOTAL HOURS)
 const ALL_TEMPLATE_TASKS = [
   "Demolition",
   "Profile/Set Up",
@@ -104,12 +104,13 @@ const ALL_TEMPLATE_TASKS = [
   "Bereavement Leave",
   "Training",
   "Other Leave (please specify)",
-  "" // Blank row preceding TOTAL HOURS matching template layout
+  "", // Blank Row 1 (Matches original template spacing)
+  ""  // Blank Row 2 (Matches original template spacing)
 ];
 
 function getWednesday(d) {
   const date = new Date(d);
-  const day = date.getDay(); // 0 = Sun, 1 = Mon, 2 = Tue, 3 = Wed, 4 = Thu, 5 = Fri, 6 = Sat
+  const day = date.getDay(); 
   const diff = date.getDate() - ((day + 4) % 7);
   return new Date(date.setDate(diff));
 }
@@ -509,13 +510,13 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         right: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
       };
 
-      const createCell = ({ text = "", bold = false, align = AlignmentType.LEFT, widthPct = null, colSpan = 1, shading = null, fontSize = 20 }) => {
+      const createCell = ({ text = "", bold = false, align = AlignmentType.LEFT, widthPct = null, colSpan = 1, shading = null, fontSize = 18 }) => {
         return new TableCell({
           columnSpan: colSpan,
           width: widthPct ? { size: widthPct, type: WidthType.PERCENTAGE } : undefined,
           shading: shading ? { fill: shading, type: ShadingType.CLEAR } : undefined,
           borders: thinBorder,
-          margins: { top: 20, bottom: 20, left: 40, right: 40 },
+          margins: { top: 30, bottom: 30, left: 40, right: 40 },
           children: [
             new Paragraph({
               alignment: align,
@@ -661,7 +662,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT }));
         tableRows.push(new TableRow({ children: travelCells }));
 
-        // Top Header Table Page 1 - Spacing handled via cell margins (top: 150)
+        // Top Header Table Page 1
         const topHeaderTableP1 = new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           borders: {
@@ -677,7 +678,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               children: [
                 new TableCell({
                   width: { size: 40, type: WidthType.PERCENTAGE },
-                  margins: { top: 150, bottom: 60, left: 0, right: 0 },
+                  margins: { top: 60, bottom: 40, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       children: [
@@ -689,7 +690,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }),
                 new TableCell({
                   width: { size: 35, type: WidthType.PERCENTAGE },
-                  margins: { top: 150, bottom: 60, left: 0, right: 0 },
+                  margins: { top: 60, bottom: 40, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       children: [
@@ -701,7 +702,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }),
                 new TableCell({
                   width: { size: 25, type: WidthType.PERCENTAGE },
-                  margins: { top: 150, bottom: 60, left: 0, right: 0 },
+                  margins: { top: 0, bottom: 40, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       alignment: AlignmentType.RIGHT,
@@ -719,16 +720,16 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           children: [
             new TextRun({
               text: "Version – August 2026",
-              size: 16,
+              size: 15,
               italic: true,
               color: "555555"
             })
           ],
-          spaceBefore: 80,
-          spaceAfter: 80
+          spaceBefore: 60,
+          spaceAfter: 0
         });
 
-        // Top Header Table Page 2 - Spacing handled via cell margins (top: 150)
+        // Top Header Table Page 2
         const topHeaderTableP2 = new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           borders: {
@@ -744,12 +745,12 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               children: [
                 new TableCell({
                   width: { size: 70, type: WidthType.PERCENTAGE },
-                  margins: { top: 150, bottom: 60, left: 0, right: 0 },
+                  margins: { top: 0, bottom: 40, left: 0, right: 0 },
                   children: [new Paragraph({ text: "" })],
                 }),
                 new TableCell({
                   width: { size: 30, type: WidthType.PERCENTAGE },
-                  margins: { top: 150, bottom: 60, left: 0, right: 0 },
+                  margins: { top: 0, bottom: 40, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       alignment: AlignmentType.RIGHT,
@@ -798,12 +799,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           rows: commentRows
         });
 
-        // Build Document directly with no empty dummy paragraphs
         const doc = new Document({
           sections: [
             {
               properties: {
-                page: { margin: { top: 300, bottom: 300, left: 400, right: 400 } }
+                page: { margin: { top: 280, bottom: 280, left: 360, right: 360 } }
               },
               children: [
                 topHeaderTableP1,
@@ -883,7 +883,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             </div>
           </div>
 
-          {/* Download DOCX Button */}
           <button
             type="button"
             onClick={handleExportDocx}
