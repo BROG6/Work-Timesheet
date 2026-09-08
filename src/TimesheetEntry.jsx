@@ -661,7 +661,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT }));
         tableRows.push(new TableRow({ children: travelCells }));
 
-        // Header Table Page 1 with cell top padding to force content & logo lower
+        // Header Table Page 1
         const topHeaderTableP1 = new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           borders: {
@@ -677,7 +677,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               children: [
                 new TableCell({
                   width: { size: 40, type: WidthType.PERCENTAGE },
-                  margins: { top: 300, bottom: 60, left: 0, right: 0 },
+                  margins: { top: 0, bottom: 0, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       children: [
@@ -689,7 +689,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }),
                 new TableCell({
                   width: { size: 35, type: WidthType.PERCENTAGE },
-                  margins: { top: 300, bottom: 60, left: 0, right: 0 },
+                  margins: { top: 0, bottom: 0, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       children: [
@@ -701,7 +701,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }),
                 new TableCell({
                   width: { size: 25, type: WidthType.PERCENTAGE },
-                  margins: { top: 200, bottom: 60, left: 0, right: 0 },
+                  margins: { top: 0, bottom: 0, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       alignment: AlignmentType.RIGHT,
@@ -744,12 +744,12 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               children: [
                 new TableCell({
                   width: { size: 70, type: WidthType.PERCENTAGE },
-                  margins: { top: 200, bottom: 60, left: 0, right: 0 },
+                  margins: { top: 0, bottom: 0, left: 0, right: 0 },
                   children: [new Paragraph({ text: "" })],
                 }),
                 new TableCell({
                   width: { size: 30, type: WidthType.PERCENTAGE },
-                  margins: { top: 200, bottom: 60, left: 0, right: 0 },
+                  margins: { top: 0, bottom: 0, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       alignment: AlignmentType.RIGHT,
@@ -798,23 +798,25 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           rows: commentRows
         });
 
-        // Build Complete 2-Page Document with expanded top page margin (1000 dxa) and spacer paragraphs
+        // Build Complete 2-Page Document
+        // Space before the header table is increased (spaceBefore: 500) to shift the top header down
+        // Space after the header table is removed (spaceAfter: 0) to keep the second table in its fixed position
         const doc = new Document({
           sections: [
             {
               properties: {
-                page: { margin: { top: 1000, bottom: 400, left: 400, right: 400 } }
+                page: { margin: { top: 300, bottom: 400, left: 400, right: 400 } }
               },
               children: [
-                new Paragraph({ text: "", spaceAfter: 200 }),
+                new Paragraph({ text: "", spaceBefore: 500 }),
                 topHeaderTableP1,
-                new Paragraph({ text: "", spaceAfter: 100 }),
+                new Paragraph({ text: "", spaceBefore: 0, spaceAfter: 0 }),
                 new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: tableRows }),
                 versionParagraph,
                 new Paragraph({ children: [new PageBreak()] }),
-                new Paragraph({ text: "", spaceAfter: 200 }),
+                new Paragraph({ text: "", spaceBefore: 500 }),
                 topHeaderTableP2,
-                new Paragraph({ text: "", spaceAfter: 100 }),
+                new Paragraph({ text: "", spaceBefore: 0, spaceAfter: 0 }),
                 commentsTable
               ]
             }
