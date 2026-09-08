@@ -7,6 +7,12 @@ import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, Width
 // Import logo directly from src/assets so Vite processes and bundles it
 import sjrLogo from './assets/logo.jpg';
 import logo2 from './assets/logo2.jpg';
+// Helper function to safely convert an imported image into binary format offline
+async function getLogoUint8Array(imageSource) {
+  const response = await fetch(imageSource);
+  const arrayBuffer = await response.arrayBuffer();
+  return new Uint8Array(arrayBuffer);
+}
 
 // Categorized Task List
 const TASK_CATEGORIES = {
