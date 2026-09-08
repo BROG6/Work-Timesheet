@@ -2,14 +2,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebaseConfig';
 import { collection, addDoc, query, where, getDocs, getDocsFromCache, serverTimestamp } from 'firebase/firestore';
-// TOP OF FILE (~Line 5)
+
 import { 
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, 
-  WidthType, BorderStyle, AlignmentType, ShadingType, ImageRun // <-- Add ImageRun here
+  WidthType, BorderStyle, AlignmentType, ShadingType, ImageRun 
 } from 'https://cdn.skypack.dev/docx';
 
 import sjrLogo from './assets/logo.jpg';
-import logo2 from './assets/logo2.jpg'; // <-- Ensure logo2 is imported
+import logo2 from './assets/logo2.jpg';
 
 // Helper function to safely convert an imported image into binary format offline
 async function getLogoUint8Array(imageSource) {
@@ -409,7 +409,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }
       } catch (err) {
         console.warn("Cache load note:", err);
-      } finally {
+      } font-medium {
         if (isMounted) setFetchingDay(false);
       }
     }
@@ -479,7 +479,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     }
   };
 
-    const handleExportDocx = async () => {
+  const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
       // 1. Load Logo 2 using the offline helper
@@ -490,10 +490,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           logo2ImageRun = new ImageRun({
             data: logoData,
             transformation: {
-              width: 130, // Adjust logo width in pixels as needed
-              height: 50,  // Adjust logo height in pixels as needed
+              width: 130,
+              height: 50,
             },
-            type: "jpg", // Change to "png" if logo2 is a PNG image
+            type: "jpg",
           });
         } catch (e) {
           console.warn("Could not load Logo 2:", e);
@@ -673,7 +673,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         tableRows.push(new TableRow({ children: [createCell({ text: "If Other – please detail what type of work you were undertaking", colSpan: 9, fontSize: 20 })] }));
         tableRows.push(new TableRow({ children: [createCell({ text: allComments.length > 0 ? allComments.join(" | ") : "", colSpan: 9 })] }));
 
-        // 3. Create the top header block (Staff & Project on left | Logo 2 on right)
+        // 3. Build Header Table for Staff Details & Logo 2
         const topHeaderTable = new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           borders: {
@@ -719,7 +719,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           ],
         });
 
-        // 4. Assemble the document
+        // 4. Assemble Word Document
         const doc = new Document({
           sections: [
             {
@@ -750,258 +750,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       }
 
       setStatusMessage({ type: 'success', text: `Exported ${sitesToExport.length} site time card(s) with Logo 2!` });
-      setTimeout(() => setStatusMessage(null), 4000);
-    } catch (err) {
-      console.error("DOCX export error:", err);
-      setStatusMessage({ type: 'error', text: "Failed to generate DOCX file." });
-    } finally {
-      setExportingDocx(false);
-    }
-  };
-
-
-      const createCell = ({ text = "", bold = false, align = AlignmentType.LEFT, widthPct = null, colSpan = 1, shading = null, fontSize = 22 }) => {
-        return new TableCell({
-          columnSpan: colSpan,
-          width: widthPct ? { size: widthPct, type: WidthType.PERCENTAGE } : undefined,
-          shading: shading ? { fill: shading, type: ShadingType.CLEAR } : undefined,
-          borders: thinBorder,
-          margins: { top: 20, bottom: 20, left: 40, right: 40 },
-          children: [
-            new Paragraph({
-              alignment: align,
-              children: [new TextRun({ text: String(text || ""), bold, size: fontSize, font: "Calibri" })]
-            })
-          ]
-        });
-      };
-
-      const daysHeader = ["Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue"];
-      const validWeekDates = weekDays.map((d) => d.dateStr);
-      let weeklyEntries = [];
-
-      if (userId) {
-        const q = query(collection(db, 'timesheets'), where('userId', '==', userId));
-        let querySnapshot;
-        try {
-          querySnapshot = await getDocs(q);
-        } catch {
-          querySnapshot = await getDocsFromCache(q);
-        }
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          if (validWeekDates.includes(data.date)) {
-            weeklyEntries.push(data);
-          }
-        });
-      }
-
-      // Restrict export exclusively to entries submitted and saved in Firestore
-      if (weeklyEntries.length === 0) {
-        setStatusMessage({ type: 'error', text: "No submitted entries found for this week to export." });
-        setTimeout(() => setStatusMessage(null), 4000);
-        setExportingDocx(false);
-        return;
-      }
-
-      const siteMap = {};
-      weeklyEntries.forEach((entry) => {
-        const siteName = entry.project || "General / Unassigned";
-        if (!siteMap[siteName]) {
-          siteMap[siteName] = [];
-        }
-        siteMap[siteName].push(entry);
-      });
-
-      const sitesToExport = Object.keys(siteMap);
-
-      for (const siteName of sitesToExport) {
-        const siteEntries = siteMap[siteName];
-        const tableRows = [];
-
-        tableRows.push(
-          new TableRow({
-            children: [
-              createCell({ text: "Day", bold: true, widthPct: 40 }),
-              ...daysHeader.map((day) => createCell({ text: day, bold: true, align: AlignmentType.CENTER, widthPct: 7.5 })),
-              createCell({ text: "Totals", bold: true, align: AlignmentType.RIGHT, widthPct: 7.5 })
-            ]
-          })
-        );
-
-        tableRows.push(
-          new TableRow({
-            children: [
-              createCell({ text: "Date", bold: true }),
-              ...weekDays.map((d) => createCell({ text: `${d.dayNumber}/${d.dateStr.split('-')[1] || ''}`, align: AlignmentType.CENTER })),
-              createCell({ text: "", align: AlignmentType.CENTER })
-            ]
-          })
-        );
-
-        const timingFields = [
-          { label: "START TIME", key: "startTime" },
-          { label: "TIME LEFT SITE", key: "timeLeftSite" },
-          { label: "TIME RETURNED", key: "timeReturned" },
-          { label: "TIME FINISHED", key: "timeFinished" }
-        ];
-
-        timingFields.forEach((tf) => {
-          const cells = [createCell({ text: tf.label, bold: true })];
-          weekDays.forEach((dayObj) => {
-            const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
-            const val = entryForDay?.timeCardDetails?.[tf.key] || "";
-            cells.push(createCell({ text: val, align: AlignmentType.CENTER }));
-          });
-          cells.push(createCell({ text: "" }));
-          tableRows.push(new TableRow({ children: cells }));
-        });
-
-        let siteGrandTotalHours = 0;
-        let siteGrandTravelTotal = 0;
-
-        ALL_TEMPLATE_TASKS.forEach((taskLabel) => {
-          let rowTaskTotal = 0;
-          const rowCells = [createCell({ text: taskLabel })];
-          weekDays.forEach((dayObj) => {
-            const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
-            let dayTaskHours = 0;
-            if (entryForDay?.tasks && taskLabel !== "") {
-              entryForDay.tasks.forEach((t) => {
-                const nameMatches =
-                  (t.taskName || '').toLowerCase().trim() === taskLabel.toLowerCase().trim() ||
-                  (taskLabel.startsWith("Other (PTO)") && (t.taskName || '').toLowerCase().includes("other work")) ||
-                  (taskLabel.startsWith("Other Leave") && (t.taskName || '').toLowerCase().includes("other leave"));
-                if (nameMatches) {
-                  dayTaskHours += parseFloat(t.hours) || 0;
-                }
-              });
-            }
-            rowTaskTotal += dayTaskHours;
-            rowCells.push(createCell({ text: dayTaskHours > 0 ? String(dayTaskHours) : "", align: AlignmentType.CENTER }));
-          });
-          siteGrandTotalHours += rowTaskTotal;
-          rowCells.push(createCell({ text: rowTaskTotal > 0 ? String(rowTaskTotal) : "", bold: true, align: AlignmentType.RIGHT }));
-          tableRows.push(new TableRow({ children: rowCells }));
-        });
-
-        const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true })];
-        weekDays.forEach((dayObj) => {
-          const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
-          let dayTotal = 0;
-          if (entryForDay?.tasks) {
-            dayTotal = entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
-          }
-          totalHoursCells.push(createCell({ text: dayTotal > 0 ? String(dayTotal) : "", bold: true, align: AlignmentType.CENTER }));
-        });
-        totalHoursCells.push(createCell({ text: String(siteGrandTotalHours), bold: true, align: AlignmentType.RIGHT }));
-        tableRows.push(new TableRow({ children: totalHoursCells }));
-
-        const travelCells = [createCell({ text: "Travel Time", bold: true })];
-        weekDays.forEach((dayObj) => {
-          const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
-          let dayTravel = 0;
-          if (entryForDay?.tasks) {
-            dayTravel = entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.travelTime) || 0), 0);
-          }
-          siteGrandTravelTotal += dayTravel;
-          travelCells.push(createCell({ text: dayTravel > 0 ? String(dayTravel) : "", align: AlignmentType.CENTER }));
-        });
-        travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT }));
-        tableRows.push(new TableRow({ children: travelCells }));
-
-        const allComments = [];
-        siteEntries.forEach((entry) => {
-          if (entry.tasks) {
-            entry.tasks.forEach((t) => {
-              if (t.comments && t.comments.trim()) {
-                allComments.push(`${displayDate(entry.date)}: ${t.comments.trim()}`);
-              }
-            });
-          }
-        });
-
-        tableRows.push(new TableRow({ children: [createCell({ text: "COMMENTS", bold: true, colSpan: 9 })] }));
-        tableRows.push(new TableRow({ children: [createCell({ text: "If Other – please detail what type of work you were undertaking", colSpan: 9, fontSize: 20 })] }));
-        tableRows.push(new TableRow({ children: [createCell({ text: allComments.length > 0 ? allComments.join(" | ") : "", colSpan: 9 })] }));
-
-                // 2. Build Header Table for Staff Details & Logo 2
-        const topHeaderTable = new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          borders: {
-            top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-            bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-            left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-            right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-            insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-            insideVertical: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-          },
-          rows: [
-            new TableRow({
-              children: [
-                new TableCell({
-                  width: { size: 60, type: WidthType.PERCENTAGE },
-                  children: [
-                    new Paragraph({
-                      children: [
-                        new TextRun({ text: "Staff Member: ", bold: true, size: 22, font: "Calibri" }),
-                        new TextRun({ text: userName, size: 22, font: "Calibri" }),
-                      ],
-                    }),
-                    new Paragraph({
-                      children: [
-                        new TextRun({ text: "Project: ", bold: true, size: 22, font: "Calibri" }),
-                        new TextRun({ text: siteName, size: 22, font: "Calibri" }),
-                      ],
-                      spaceBefore: 60,
-                    }),
-                  ],
-                }),
-                new TableCell({
-                  width: { size: 40, type: WidthType.PERCENTAGE },
-                  children: [
-                    new Paragraph({
-                      alignment: AlignmentType.RIGHT,
-                      children: logo2ImageRun ? [logo2ImageRun] : [],
-                    }),
-                  ],
-                }),
-              ],
-            }),
-          ],
-        });
-
-        // 3. Assemble Word Document
-        const doc = new Document({
-          sections: [
-            {
-              properties: {
-                page: { margin: { top: 500, bottom: 500, left: 500, right: 500 } }
-              },
-              children: [
-                topHeaderTable,
-                new Paragraph({ text: "", spaceAfter: 100 }),
-                new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: tableRows })
-              ]
-            }
-          ]
-        });
-
-        const safeUserName = userName.replace(/[^a-zA-Z0-9_\-]/g, '_');
-        const safeSiteName = siteName.replace(/[^a-zA-Z0-9_\-]/g, '_');
-        const weekStartStr = weekDays[0].dateStr;
-        const blob = await Packer.toBlob(doc);
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `TimeCard_${safeUserName}_${safeSiteName}_${weekStartStr}.docx`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      }
-
-      setStatusMessage({ type: 'success', text: `Exported ${sitesToExport.length} site time card(s) matching exact template!` });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
       console.error("DOCX export error:", err);
