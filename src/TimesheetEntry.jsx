@@ -2,11 +2,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebaseConfig';
 import { collection, addDoc, query, where, getDocs, getDocsFromCache, serverTimestamp } from 'firebase/firestore';
-// Import docx directly via Skypack CDN (bypasses local npm module resolution during Vercel build)
-import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType, ShadingType } from 'https://cdn.skypack.dev/docx';
-// Import logo directly from src/assets so Vite processes and bundles it
+// TOP OF FILE (~Line 5)
+import { 
+  Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, 
+  WidthType, BorderStyle, AlignmentType, ShadingType, ImageRun // <-- Add ImageRun here
+} from 'https://cdn.skypack.dev/docx';
+
 import sjrLogo from './assets/logo.jpg';
-import logo2 from './assets/logo2.jpg';
+import logo2 from './assets/logo2.jpg'; // <-- Ensure logo2 is imported
+
 // Helper function to safely convert an imported image into binary format offline
 async function getLogoUint8Array(imageSource) {
   const response = await fetch(imageSource);
