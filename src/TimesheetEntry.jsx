@@ -5,7 +5,7 @@ import { collection, addDoc, query, where, getDocs, getDocsFromCache, serverTime
 
 import { 
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, 
-  WidthType, BorderStyle, AlignmentType, ShadingType, ImageRun 
+  WidthType, BorderStyle, AlignmentType, ShadingType, ImageRun, PageBreak 
 } from 'https://cdn.skypack.dev/docx';
 
 import sjrLogo from './assets/logo.jpg';
@@ -98,7 +98,7 @@ const ALL_TEMPLATE_TASKS = [
   "Shelving/Joinery",
   "Deck Framing & Decking",
   "Driveway/Paths/Landscaping",
-  "Other (PTO)",
+  "Other                  (PTO)",
   "Sick Leave",
   "Annual Leave",
   "Bereavement Leave",
@@ -482,17 +482,20 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
-      // 1. Load Logo 2 using the offline helper
-      let logo2ImageRun = null;
+      // 1. Load Logo 2 images for Page 1 & Page 2 headers
+      let logo2ImageRunP1 = null;
+      let logo2ImageRunP2 = null;
       if (logo2) {
         try {
           const logoData = await getLogoUint8Array(logo2);
-          logo2ImageRun = new ImageRun({
+          logo2ImageRunP1 = new ImageRun({
             data: logoData,
-            transformation: {
-              width: 130,
-              height: 50,
-            },
+            transformation: { width: 130, height: 50 },
+            type: "jpg",
+          });
+          logo2ImageRunP2 = new ImageRun({
+            data: logoData,
+            transformation: { width: 130, height: 50 },
             type: "jpg",
           });
         } catch (e) {
@@ -500,7 +503,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }
       }
 
-      // 2. Setup border formatting for timesheet grid
+      // 2. Setup border formatting
       const tableBorderColor = "000000";
       const thinBorder = {
         top: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
@@ -509,7 +512,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         right: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
       };
 
-      const createCell = ({ text = "", bold = false, align = AlignmentType.LEFT, widthPct = null, colSpan = 1, shading = null, fontSize = 22 }) => {
+      const createCell = ({ text = "", bold = false, align = AlignmentType.LEFT, widthPct = null, colSpan = 1, shading = null, fontSize = 20 }) => {
         return new TableCell({
           columnSpan: colSpan,
           width: widthPct ? { size: widthPct, type: WidthType.PERCENTAGE } : undefined,
@@ -567,6 +570,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const siteEntries = siteMap[siteName];
         const tableRows = [];
 
+        // --- PAGE 1: HEADER & TIMESHEET TABLE ---
         tableRows.push(
           new TableRow({
             children: [
@@ -618,8 +622,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               entryForDay.tasks.forEach((t) => {
                 const nameMatches =
                   (t.taskName || '').toLowerCase().trim() === taskLabel.toLowerCase().trim() ||
-                  (taskLabel.startsWith("Other (PTO)") && (t.taskName || '').toLowerCase().includes("other work")) ||
-                  (taskLabel.startsWith("Other Leave") && (t.taskName || '').toLowerCase().includes("other leave"));
+                  (taskLabel.includes("PTO") && (t.taskName || '').toLowerCase().includes("other work")) ||
+                  (taskLabel.includes("specify") && (t.taskName || '').toLowerCase().includes("other leave"));
                 if (nameMatches) {
                   dayTaskHours += parseFloat(t.hours) || 0;
                 }
@@ -633,6 +637,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           tableRows.push(new TableRow({ children: rowCells }));
         });
 
+        // TOTAL HOURS Row
         const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true })];
         weekDays.forEach((dayObj) => {
           const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
@@ -645,6 +650,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         totalHoursCells.push(createCell({ text: String(siteGrandTotalHours), bold: true, align: AlignmentType.RIGHT }));
         tableRows.push(new TableRow({ children: totalHoursCells }));
 
+        // Travel Time Row
         const travelCells = [createCell({ text: "Travel Time", bold: true })];
         weekDays.forEach((dayObj) => {
           const entryForDay = siteEntries.find((e) => e.date === dayObj.dateStr);
@@ -658,23 +664,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT }));
         tableRows.push(new TableRow({ children: travelCells }));
 
-        const allComments = [];
-        siteEntries.forEach((entry) => {
-          if (entry.tasks) {
-            entry.tasks.forEach((t) => {
-              if (t.comments && t.comments.trim()) {
-                allComments.push(`${displayDate(entry.date)}: ${t.comments.trim()}`);
-              }
-            });
-          }
-        });
-
-        tableRows.push(new TableRow({ children: [createCell({ text: "COMMENTS", bold: true, colSpan: 9 })] }));
-        tableRows.push(new TableRow({ children: [createCell({ text: "If Other – please detail what type of work you were undertaking", colSpan: 9, fontSize: 20 })] }));
-        tableRows.push(new TableRow({ children: [createCell({ text: allComments.length > 0 ? allComments.join(" | ") : "", colSpan: 9 })] }));
-
-        // 3. Build Header Table for Staff Details & Logo 2
-        const topHeaderTable = new Table({
+        // Header Table Page 1
+        const topHeaderTableP1 = new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           borders: {
             top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
@@ -688,29 +679,33 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             new TableRow({
               children: [
                 new TableCell({
-                  width: { size: 60, type: WidthType.PERCENTAGE },
+                  width: { size: 40, type: WidthType.PERCENTAGE },
                   children: [
                     new Paragraph({
                       children: [
-                        new TextRun({ text: "Staff Member: ", bold: true, size: 22, font: "Calibri" }),
-                        new TextRun({ text: userName, size: 22, font: "Calibri" }),
+                        new TextRun({ text: "Staff Member: ", bold: true, size: 20, font: "Calibri" }),
+                        new TextRun({ text: userName, size: 20, font: "Calibri" }),
                       ],
-                    }),
-                    new Paragraph({
-                      children: [
-                        new TextRun({ text: "Project: ", bold: true, size: 22, font: "Calibri" }),
-                        new TextRun({ text: siteName, size: 22, font: "Calibri" }),
-                      ],
-                      spaceBefore: 60,
                     }),
                   ],
                 }),
                 new TableCell({
-                  width: { size: 40, type: WidthType.PERCENTAGE },
+                  width: { size: 35, type: WidthType.PERCENTAGE },
+                  children: [
+                    new Paragraph({
+                      children: [
+                        new TextRun({ text: "Project: ", bold: true, size: 20, font: "Calibri" }),
+                        new TextRun({ text: siteName, size: 20, font: "Calibri" }),
+                      ],
+                    }),
+                  ],
+                }),
+                new TableCell({
+                  width: { size: 25, type: WidthType.PERCENTAGE },
                   children: [
                     new Paragraph({
                       alignment: AlignmentType.RIGHT,
-                      children: logo2ImageRun ? [logo2ImageRun] : [],
+                      children: logo2ImageRunP1 ? [logo2ImageRunP1] : [],
                     }),
                   ],
                 }),
@@ -719,17 +714,104 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           ],
         });
 
-        // 4. Assemble Word Document
+        // Version Footer Text for Page 1
+        const versionParagraph = new Paragraph({
+          children: [
+            new TextRun({
+              text: "Version – August 2026",
+              size: 16,
+              italic: true,
+              color: "555555"
+            })
+          ],
+          spaceBefore: 120,
+          spaceAfter: 120
+        });
+
+        // --- PAGE 2: HEADER & COMMENTS TABLE ---
+        const topHeaderTableP2 = new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          borders: {
+            top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+            bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+            left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+            right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+            insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+            insideVertical: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+          },
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({
+                  width: { size: 70, type: WidthType.PERCENTAGE },
+                  children: [new Paragraph({ text: "" })],
+                }),
+                new TableCell({
+                  width: { size: 30, type: WidthType.PERCENTAGE },
+                  children: [
+                    new Paragraph({
+                      alignment: AlignmentType.RIGHT,
+                      children: logo2ImageRunP2 ? [logo2ImageRunP2] : [],
+                    }),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        });
+
+        const allComments = [];
+        siteEntries.forEach((entry) => {
+          if (entry.tasks) {
+            entry.tasks.forEach((t) => {
+              if (t.comments && t.comments.trim()) {
+                allComments.push(`${displayDate(entry.date)}: ${t.comments.trim()}`);
+              }
+            });
+          }
+        });
+
+        const commentRows = [
+          new TableRow({
+            children: [createCell({ text: "COMMENTS", bold: true, fontSize: 22 })]
+          }),
+          new TableRow({
+            children: [createCell({ text: "If Other – please detail what type of work you were undertaking", fontSize: 18 })]
+          })
+        ];
+
+        // Generate 15 lined comments rows matching original template grid
+        const TOTAL_COMMENT_ROWS = 15;
+        for (let i = 0; i < TOTAL_COMMENT_ROWS; i++) {
+          const commentText = allComments[i] || "";
+          commentRows.push(
+            new TableRow({
+              children: [createCell({ text: commentText, fontSize: 20 })]
+            })
+          );
+        }
+
+        const commentsTable = new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: commentRows
+        });
+
+        // Build Complete 2-Page Document
         const doc = new Document({
           sections: [
             {
               properties: {
-                page: { margin: { top: 500, bottom: 500, left: 500, right: 500 } }
+                page: { margin: { top: 400, bottom: 400, left: 400, right: 400 } }
               },
               children: [
-                topHeaderTable,
-                new Paragraph({ text: "", spaceAfter: 100 }),
-                new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: tableRows })
+                topHeaderTableP1,
+                new Paragraph({ text: "", spaceAfter: 60 }),
+                new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: tableRows }),
+                versionParagraph,
+                new Paragraph({ children: [new PageBreak()] }),
+                topHeaderTableP2,
+                new Paragraph({ text: "", spaceAfter: 60 }),
+                commentsTable
               ]
             }
           ]
@@ -749,7 +831,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         URL.revokeObjectURL(url);
       }
 
-      setStatusMessage({ type: 'success', text: `Exported ${sitesToExport.length} site time card(s) with Logo 2!` });
+      setStatusMessage({ type: 'success', text: `Exported ${sitesToExport.length} site time card(s) matching template!` });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
       console.error("DOCX export error:", err);
