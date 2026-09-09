@@ -21,10 +21,10 @@ async function getLogoUint8Array(imageSource) {
   return new Uint8Array(arrayBuffer);
 }
 
-// Fixed printable grid dimensions in twips (1/20th of a point)
-// Total Printable Width = 10,800 twips (fits standard A4 with ~0.38" / 500 twip margins)
-// Task Col = 3800 twips, 8 Day/Total Cols = 875 twips each (3800 + 8 * 875 = 10,800)
-const EXACT_TIMESHEET_COL_WIDTHS = [3800, 875, 875, 875, 875, 875, 875, 875, 875];
+// Total Table Width = 10,600 DXA
+// Fits printable area cleanly with 540 DXA (~0.375 in) left/right margins
+// Task Col = 3720 DXA, 8 Day/Total Cols = 860 DXA each (3720 + 8 * 860 = 10,600)
+const EXACT_TIMESHEET_COL_WIDTHS = [3720, 860, 860, 860, 860, 860, 860, 860, 860];
 
 // Categorized Task List
 const TASK_CATEGORIES = {
@@ -46,7 +46,7 @@ const TASK_CATEGORIES = {
     "Wall Framing",
     "Roof Framing and Purlins",
     "Fascia and Soffits",
-    "C/Battens, RAB/Ecoply",
+    "C/Battens, Rab/Ecoply",
     "Building Paper/Aliband",
     "Exterior Windows/Doors",
     "Exterior Cladding"
@@ -92,7 +92,7 @@ const ALL_TEMPLATE_TASKS = [
   "Wall Framing",
   "Roof Framing and Purlins",
   "Fascia and Soffits",
-  "C/Battens, RAB/Ecoply",
+  "C/Battens, Rab/Ecoply",
   "Building Paper/Aliband",
   "Exterior Windows/Doors",
   "Exterior Cladding",
@@ -106,7 +106,7 @@ const ALL_TEMPLATE_TASKS = [
   "Shelving/Joinery",
   "Deck Framing & Decking",
   "Driveway/Paths/Landscaping",
-  "Other (PTO)",
+  "Other                            (PTO)",
   "Sick Leave",
   "Annual Leave",
   "Bereavement Leave",
@@ -342,7 +342,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       try {
         querySnapshot = await getDocs(q);
       } catch (e) {
-        querySnapshot = await getDocsFromCache(q);
+        querySnapshot = await getDocsFromCache(e);
       }
       
       const validWeekDates = Array.from({ length: 7 }, (_, i) => {
@@ -506,12 +506,12 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           const logoDataP2 = await getLogoUint8Array(logo2);
           logo2ImageRunP1 = new ImageRun({
             data: logoDataP1,
-            transformation: { width: 120, height: 44 },
+            transformation: { width: 115, height: 42 },
             type: "jpg",
           });
           logo2ImageRunP2 = new ImageRun({
             data: logoDataP2,
-            transformation: { width: 120, height: 44 },
+            transformation: { width: 115, height: 42 },
             type: "jpg",
           });
         } catch (e) {
@@ -519,7 +519,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }
       }
 
-      // Standard solid 0.5pt (size: 4) table border definition for crisp lines
+      // Crisp 0.5pt solid black borders matching template grid
       const tableBorderColor = "000000";
       const solidBorder = {
         top: { style: BorderStyle.SINGLE, size: 4, color: tableBorderColor },
@@ -528,24 +528,24 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         right: { style: BorderStyle.SINGLE, size: 4, color: tableBorderColor },
       };
 
-      // Compact Cell Generator (Ensures complete single-page fit for Page 1)
+      // Compact Cell Builder (Ensures all rows fit Page 1 without bottom overflow)
       const createCell = ({ 
         text = "", 
         bold = false, 
         align = AlignmentType.LEFT, 
-        colWidth = 875, 
+        colWidth = 860, 
         colSpan = 1, 
         shading = null, 
-        fontSize = 15, // ~7.5pt Calibri font
-        topMargin = 18,
-        bottomMargin = 18
+        fontSize = 14, // ~7pt Calibri font for precise grid alignment
+        topMargin = 12,
+        bottomMargin = 12
       }) => {
         return new TableCell({
           columnSpan: colSpan,
           width: { size: colWidth, type: WidthType.DXA },
           shading: shading ? { fill: shading, type: ShadingType.CLEAR } : undefined,
           borders: solidBorder,
-          margins: { top: topMargin, bottom: bottomMargin, left: 45, right: 45 },
+          margins: { top: topMargin, bottom: bottomMargin, left: 35, right: 35 },
           children: [
             new Paragraph({
               alignment: align,
@@ -733,11 +733,12 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8] }));
         tableRows.push(new TableRow({ children: travelCells }));
 
-        // Page 1 Header Table
+        // Page 1 Header Table (10,600 DXA Total Width)
         const topHeaderTableP1 = new Table({
           layout: TableLayoutType.FIXED,
-          columnWidths: [4500, 4140, 2160],
-          width: { size: 10800, type: WidthType.DXA },
+          columnWidths: [4400, 4100, 2100],
+          width: { size: 10600, type: WidthType.DXA },
+          indent: { size: 0, type: WidthType.DXA },
           borders: {
             top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
             bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
@@ -750,39 +751,39 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             new TableRow({
               children: [
                 new TableCell({
-                  width: { size: 4500, type: WidthType.DXA },
+                  width: { size: 4400, type: WidthType.DXA },
                   verticalAlign: VerticalAlign.BOTTOM,
-                  margins: { top: 0, bottom: 20, left: 0, right: 0 },
+                  margins: { top: 0, bottom: 10, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       spaceBefore: 0,
-                      spaceAfter: 20,
+                      spaceAfter: 10,
                       children: [
-                        new TextRun({ text: "Staff Member: ", bold: true, size: 18, font: "Calibri" }),
-                        new TextRun({ text: userName, size: 18, font: "Calibri" }),
+                        new TextRun({ text: "Staff Member: ", bold: true, size: 17, font: "Calibri" }),
+                        new TextRun({ text: userName, size: 17, font: "Calibri" }),
                       ],
                     }),
                   ],
                 }),
                 new TableCell({
-                  width: { size: 4140, type: WidthType.DXA },
+                  width: { size: 4100, type: WidthType.DXA },
                   verticalAlign: VerticalAlign.BOTTOM,
-                  margins: { top: 0, bottom: 20, left: 0, right: 0 },
+                  margins: { top: 0, bottom: 10, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       spaceBefore: 0,
-                      spaceAfter: 20,
+                      spaceAfter: 10,
                       children: [
-                        new TextRun({ text: "Project: ", bold: true, size: 18, font: "Calibri" }),
-                        new TextRun({ text: siteName, size: 18, font: "Calibri" }),
+                        new TextRun({ text: "Project: ", bold: true, size: 17, font: "Calibri" }),
+                        new TextRun({ text: siteName, size: 17, font: "Calibri" }),
                       ],
                     }),
                   ],
                 }),
                 new TableCell({
-                  width: { size: 2160, type: WidthType.DXA },
+                  width: { size: 2100, type: WidthType.DXA },
                   verticalAlign: VerticalAlign.BOTTOM,
-                  margins: { top: 0, bottom: 20, left: 0, right: 0 },
+                  margins: { top: 0, bottom: 10, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       alignment: AlignmentType.RIGHT,
@@ -802,20 +803,21 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           children: [
             new TextRun({
               text: "Version – August 2026",
-              size: 14,
+              size: 13,
               italic: true,
               color: "555555"
             })
           ],
-          spaceBefore: 40,
+          spaceBefore: 20,
           spaceAfter: 0
         });
 
         // --- PAGE 2: COMMENTS SECTION ---
         const topHeaderTableP2 = new Table({
           layout: TableLayoutType.FIXED,
-          columnWidths: [8640, 2160],
-          width: { size: 10800, type: WidthType.DXA },
+          columnWidths: [8500, 2100],
+          width: { size: 10600, type: WidthType.DXA },
+          indent: { size: 0, type: WidthType.DXA },
           borders: {
             top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
             bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
@@ -828,13 +830,13 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             new TableRow({
               children: [
                 new TableCell({
-                  width: { size: 8640, type: WidthType.DXA },
+                  width: { size: 8500, type: WidthType.DXA },
                   children: [new Paragraph({ spaceBefore: 0, spaceAfter: 0, children: [] })]
                 }),
                 new TableCell({
-                  width: { size: 2160, type: WidthType.DXA },
+                  width: { size: 2100, type: WidthType.DXA },
                   verticalAlign: VerticalAlign.BOTTOM,
-                  margins: { top: 0, bottom: 20, left: 0, right: 0 },
+                  margins: { top: 0, bottom: 10, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       alignment: AlignmentType.RIGHT,
@@ -863,11 +865,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const commentRows = [
           new TableRow({
             children: [
-              createCell({ text: "COMMENTS", bold: true, fontSize: 18, colWidth: 10800, topMargin: 30, bottomMargin: 30 })
+              createCell({ text: "COMMENTS", bold: true, fontSize: 17, colWidth: 10600, topMargin: 20, bottomMargin: 20 })
             ]
           }),
           new TableRow({
-            children: [createCell({ text: "If Other – please detail what type of work you were undertaking", fontSize: 15, colWidth: 10800, topMargin: 20, bottomMargin: 20 })]
+            children: [createCell({ text: "If Other – please detail what type of work you were undertaking", fontSize: 14, colWidth: 10600, topMargin: 15, bottomMargin: 15 })]
           })
         ];
 
@@ -876,22 +878,24 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           const commentText = allComments[i] || "";
           commentRows.push(
             new TableRow({
-              children: [createCell({ text: commentText, fontSize: 15, colWidth: 10800, topMargin: 16, bottomMargin: 16 })]
+              children: [createCell({ text: commentText, fontSize: 14, colWidth: 10600, topMargin: 12, bottomMargin: 12 })]
             })
           );
         }
 
         const commentsTable = new Table({
           layout: TableLayoutType.FIXED,
-          columnWidths: [10800],
-          width: { size: 10800, type: WidthType.DXA },
+          columnWidths: [10600],
+          width: { size: 10600, type: WidthType.DXA },
+          indent: { size: 0, type: WidthType.DXA },
           rows: commentRows
         });
 
         const timesheetTable = new Table({
           layout: TableLayoutType.FIXED,
           columnWidths: EXACT_TIMESHEET_COL_WIDTHS,
-          width: { size: 10800, type: WidthType.DXA },
+          width: { size: 10600, type: WidthType.DXA },
+          indent: { size: 0, type: WidthType.DXA },
           rows: tableRows
         });
 
@@ -902,10 +906,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               properties: {
                 page: { 
                   margin: { 
-                    top: 360,    // ~0.63 cm top margin
-                    bottom: 360, // ~0.63 cm bottom margin
-                    left: 500,   // ~0.88 cm left margin
-                    right: 500   // ~0.88 cm right margin
+                    top: 280,    // ~0.5 cm top margin
+                    bottom: 280, // ~0.5 cm bottom margin
+                    left: 540,   // ~0.95 cm left margin
+                    right: 540   // ~0.95 cm right margin
                   } 
                 }
               },
@@ -919,10 +923,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               properties: {
                 page: { 
                   margin: { 
-                    top: 360,
-                    bottom: 360,
-                    left: 500,
-                    right: 500
+                    top: 280,
+                    bottom: 280,
+                    left: 540,
+                    right: 540
                   } 
                 }
               },
