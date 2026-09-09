@@ -8,7 +8,7 @@ import {
 import { 
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, 
   WidthType, BorderStyle, AlignmentType, ShadingType, ImageRun,
-  VerticalAlign, TableLayoutType 
+  VerticalAlign, TableLayoutType, HeightRule 
 } from 'docx';
 
 import sjrLogo from './assets/logo.jpg';
@@ -528,7 +528,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         right: { style: BorderStyle.SINGLE, size: 4, color: tableBorderColor },
       };
 
-      // Compact Cell Builder (Ensures all rows fit Page 1 without bottom overflow)
+      // Recalibrated Cell Builder: Expanded height & margins to stretch table down Page 1
       const createCell = ({ 
         text = "", 
         bold = false, 
@@ -536,16 +536,17 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         colWidth = 860, 
         colSpan = 1, 
         shading = null, 
-        fontSize = 14, // ~7pt Calibri font for precise grid alignment
-        topMargin = 12,
-        bottomMargin = 12
+        fontSize = 16, // ~8pt font
+        topMargin = 45, // Elevated cell padding to stretch table height
+        bottomMargin = 45
       }) => {
         return new TableCell({
           columnSpan: colSpan,
           width: { size: colWidth, type: WidthType.DXA },
           shading: shading ? { fill: shading, type: ShadingType.CLEAR } : undefined,
           borders: solidBorder,
-          margins: { top: topMargin, bottom: bottomMargin, left: 35, right: 35 },
+          verticalAlign: VerticalAlign.CENTER,
+          margins: { top: topMargin, bottom: bottomMargin, left: 40, right: 40 },
           children: [
             new Paragraph({
               alignment: align,
@@ -614,6 +615,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         // Header Row 1: Day Names
         tableRows.push(
           new TableRow({
+            height: { value: 380, rule: HeightRule.EXACTLY },
             children: [
               createCell({ text: "Day", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0] }),
               ...daysHeader.map((day, idx) => createCell({ text: day, bold: true, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1] })),
@@ -625,6 +627,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         // Header Row 2: Dates
         tableRows.push(
           new TableRow({
+            height: { value: 350, rule: HeightRule.EXACTLY },
             children: [
               createCell({ text: "Date", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0] }),
               ...weekDays.map((d, idx) => createCell({ text: `${d.dayNumber}/${d.dateStr.split('-')[1] || ''}`, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1] })),
@@ -650,7 +653,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             cells.push(createCell({ text: val, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1] }));
           });
           cells.push(createCell({ text: "", colWidth: EXACT_TIMESHEET_COL_WIDTHS[8] }));
-          tableRows.push(new TableRow({ children: cells }));
+          tableRows.push(new TableRow({ height: { value: 330, rule: HeightRule.EXACTLY }, children: cells }));
         });
 
         let siteGrandTotalHours = 0;
@@ -692,7 +695,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           });
 
           rowCells.push(createCell({ text: rowTaskTotal > 0 ? String(rowTaskTotal) : "", bold: true, align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8] }));
-          tableRows.push(new TableRow({ children: rowCells }));
+          tableRows.push(new TableRow({ height: { value: 330, rule: HeightRule.EXACTLY }, children: rowCells }));
         });
 
         // TOTAL HOURS Row
@@ -712,7 +715,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           totalHoursCells.push(createCell({ text: dayTotal > 0 ? String(dayTotal) : "", bold: true, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1] }));
         });
         totalHoursCells.push(createCell({ text: String(siteGrandTotalHours), bold: true, align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8] }));
-        tableRows.push(new TableRow({ children: totalHoursCells }));
+        tableRows.push(new TableRow({ height: { value: 350, rule: HeightRule.EXACTLY }, children: totalHoursCells }));
 
         // Travel Time Row
         const travelCells = [createCell({ text: "Travel Time", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0] })];
@@ -731,7 +734,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           travelCells.push(createCell({ text: dayTravel > 0 ? String(dayTravel) : "", align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1] }));
         });
         travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8] }));
-        tableRows.push(new TableRow({ children: travelCells }));
+        tableRows.push(new TableRow({ height: { value: 350, rule: HeightRule.EXACTLY }, children: travelCells }));
 
         // Page 1 Header Table (10,600 DXA Total Width)
         const topHeaderTableP1 = new Table({
@@ -759,8 +762,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                       spaceBefore: 0,
                       spaceAfter: 10,
                       children: [
-                        new TextRun({ text: "Staff Member: ", bold: true, size: 17, font: "Calibri" }),
-                        new TextRun({ text: userName, size: 17, font: "Calibri" }),
+                        new TextRun({ text: "Staff Member: ", bold: true, size: 18, font: "Calibri" }),
+                        new TextRun({ text: userName, size: 18, font: "Calibri" }),
                       ],
                     }),
                   ],
@@ -774,8 +777,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                       spaceBefore: 0,
                       spaceAfter: 10,
                       children: [
-                        new TextRun({ text: "Project: ", bold: true, size: 17, font: "Calibri" }),
-                        new TextRun({ text: siteName, size: 17, font: "Calibri" }),
+                        new TextRun({ text: "Project: ", bold: true, size: 18, font: "Calibri" }),
+                        new TextRun({ text: siteName, size: 18, font: "Calibri" }),
                       ],
                     }),
                   ],
@@ -808,7 +811,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               color: "555555"
             })
           ],
-          spaceBefore: 20,
+          spaceBefore: 120,
           spaceAfter: 0
         });
 
@@ -864,11 +867,13 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
         const commentRows = [
           new TableRow({
+            height: { value: 400, rule: HeightRule.EXACTLY },
             children: [
-              createCell({ text: "COMMENTS", bold: true, fontSize: 17, colWidth: 10600, topMargin: 20, bottomMargin: 20 })
+              createCell({ text: "COMMENTS", bold: true, fontSize: 18, colWidth: 10600, topMargin: 20, bottomMargin: 20 })
             ]
           }),
           new TableRow({
+            height: { value: 350, rule: HeightRule.EXACTLY },
             children: [createCell({ text: "If Other – please detail what type of work you were undertaking", fontSize: 14, colWidth: 10600, topMargin: 15, bottomMargin: 15 })]
           })
         ];
@@ -878,7 +883,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           const commentText = allComments[i] || "";
           commentRows.push(
             new TableRow({
-              children: [createCell({ text: commentText, fontSize: 14, colWidth: 10600, topMargin: 12, bottomMargin: 12 })]
+              height: { value: 380, rule: HeightRule.EXACTLY },
+              children: [createCell({ text: commentText, fontSize: 14, colWidth: 10600, topMargin: 20, bottomMargin: 20 })]
             })
           );
         }
