@@ -22,8 +22,9 @@ async function getLogoUint8Array(imageSource) {
 }
 
 // Fixed printable grid dimensions in twips (1/20th of a point)
-// Printable area on standard A4 (210mm / 11906 twips) minus margins = 10,800 twips
-const EXACT_TIMESHEET_COL_WIDTHS = [4000, 850, 850, 850, 850, 850, 850, 850, 850];
+// Total Printable Width = 10,800 twips (fits standard A4 with ~0.38" / 500 twip margins)
+// Task Col = 3800 twips, 8 Day/Total Cols = 875 twips each (3800 + 8 * 875 = 10,800)
+const EXACT_TIMESHEET_COL_WIDTHS = [3800, 875, 875, 875, 875, 875, 875, 875, 875];
 
 // Categorized Task List
 const TASK_CATEGORIES = {
@@ -45,7 +46,7 @@ const TASK_CATEGORIES = {
     "Wall Framing",
     "Roof Framing and Purlins",
     "Fascia and Soffits",
-    "C/Battens, Rab/Ecoply",
+    "C/Battens, RAB/Ecoply",
     "Building Paper/Aliband",
     "Exterior Windows/Doors",
     "Exterior Cladding"
@@ -57,7 +58,7 @@ const TASK_CATEGORIES = {
     "Interior Doors",
     "Wall Linings",
     "Scotia/Skirting/Architrave",
-    "Hardware/ Door Hardware",
+    "Hardware/Door Hardware",
     "Shelving/Joinery"
   ],
   "Exterior & Landscaping": [
@@ -91,7 +92,7 @@ const ALL_TEMPLATE_TASKS = [
   "Wall Framing",
   "Roof Framing and Purlins",
   "Fascia and Soffits",
-  "C/Battens, Rab/Ecoply",
+  "C/Battens, RAB/Ecoply",
   "Building Paper/Aliband",
   "Exterior Windows/Doors",
   "Exterior Cladding",
@@ -101,11 +102,11 @@ const ALL_TEMPLATE_TASKS = [
   "Interior Doors",
   "Wall Linings",
   "Scotia/Skirting/Architrave",
-  "Hardware/ Door Hardware",
+  "Hardware/Door Hardware",
   "Shelving/Joinery",
   "Deck Framing & Decking",
   "Driveway/Paths/Landscaping",
-  "Other                                  (PTO)",
+  "Other (PTO)",
   "Sick Leave",
   "Annual Leave",
   "Bereavement Leave",
@@ -518,23 +519,24 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }
       }
 
+      // Standard solid 0.5pt (size: 4) table border definition for crisp lines
       const tableBorderColor = "000000";
-      const thinBorder = {
-        top: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
-        bottom: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
-        left: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
-        right: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
+      const solidBorder = {
+        top: { style: BorderStyle.SINGLE, size: 4, color: tableBorderColor },
+        bottom: { style: BorderStyle.SINGLE, size: 4, color: tableBorderColor },
+        left: { style: BorderStyle.SINGLE, size: 4, color: tableBorderColor },
+        right: { style: BorderStyle.SINGLE, size: 4, color: tableBorderColor },
       };
 
-      // Compact Cell Generator (Maximized vertical fit for Page 1)
+      // Compact Cell Generator (Ensures complete single-page fit for Page 1)
       const createCell = ({ 
         text = "", 
         bold = false, 
         align = AlignmentType.LEFT, 
-        colWidth = 850, 
+        colWidth = 875, 
         colSpan = 1, 
         shading = null, 
-        fontSize = 15,
+        fontSize = 15, // ~7.5pt Calibri font
         topMargin = 18,
         bottomMargin = 18
       }) => {
@@ -542,8 +544,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           columnSpan: colSpan,
           width: { size: colWidth, type: WidthType.DXA },
           shading: shading ? { fill: shading, type: ShadingType.CLEAR } : undefined,
-          borders: thinBorder,
-          margins: { top: topMargin, bottom: bottomMargin, left: 40, right: 40 },
+          borders: solidBorder,
+          margins: { top: topMargin, bottom: bottomMargin, left: 45, right: 45 },
           children: [
             new Paragraph({
               alignment: align,
@@ -734,7 +736,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         // Page 1 Header Table
         const topHeaderTableP1 = new Table({
           layout: TableLayoutType.FIXED,
-          columnWidths: [4860, 3780, 2160],
+          columnWidths: [4500, 4140, 2160],
           width: { size: 10800, type: WidthType.DXA },
           borders: {
             top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
@@ -748,7 +750,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             new TableRow({
               children: [
                 new TableCell({
-                  width: { size: 4860, type: WidthType.DXA },
+                  width: { size: 4500, type: WidthType.DXA },
                   verticalAlign: VerticalAlign.BOTTOM,
                   margins: { top: 0, bottom: 20, left: 0, right: 0 },
                   children: [
@@ -763,7 +765,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   ],
                 }),
                 new TableCell({
-                  width: { size: 3780, type: WidthType.DXA },
+                  width: { size: 4140, type: WidthType.DXA },
                   verticalAlign: VerticalAlign.BOTTOM,
                   margins: { top: 0, bottom: 20, left: 0, right: 0 },
                   children: [
