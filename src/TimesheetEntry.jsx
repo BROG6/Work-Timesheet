@@ -518,6 +518,353 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         right: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
       };
 
+      // Updated createCell with increased top/bottom padding (75 twips) to fill vertical height on A4
+      const createCell = ({ 
+        text = "", 
+        bold = false, 
+        align = AlignmentType.LEFT, 
+        colWidth = 850, 
+        colSpan = 1, 
+        shading = null, 
+        fontSize = 20,
+        pageBreakBefore = false 
+      }) => {
+        return new TableCell({
+          columnSpan: colSpan,
+          width: { size: colWidth, type: WidthType.DXA },
+          shading: shading ? { fill: shading, type: ShadingType.CLEAR } : undefined,
+          borders: thinBorder,
+          margins: { top: 75, bottom: 75, left: 60, right: 60 }, // Expanded vertical padding per row
+          children: [
+            new Paragraph({
+              alignment: align,
+              pageBreakBefore: pageBreakBefore,
+              spaceBefore: 0,
+              spaceAfter: 0,
+              children: [new TextRun({ text: String(text || ""), bold, size: fontSize, font: "Calibri" })]
+            })
+          ]
+        });
+      };
+
+      const daysHeader = ["Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue"];
+      const validDisplayDates = weekDays.map((d) => displayDate(d.dateStr));
+      let weeklyEntries = [];
+
+      if (userId) {
+        const q = query(collection(db, 'timesheets'), where('userId', '==', userId));
+        let querySnapshot;
+        try {
+          querySnapshot = await getDocs(q);
+        } catch {
+          querySnapshot = await getDocsFromCache(q);
+        }
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          if (validDisplayDates.includes(displayDate(data.date))) {
+            weeklyEntries.push(data);
+          }
+        });
+      }
+
+      if (weeklyEntries.length === 0) {
+        setStatusMessage({ type: 'error', text: "No submitted entries found for this week to export." });
+        setTimeout(() => setStatusMessage(null), 4000);
+        setExportingDocx(false);
+        return;
+      }
+
+      const siteMap = {};
+      weeklyEntries.forEach((entry) => {
+        const siteName = entry.project || "General / Unassigned";
+        if (!siteMap[siteName]) {
+          siteMap[siteName] = [];
+        }
+        siteMap[siteName].push(entry);
+      });
+
+      const sitesToExport = Object.keys(siteMap);
+
+      for (const siteName of sitesToExport) {
+        const siteEntries = siteMap[siteName];
+        const tableRows = [];
+
+        // --- PAGE 1: TIMESHEET TABLE ---
+        tableRows.push(
+          new TableRow({
+            children: [
+              createCell({ text: "Day", bold: true, colWidth: 4000 }),
+              ...daysHeader.map((day) => createCell({ text: day, bold: true, align: AlignmentType.CENTER, colWidth: 850 })),
+              createCell({ text: "Totals", bold: true, align: AlignmentType.RIGHT, colWidth: 850 })
+            ]
+          })
+        );
+
+        tableRows.push(
+          new TableRow({
+            children: [
+              createCell({ text: "Date", bold: true, colWidth: 4000 }),
+              ...weekDays.map((d) => createCell({ text: `${d.dayNumber}/${d.dateStr.split('-')[1] || ''}`, align: AlignmentType.CENTER, colWidth: 850 })),
+              createCell({ text: "", align: AlignmentType.CENTER, colWidth: 850 })
+            ]
+          })
+        );
+
+        const timingFields = [
+          { label: "START TIME", key: "startTime" },
+          { label: "TIME LEFT SITE", key: "timeLeftSite" },
+          { label: "TIME RETURNED", key: "timeReturned" },
+          { label: "TIME FINISHED", key: "timeFinished" }
+        ];
+
+        timingFields.forEach((tf) => {
+          const cells = [createCell({ text: tf.label, bold: true, colWidth: 4000 })];
+          weekDays.forEach((dayObj) => {
+            const entryForDay = siteEntries.find((e) => displayDate(e.date) === displayDate(dayObj.dateStr));
+            const val = entryForDay?.timeCardDetails?.[tf.key] || "";
+            cells.push(createCell({ text: val, align: AlignmentType.CENTER, colWidth: 850 }));
+          });
+          cells.push(createCell({ text: "", colWidth: 850 }));
+          tableRows.push(new TableRow({ children: cells }));
+        });
+
+        let siteGrandTotalHours = 0;
+        let siteGrandTravelTotal = 0;
+
+        ALL_TEMPLATE_TASKS.forEach((taskLabel) => {
+          let rowTaskTotal = 0;
+          const rowCells = [createCell({ text: taskLabel, colWidth: 4000 })];
+          weekDays.forEach((dayObj) => {
+            const entryForDay = siteEntries.find((e) => displayDate(e.date) === displayDate(dayObj.dateStr));
+            let dayTaskHours = 0;
+            if (entryForDay?.tasks && taskLabel !== "") {
+              entryForDay.tasks.forEach((t) => {
+                const tName = (t.taskName || '').toLowerCase().trim();
+                const lName = taskLabel.toLowerCase().trim();
+                const nameMatches =
+                  tName === lName ||
+                  (lName.includes("pto") && tName.includes("other work")) ||
+                  (lName.includes("specify") && tName.includes("other leave"));
+                if (nameMatches) {
+                  dayTaskHours += parseFloat(t.hours) || 0;
+                }
+              });
+            }
+            rowTaskTotal += dayTaskHours;
+            rowCells.push(createCell({ text: dayTaskHours > 0 ? String(dayTaskHours) : "", align: AlignmentType.CENTER, colWidth: 850 }));
+          });
+          rowCells.push(createCell({ text: rowTaskTotal > 0 ? String(rowTaskTotal) : "", bold: true, align: AlignmentType.RIGHT, colWidth: 850 }));
+          tableRows.push(new TableRow({ children: rowCells }));
+        });
+
+        // TOTAL HOURS Row
+        const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true, colWidth: 4000 })];
+        weekDays.forEach((dayObj) => {
+          const entryForDay = siteEntries.find((e) => displayDate(e.date) === displayDate(dayObj.dateStr));
+          let dayTotal = 0;
+          if (entryForDay?.tasks) {
+            dayTotal = entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
+          }
+          siteGrandTotalHours += dayTotal;
+          totalHoursCells.push(createCell({ text: dayTotal > 0 ? String(dayTotal) : "", bold: true, align: AlignmentType.CENTER, colWidth: 850 }));
+        });
+        totalHoursCells.push(createCell({ text: String(siteGrandTotalHours), bold: true, align: AlignmentType.RIGHT, colWidth: 850 }));
+        tableRows.push(new TableRow({ children: totalHoursCells }));
+
+        // Travel Time Row
+        const travelCells = [createCell({ text: "Travel Time", bold: true, colWidth: 4000 })];
+        weekDays.forEach((dayObj) => {
+          const entryForDay = siteEntries.find((e) => displayDate(e.date) === displayDate(dayObj.dateStr));
+          let dayTravel = 0;
+          if (entryForDay?.tasks) {
+            dayTravel = entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.travelTime) || 0), 0);
+          }
+          siteGrandTravelTotal += dayTravel;
+          travelCells.push(createCell({ text: dayTravel > 0 ? String(dayTravel) : "", align: AlignmentType.CENTER, colWidth: 850 }));
+        });
+        travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT, colWidth: 850 }));
+        tableRows.push(new TableRow({ children: travelCells }));
+
+        // Top Header Table Page 1 with explicit top spacing (spaceBefore: 140)
+        const topHeaderTableP1 = new Table({
+          columnWidths: [4860, 3780, 2160],
+          width: { size: 10800, type: WidthType.DXA },
+          borders: {
+            top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+            bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+            left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+            right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+            insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+            insideVertical: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+          },
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({
+                  width: { size: 4860, type: WidthType.DXA },
+                  verticalAlign: VerticalAlign.BOTTOM,
+                  margins: { top: 160, bottom: 40, left: 0, right: 0 },
+                  children: [
+                    new Paragraph({
+                      spaceBefore: 140, // Top margin gap above text
+                      spaceAfter: 30,
+                      children: [
+                        new TextRun({ text: "Staff Member: ", bold: true, size: 20, font: "Calibri" }),
+                        new TextRun({ text: userName, size: 20, font: "Calibri" }),
+                      ],
+                    }),
+                  ],
+                }),
+                new TableCell({
+                  width: { size: 3780, type: WidthType.DXA },
+                  verticalAlign: VerticalAlign.BOTTOM,
+                  margins: { top: 160, bottom: 40, left: 0, right: 0 },
+                  children: [
+                    new Paragraph({
+                      spaceBefore: 140, // Top margin gap above text
+                      spaceAfter: 30,
+                      children: [
+                        new TextRun({ text: "Project: ", bold: true, size: 20, font: "Calibri" }),
+                        new TextRun({ text: siteName, size: 20, font: "Calibri" }),
+                      ],
+                    }),
+                  ],
+                }),
+                new TableCell({
+                  width: { size: 2160, type: WidthType.DXA },
+                  verticalAlign: VerticalAlign.BOTTOM,
+                  margins: { top: 60, bottom: 20, left: 0, right: 0 },
+                  children: [
+                    new Paragraph({
+                      alignment: AlignmentType.RIGHT,
+                      spaceBefore: 0,
+                      spaceAfter: 30,
+                      children: logo2ImageRunP1 ? [logo2ImageRunP1] : [],
+                    }),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        });
+
+        // Version Footer Paragraph directly under main table
+        const versionParagraph = new Paragraph({
+          children: [
+            new TextRun({
+              text: "Version – August 2026",
+              size: 16,
+              italic: true,
+              color: "555555"
+            })
+          ],
+          spaceBefore: 60,
+          spaceAfter: 0
+        });
+
+        const allComments = [];
+        siteEntries.forEach((entry) => {
+          if (entry.tasks) {
+            entry.tasks.forEach((t) => {
+              if (t.comments && t.comments.trim()) {
+                allComments.push(`${displayDate(entry.date)}: ${t.comments.trim()}`);
+              }
+            });
+          }
+        });
+
+        const commentRows = [
+          new TableRow({
+            children: [
+              // Inline pageBreakBefore allows Print view to break pages cleanly while Mobile reflow connects the tables seamlessly
+              createCell({ text: "COMMENTS", bold: true, fontSize: 22, colWidth: 10800, pageBreakBefore: true })
+            ]
+          }),
+          new TableRow({
+            children: [createCell({ text: "If Other – please detail what type of work you were undertaking", fontSize: 18, colWidth: 10800 })]
+          })
+        ];
+
+        // Generate comment rows matching original template grid
+        const TOTAL_COMMENT_ROWS = 35;
+        for (let i = 0; i < TOTAL_COMMENT_ROWS; i++) {
+          const commentText = allComments[i] || "";
+          commentRows.push(
+            new TableRow({
+              children: [createCell({ text: commentText, fontSize: 20, colWidth: 10800 })]
+            })
+          );
+        }
+
+        const commentsTable = new Table({
+          columnWidths: [10800],
+          width: { size: 10800, type: WidthType.DXA },
+          rows: commentRows
+        });
+
+        // Main timesheet table initialized with exact column width grid frozen in twips
+        const timesheetTable = new Table({
+          columnWidths: EXACT_TIMESHEET_COL_WIDTHS,
+          width: { size: 10800, type: WidthType.DXA },
+          rows: tableRows
+        });
+
+        const doc = new Document({
+          sections: [
+            {
+              properties: {
+                page: { 
+                  margin: { 
+                    top: 567,    // ~1.0 cm top margin
+                    bottom: 567, // ~1.0 cm bottom margin
+                    left: 553,   // ~0.97 cm left margin
+                    right: 553   // ~0.97 cm right margin
+                  } 
+                }
+              },
+              children: [
+                topHeaderTableP1,
+                timesheetTable,
+                versionParagraph,
+                commentsTable
+              ]
+            }
+          ]
+        });
+
+        const safeUserName = userName.replace(/[^a-zA-Z0-9_\-]/g, '_');
+        const safeSiteName = siteName.replace(/[^a-zA-Z0-9_\-]/g, '_');
+        const weekStartStr = weekDays[0].dateStr;
+        const blob = await Packer.toBlob(doc);
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `TimeCard_${safeUserName}_${safeSiteName}_${weekStartStr}.docx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+
+      setStatusMessage({ type: 'success', text: `Exported ${sitesToExport.length} site time card(s) matching template!` });
+      setTimeout(() => setStatusMessage(null), 4000);
+    } catch (err) {
+      console.error("DOCX export error:", err);
+      setStatusMessage({ type: 'error', text: "Failed to generate DOCX file." });
+    } finally {
+      setExportingDocx(false);
+    }
+  };
+
+
+      const tableBorderColor = "000000";
+      const thinBorder = {
+        top: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
+        bottom: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
+        left: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
+        right: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
+      };
+
       // Updated helper using DXA (Twips) to prevent Word / Mobile autoscaling from shrinking the table
       const createCell = ({ text = "", bold = false, align = AlignmentType.LEFT, colWidth = 850, colSpan = 1, shading = null, fontSize = 20 }) => {
         return new TableCell({
