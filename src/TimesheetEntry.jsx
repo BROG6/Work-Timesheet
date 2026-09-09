@@ -1245,3 +1245,4 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     </div>
   );
 }
+
