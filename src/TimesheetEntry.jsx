@@ -146,6 +146,7 @@ function isFriday(dateStr) {
   return d.getDay() === 5;
 }
 
+// Priority check for registered staff name
 function getFormattedStaffName(user, userProfile) {
   const explicitName = userProfile?.name || userProfile?.fullName || userProfile?.userName || user?.displayName;
   if (explicitName && explicitName.trim() !== '' && !explicitName.includes('@')) {
@@ -481,6 +482,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
+      // 1. Load Logo 2 images for Page 1 & Page 2 headers
       let logo2ImageRunP1 = null;
       let logo2ImageRunP2 = null;
       if (logo2) {
@@ -501,6 +503,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }
       }
 
+      // 2. Setup border formatting
       const tableBorderColor = "000000";
       const thinBorder = {
         top: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
@@ -567,7 +570,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const siteEntries = siteMap[siteName];
         const tableRows = [];
 
-        // --- PAGE 1: TIMESHEET TABLE ---
+        // --- PAGE 1: HEADER & TIMESHEET TABLE ---
         tableRows.push(
           new TableRow({
             children: [
@@ -661,7 +664,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT }));
         tableRows.push(new TableRow({ children: travelCells }));
 
-        // Top Header Table Page 1 - Spacing handled via cell margins (top: 150)
+        // Header Table Page 1
         const topHeaderTableP1 = new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           borders: {
@@ -677,7 +680,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               children: [
                 new TableCell({
                   width: { size: 40, type: WidthType.PERCENTAGE },
-                  margins: { top: 150, bottom: 60, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       children: [
@@ -689,7 +691,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }),
                 new TableCell({
                   width: { size: 35, type: WidthType.PERCENTAGE },
-                  margins: { top: 150, bottom: 60, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       children: [
@@ -701,7 +702,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }),
                 new TableCell({
                   width: { size: 25, type: WidthType.PERCENTAGE },
-                  margins: { top: 150, bottom: 60, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       alignment: AlignmentType.RIGHT,
@@ -724,11 +724,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               color: "555555"
             })
           ],
-          spaceBefore: 80,
-          spaceAfter: 80
+          spaceBefore: 120,
+          spaceAfter: 120
         });
 
-        // Top Header Table Page 2 - Spacing handled via cell margins (top: 150)
+        // --- PAGE 2: HEADER & COMMENTS TABLE ---
         const topHeaderTableP2 = new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           borders: {
@@ -744,12 +744,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               children: [
                 new TableCell({
                   width: { size: 70, type: WidthType.PERCENTAGE },
-                  margins: { top: 150, bottom: 60, left: 0, right: 0 },
                   children: [new Paragraph({ text: "" })],
                 }),
                 new TableCell({
                   width: { size: 30, type: WidthType.PERCENTAGE },
-                  margins: { top: 150, bottom: 60, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       alignment: AlignmentType.RIGHT,
@@ -798,19 +796,21 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           rows: commentRows
         });
 
-        // Build Document directly with no empty dummy paragraphs
+        // Build Complete 2-Page Document
         const doc = new Document({
           sections: [
             {
               properties: {
-                page: { margin: { top: 300, bottom: 300, left: 400, right: 400 } }
+                page: { margin: { top: 400, bottom: 400, left: 400, right: 400 } }
               },
               children: [
                 topHeaderTableP1,
+                new Paragraph({ text: "", spaceAfter: 60 }),
                 new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: tableRows }),
                 versionParagraph,
                 new Paragraph({ children: [new PageBreak()] }),
                 topHeaderTableP2,
+                new Paragraph({ text: "", spaceAfter: 60 }),
                 commentsTable
               ]
             }
