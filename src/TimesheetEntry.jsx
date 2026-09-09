@@ -7,19 +7,11 @@ import {
 
 import { 
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, 
-  WidthType, BorderStyle, AlignmentType, ShadingType, ImageRun,
-  VerticalAlign, TableLayoutType, HeightRule, Header, Footer 
+  WidthType, BorderStyle, AlignmentType, ShadingType, 
+  VerticalAlign, TableLayoutType, HeightRule, Header 
 } from 'docx';
 
 import sjrLogo from './assets/logo.jpg';
-import logo2 from './assets/logo2.jpg';
-
-// Helper function to safely convert an imported image into binary format offline
-async function getLogoUint8Array(imageSource) {
-  const response = await fetch(imageSource);
-  const arrayBuffer = await response.arrayBuffer();
-  return new Uint8Array(arrayBuffer);
-}
 
 // Total Table Width = 10,600 DXA
 // Fits printable area cleanly with 540 DXA (~0.375 in) left/right margins
@@ -498,27 +490,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
-      let logo2ImageRunP1 = null;
-      let logo2ImageRunP2 = null;
-      if (logo2) {
-        try {
-          const logoDataP1 = await getLogoUint8Array(logo2);
-          const logoDataP2 = await getLogoUint8Array(logo2);
-          logo2ImageRunP1 = new ImageRun({
-            data: logoDataP1,
-            transformation: { width: 115, height: 42 },
-            type: "jpg",
-          });
-          logo2ImageRunP2 = new ImageRun({
-            data: logoDataP2,
-            transformation: { width: 115, height: 42 },
-            type: "jpg",
-          });
-        } catch (e) {
-          console.warn("Could not load Logo 2:", e);
-        }
-      }
-
       // Crisp 0.5pt solid black borders matching template grid
       const tableBorderColor = "000000";
       const solidBorder = {
@@ -528,7 +499,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         right: { style: BorderStyle.SINGLE, size: 4, color: tableBorderColor },
       };
 
-      // Recalibrated Cell Builder: Expanded row heights & cell padding to fully fill Page 1 down to the footer
       const createCell = ({ 
         text = "", 
         bold = false, 
@@ -612,7 +582,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const tableRows = [];
 
         // --- PAGE 1: MAIN TIMESHEET TABLE ---
-        // Header Row 1: Day Names
         tableRows.push(
           new TableRow({
             height: { value: 440, rule: HeightRule.EXACTLY },
@@ -624,7 +593,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           })
         );
 
-        // Header Row 2: Dates
         tableRows.push(
           new TableRow({
             height: { value: 420, rule: HeightRule.EXACTLY },
@@ -636,7 +604,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           })
         );
 
-        // Timing Rows
         const timingFields = [
           { label: "START TIME", key: "startTime" },
           { label: "TIME LEFT SITE", key: "timeLeftSite" },
@@ -659,7 +626,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         let siteGrandTotalHours = 0;
         let siteGrandTravelTotal = 0;
 
-        // Template Task Rows
         ALL_TEMPLATE_TASKS.forEach((taskLabel) => {
           let rowTaskTotal = 0;
           const rowCells = [createCell({ text: taskLabel, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 95, bottomMargin: 95 })];
@@ -698,7 +664,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           tableRows.push(new TableRow({ height: { value: 390, rule: HeightRule.EXACTLY }, children: rowCells }));
         });
 
-        // TOTAL HOURS Row
         const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 100, bottomMargin: 100 })];
         weekDays.forEach((dayObj, idx) => {
           const targetDate = normalizeDateStr(dayObj.dateStr);
@@ -717,7 +682,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         totalHoursCells.push(createCell({ text: String(siteGrandTotalHours), bold: true, align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 100, bottomMargin: 100 }));
         tableRows.push(new TableRow({ height: { value: 420, rule: HeightRule.EXACTLY }, children: totalHoursCells }));
 
-        // Travel Time Row
         const travelCells = [createCell({ text: "Travel Time", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 100, bottomMargin: 100 })];
         weekDays.forEach((dayObj, idx) => {
           const targetDate = normalizeDateStr(dayObj.dateStr);
@@ -736,10 +700,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 100, bottomMargin: 100 }));
         tableRows.push(new TableRow({ height: { value: 420, rule: HeightRule.EXACTLY }, children: travelCells }));
 
-        // Page 1 Header Table (Moved to actual Word Header so it hides in Mobile View)
+        // Clean Header (No logo or version text, matching template style)
         const topHeaderTableP1 = new Table({
           layout: TableLayoutType.FIXED,
-          columnWidths: [4400, 4100, 2100],
+          columnWidths: [5300, 5300],
           width: { size: 10600, type: WidthType.DXA },
           indent: { size: 0, type: WidthType.DXA },
           borders: {
@@ -754,7 +718,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             new TableRow({
               children: [
                 new TableCell({
-                  width: { size: 4400, type: WidthType.DXA },
+                  width: { size: 5300, type: WidthType.DXA },
                   verticalAlign: VerticalAlign.BOTTOM,
                   margins: { top: 0, bottom: 10, left: 0, right: 0 },
                   children: [
@@ -769,7 +733,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   ],
                 }),
                 new TableCell({
-                  width: { size: 4100, type: WidthType.DXA },
+                  width: { size: 5300, type: WidthType.DXA },
                   verticalAlign: VerticalAlign.BOTTOM,
                   margins: { top: 0, bottom: 10, left: 0, right: 0 },
                   children: [
@@ -783,42 +747,15 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                     }),
                   ],
                 }),
-                new TableCell({
-                  width: { size: 2100, type: WidthType.DXA },
-                  verticalAlign: VerticalAlign.BOTTOM,
-                  margins: { top: 0, bottom: 10, left: 0, right: 0 },
-                  children: [
-                    new Paragraph({
-                      alignment: AlignmentType.RIGHT,
-                      spaceBefore: 0,
-                      spaceAfter: 0,
-                      children: logo2ImageRunP1 ? [logo2ImageRunP1] : [],
-                    }),
-                  ],
-                }),
               ],
             }),
           ],
         });
 
-        // Page 1 Footer Paragraph (Moved to actual Word Footer so it hides in Mobile View)
-        const versionParagraph = new Paragraph({
-          children: [
-            new TextRun({
-              text: "Version – August 2026",
-              size: 13,
-              italic: true,
-              color: "555555"
-            })
-          ],
-          spaceBefore: 120,
-          spaceAfter: 0
-        });
-
         // --- PAGE 2: COMMENTS SECTION ---
         const topHeaderTableP2 = new Table({
           layout: TableLayoutType.FIXED,
-          columnWidths: [8500, 2100],
+          columnWidths: [10600],
           width: { size: 10600, type: WidthType.DXA },
           indent: { size: 0, type: WidthType.DXA },
           borders: {
@@ -833,21 +770,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             new TableRow({
               children: [
                 new TableCell({
-                  width: { size: 8500, type: WidthType.DXA },
+                  width: { size: 10600, type: WidthType.DXA },
                   children: [new Paragraph({ spaceBefore: 0, spaceAfter: 0, children: [] })]
-                }),
-                new TableCell({
-                  width: { size: 2100, type: WidthType.DXA },
-                  verticalAlign: VerticalAlign.BOTTOM,
-                  margins: { top: 0, bottom: 10, left: 0, right: 0 },
-                  children: [
-                    new Paragraph({
-                      alignment: AlignmentType.RIGHT,
-                      spaceBefore: 0,
-                      spaceAfter: 0,
-                      children: logo2ImageRunP2 ? [logo2ImageRunP2] : [],
-                    }),
-                  ],
                 }),
               ],
             }),
@@ -905,7 +829,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           rows: tableRows
         });
 
-        // Document with Sections using native Word Header & Footer classes (automatically hidden in mobile view)
         const doc = new Document({
           sections: [
             {
@@ -921,9 +844,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               },
               header: new Header({
                 children: [topHeaderTableP1]
-              }),
-              footer: new Footer({
-                children: [versionParagraph]
               }),
               children: [
                 timesheetTable
