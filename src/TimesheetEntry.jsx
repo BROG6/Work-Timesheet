@@ -1,13 +1,15 @@
 // src/TimesheetEntry.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from './firebaseConfig';
-import { collection, addDoc, query, where, getDocs, getDocsFromCache, serverTimestamp } from 'firebase/firestore';
+import { 
+  collection, doc, setDoc, query, where, getDocs, getDocsFromCache, serverTimestamp 
+} from 'firebase/firestore';
 
 import { 
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, 
   WidthType, BorderStyle, AlignmentType, ShadingType, ImageRun,
   VerticalAlign 
-} from 'https://cdn.skypack.dev/docx';
+} from 'docx';
 
 import sjrLogo from './assets/logo.jpg';
 import logo2 from './assets/logo2.jpg';
@@ -302,8 +304,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           querySnapshot = await getDocsFromCache(q);
         }
         const sitesSet = new Set();
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
+        querySnapshot.forEach((docSnap) => {
+          const data = docSnap.data();
           if (data.project && data.project.trim() !== '') {
             sitesSet.add(data.project.trim());
           }
@@ -349,8 +351,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       });
       
       let total = 0;
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
+      querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
         if (validWeekDates.includes(displayDate(data.date))) {
           total += parseFloat(data.totalHours) || 0;
         }
@@ -447,6 +449,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       return;
     }
     setLoading(true);
+
+    const safeSiteKey = (project || "General_Unassigned").trim().replace(/[^a-zA-Z0-9_\-]/g, '_');
+    // Composite Document ID prevents duplicate database records on re-submitting updates for the same day and site
+    const docId = `${userId}_${selectedDate}_${safeSiteKey}`;
+
     const payload = {
       userId,
       userName,
@@ -463,12 +470,15 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       })),
       totalHours,
       status: 'pending',
-      createdAt: serverTimestamp()
+      updatedAt: serverTimestamp()
     };
 
     try {
-      await addDoc(collection(db, 'timesheets'), payload);
-      setWeeklyHours((prev) => prev + totalHours);
+      await setDoc(doc(db, 'timesheets', docId), payload, { merge: true });
+      
+      // Re-fetch total weekly hours to accurately update UI accumulator
+      await fetchStaffWeeklyHours();
+
       if (project && !existingSites.includes(project)) {
         const updated = [...existingSites, project];
         setExistingSites(updated);
@@ -491,16 +501,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     setExportingDocx(true);
     try {
       let logo2ImageRunP1 = null;
-      let logo2ImageRunP2 = null;
       if (logo2) {
         try {
           const logoData = await getLogoUint8Array(logo2);
           logo2ImageRunP1 = new ImageRun({
-            data: logoData,
-            transformation: { width: 130, height: 48 },
-            type: "jpg",
-          });
-          logo2ImageRunP2 = new ImageRun({
             data: logoData,
             transformation: { width: 130, height: 48 },
             type: "jpg",
@@ -518,7 +522,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         right: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
       };
 
-      // Updated createCell helper with increased vertical padding (75 twips) to stretch to page height
       const createCell = ({ 
         text = "", 
         bold = false, 
@@ -559,8 +562,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         } catch {
           querySnapshot = await getDocsFromCache(q);
         }
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
+        querySnapshot.forEach((docSnap) => {
+          const data = docSnap.data();
           if (validDisplayDates.includes(displayDate(data.date))) {
             weeklyEntries.push(data);
           }
@@ -685,7 +688,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT, colWidth: 850 }));
         tableRows.push(new TableRow({ children: travelCells }));
 
-        // Top Header Table Page 1 with explicit spaceBefore gap (spaceBefore: 140)
+        // Top Header Table Page 1
         const topHeaderTableP1 = new Table({
           columnWidths: [4860, 3780, 2160],
           width: { size: 10800, type: WidthType.DXA },
