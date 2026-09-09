@@ -8,7 +8,7 @@ import {
 import { 
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, 
   WidthType, BorderStyle, AlignmentType, ShadingType, ImageRun,
-  VerticalAlign, TableLayoutType, HeightRule 
+  VerticalAlign, TableLayoutType, HeightRule, Header, Footer 
 } from 'docx';
 
 import sjrLogo from './assets/logo.jpg';
@@ -537,7 +537,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         colSpan = 1, 
         shading = null, 
         fontSize = 16, 
-        topMargin = 100,  // Increased vertical padding to stretch table down the page
+        topMargin = 100,  
         bottomMargin = 100
       }) => {
         return new TableCell({
@@ -659,7 +659,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         let siteGrandTotalHours = 0;
         let siteGrandTravelTotal = 0;
 
-        // Template Task Rows (Expanded exact row heights & padding to fill the page cleanly)
+        // Template Task Rows
         ALL_TEMPLATE_TASKS.forEach((taskLabel) => {
           let rowTaskTotal = 0;
           const rowCells = [createCell({ text: taskLabel, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 95, bottomMargin: 95 })];
@@ -736,7 +736,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 100, bottomMargin: 100 }));
         tableRows.push(new TableRow({ height: { value: 420, rule: HeightRule.EXACTLY }, children: travelCells }));
 
-        // Page 1 Header Table (10,600 DXA Total Width)
+        // Page 1 Header Table (Moved to actual Word Header so it hides in Mobile View)
         const topHeaderTableP1 = new Table({
           layout: TableLayoutType.FIXED,
           columnWidths: [4400, 4100, 2100],
@@ -801,7 +801,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           ],
         });
 
-        // Page 1 Footer Paragraph
+        // Page 1 Footer Paragraph (Moved to actual Word Footer so it hides in Mobile View)
         const versionParagraph = new Paragraph({
           children: [
             new TextRun({
@@ -905,24 +905,28 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           rows: tableRows
         });
 
-        // Document with Page 1 and Page 2 Sections
+        // Document with Sections using native Word Header & Footer classes (automatically hidden in mobile view)
         const doc = new Document({
           sections: [
             {
               properties: {
                 page: { 
                   margin: { 
-                    top: 280,    // ~0.5 cm top margin
-                    bottom: 280, // ~0.5 cm bottom margin
-                    left: 540,   // ~0.95 cm left margin
-                    right: 540   // ~0.95 cm right margin
+                    top: 280,    
+                    bottom: 280, 
+                    left: 540,   
+                    right: 540   
                   } 
                 }
               },
+              header: new Header({
+                children: [topHeaderTableP1]
+              }),
+              footer: new Footer({
+                children: [versionParagraph]
+              }),
               children: [
-                topHeaderTableP1,
-                timesheetTable,
-                versionParagraph
+                timesheetTable
               ]
             },
             {
@@ -936,8 +940,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   } 
                 }
               },
+              header: new Header({
+                children: [topHeaderTableP2]
+              }),
               children: [
-                topHeaderTableP2,
                 commentsTable
               ]
             }
