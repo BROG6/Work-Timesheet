@@ -70,7 +70,7 @@ const TASK_CATEGORIES = {
   ]
 };
 
-// Exact template tasks matching "Blank Time Cards_2.docx" layout
+// Exact template tasks matching "Blank Time Cards.docx" layout
 const ALL_TEMPLATE_TASKS = [
   "Demolition",
   "Profile/Set Up",
@@ -99,7 +99,7 @@ const ALL_TEMPLATE_TASKS = [
   "Shelving/Joinery",
   "Deck Framing & Decking",
   "Driveway/Paths/Landscaping",
-  "Other                  (PTO)",
+  "Other                                  (PTO)",
   "Sick Leave",
   "Annual Leave",
   "Bereavement Leave",
@@ -520,10 +520,12 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           width: widthPct ? { size: widthPct, type: WidthType.PERCENTAGE } : undefined,
           shading: shading ? { fill: shading, type: ShadingType.CLEAR } : undefined,
           borders: thinBorder,
-          margins: { top: 20, bottom: 20, left: 40, right: 40 },
+          margins: { top: 15, bottom: 15, left: 30, right: 30 },
           children: [
             new Paragraph({
               alignment: align,
+              spaceBefore: 0,
+              spaceAfter: 0,
               children: [new TextRun({ text: String(text || ""), bold, size: fontSize, font: "Calibri" })]
             })
           ]
@@ -668,7 +670,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT }));
         tableRows.push(new TableRow({ children: travelCells }));
 
-        // Lowered Top Header Table Page 1 - Bottom Vertical Alignment matching image layout
+        // Lowered Top Header Table Page 1 - Bottom Vertical Alignment matching "Blank Time Cards.docx"
         const topHeaderTableP1 = new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           borders: {
@@ -685,10 +687,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 new TableCell({
                   width: { size: 45, type: WidthType.PERCENTAGE },
                   verticalAlign: VerticalAlign.BOTTOM,
-                  margins: { top: 200, bottom: 40, left: 0, right: 0 },
+                  margins: { top: 0, bottom: 20, left: 0, right: 0 },
                   children: [
                     new Paragraph({
-                      spaceAfter: 20,
+                      spaceBefore: 0,
+                      spaceAfter: 30,
                       children: [
                         new TextRun({ text: "Staff Member:", bold: true, size: 20, font: "Calibri" }),
                         new TextRun({ text: userName, size: 20, font: "Calibri" }),
@@ -699,10 +702,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 new TableCell({
                   width: { size: 35, type: WidthType.PERCENTAGE },
                   verticalAlign: VerticalAlign.BOTTOM,
-                  margins: { top: 200, bottom: 40, left: 0, right: 0 },
+                  margins: { top: 0, bottom: 20, left: 0, right: 0 },
                   children: [
                     new Paragraph({
-                      spaceAfter: 20,
+                      spaceBefore: 0,
+                      spaceAfter: 30,
                       children: [
                         new TextRun({ text: "Project: ", bold: true, size: 20, font: "Calibri" }),
                         new TextRun({ text: siteName, size: 20, font: "Calibri" }),
@@ -713,10 +717,12 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 new TableCell({
                   width: { size: 20, type: WidthType.PERCENTAGE },
                   verticalAlign: VerticalAlign.BOTTOM,
-                  margins: { top: 100, bottom: 40, left: 0, right: 0 },
+                  margins: { top: 0, bottom: 20, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       alignment: AlignmentType.RIGHT,
+                      spaceBefore: 0,
+                      spaceAfter: 30,
                       children: logo2ImageRunP1 ? [logo2ImageRunP1] : [],
                     }),
                   ],
@@ -736,8 +742,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               color: "555555"
             })
           ],
-          spaceBefore: 80,
-          spaceAfter: 80
+          spaceBefore: 40,
+          spaceAfter: 40
         });
 
         // Lowered Top Header Table Page 2 - Logo on top right
@@ -757,16 +763,18 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 new TableCell({
                   width: { size: 70, type: WidthType.PERCENTAGE },
                   verticalAlign: VerticalAlign.BOTTOM,
-                  margins: { top: 200, bottom: 40, left: 0, right: 0 },
-                  children: [new Paragraph({ text: "" })],
+                  margins: { top: 0, bottom: 20, left: 0, right: 0 },
+                  children: [new Paragraph({ spaceBefore: 0, spaceAfter: 0, text: "" })],
                 }),
                 new TableCell({
                   width: { size: 30, type: WidthType.PERCENTAGE },
                   verticalAlign: VerticalAlign.BOTTOM,
-                  margins: { top: 100, bottom: 40, left: 0, right: 0 },
+                  margins: { top: 0, bottom: 20, left: 0, right: 0 },
                   children: [
                     new Paragraph({
                       alignment: AlignmentType.RIGHT,
+                      spaceBefore: 0,
+                      spaceAfter: 30,
                       children: logo2ImageRunP2 ? [logo2ImageRunP2] : [],
                     }),
                   ],
@@ -796,8 +804,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           })
         ];
 
-        // Generate 15 lined comments rows matching original template grid
-        const TOTAL_COMMENT_ROWS = 15;
+        // Generate comment rows matching original template grid
+        const TOTAL_COMMENT_ROWS = 35;
         for (let i = 0; i < TOTAL_COMMENT_ROWS; i++) {
           const commentText = allComments[i] || "";
           commentRows.push(
@@ -816,7 +824,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           sections: [
             {
               properties: {
-                page: { margin: { top: 520, bottom: 400, left: 400, right: 400 } }
+                page: { margin: { top: 360, bottom: 360, left: 360, right: 360 } }
               },
               children: [
                 topHeaderTableP1,
