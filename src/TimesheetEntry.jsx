@@ -700,10 +700,9 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 65, bottomMargin: 65 }));
         tableRows.push(new TableRow({ height: { value: 320, rule: HeightRule.EXACTLY }, children: travelCells }));
 
-        // Exact soft pink badge matching template
+        // Badge cell without background shading (since the picture default color was updated)
         const logoBadgeCell = new TableCell({
           width: { size: 2200, type: WidthType.DXA },
-          shading: { fill: "F3C2C6", type: ShadingType.CLEAR }, 
           borders: solidBorder,
           verticalAlign: VerticalAlign.CENTER,
           margins: { top: 60, bottom: 60, left: 60, right: 60 },
