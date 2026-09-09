@@ -528,7 +528,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         right: { style: BorderStyle.SINGLE, size: 4, color: tableBorderColor },
       };
 
-      // Recalibrated Cell Builder: Expanded height & margins to stretch table down Page 1
+      // Recalibrated Cell Builder: Expanded row heights & cell padding to fully fill Page 1 down to the footer
       const createCell = ({ 
         text = "", 
         bold = false, 
@@ -536,9 +536,9 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         colWidth = 860, 
         colSpan = 1, 
         shading = null, 
-        fontSize = 16, // ~8pt font
-        topMargin = 45, // Elevated cell padding to stretch table height
-        bottomMargin = 45
+        fontSize = 16, 
+        topMargin = 100,  // Increased vertical padding to stretch table down the page
+        bottomMargin = 100
       }) => {
         return new TableCell({
           columnSpan: colSpan,
@@ -615,11 +615,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         // Header Row 1: Day Names
         tableRows.push(
           new TableRow({
-            height: { value: 380, rule: HeightRule.EXACTLY },
+            height: { value: 440, rule: HeightRule.EXACTLY },
             children: [
-              createCell({ text: "Day", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0] }),
-              ...daysHeader.map((day, idx) => createCell({ text: day, bold: true, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1] })),
-              createCell({ text: "Totals", bold: true, align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8] })
+              createCell({ text: "Day", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 110, bottomMargin: 110 }),
+              ...daysHeader.map((day, idx) => createCell({ text: day, bold: true, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1], topMargin: 110, bottomMargin: 110 })),
+              createCell({ text: "Totals", bold: true, align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 110, bottomMargin: 110 })
             ]
           })
         );
@@ -627,11 +627,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         // Header Row 2: Dates
         tableRows.push(
           new TableRow({
-            height: { value: 350, rule: HeightRule.EXACTLY },
+            height: { value: 420, rule: HeightRule.EXACTLY },
             children: [
-              createCell({ text: "Date", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0] }),
-              ...weekDays.map((d, idx) => createCell({ text: `${d.dayNumber}/${d.dateStr.split('-')[1] || ''}`, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1] })),
-              createCell({ text: "", align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8] })
+              createCell({ text: "Date", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 100, bottomMargin: 100 }),
+              ...weekDays.map((d, idx) => createCell({ text: `${d.dayNumber}/${d.dateStr.split('-')[1] || ''}`, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1], topMargin: 100, bottomMargin: 100 })),
+              createCell({ text: "", align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 100, bottomMargin: 100 })
             ]
           })
         );
@@ -645,24 +645,24 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         ];
 
         timingFields.forEach((tf) => {
-          const cells = [createCell({ text: tf.label, bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0] })];
+          const cells = [createCell({ text: tf.label, bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 90, bottomMargin: 90 })];
           weekDays.forEach((dayObj, idx) => {
             const targetDate = normalizeDateStr(dayObj.dateStr);
             const entriesForDay = siteEntries.filter((e) => normalizeDateStr(e.date) === targetDate);
             const val = entriesForDay.map(e => e.timeCardDetails?.[tf.key]).filter(Boolean).join(" / ") || "";
-            cells.push(createCell({ text: val, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1] }));
+            cells.push(createCell({ text: val, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1], topMargin: 90, bottomMargin: 90 }));
           });
-          cells.push(createCell({ text: "", colWidth: EXACT_TIMESHEET_COL_WIDTHS[8] }));
-          tableRows.push(new TableRow({ height: { value: 330, rule: HeightRule.EXACTLY }, children: cells }));
+          cells.push(createCell({ text: "", colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 90, bottomMargin: 90 }));
+          tableRows.push(new TableRow({ height: { value: 390, rule: HeightRule.EXACTLY }, children: cells }));
         });
 
         let siteGrandTotalHours = 0;
         let siteGrandTravelTotal = 0;
 
-        // Template Task Rows
+        // Template Task Rows (Expanded exact row heights & padding to fill the page cleanly)
         ALL_TEMPLATE_TASKS.forEach((taskLabel) => {
           let rowTaskTotal = 0;
-          const rowCells = [createCell({ text: taskLabel, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0] })];
+          const rowCells = [createCell({ text: taskLabel, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 95, bottomMargin: 95 })];
           
           weekDays.forEach((dayObj, idx) => {
             const targetDate = normalizeDateStr(dayObj.dateStr);
@@ -691,15 +691,15 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             }
             
             rowTaskTotal += dayTaskHours;
-            rowCells.push(createCell({ text: dayTaskHours > 0 ? String(dayTaskHours) : "", align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1] }));
+            rowCells.push(createCell({ text: dayTaskHours > 0 ? String(dayTaskHours) : "", align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1], topMargin: 95, bottomMargin: 95 }));
           });
 
-          rowCells.push(createCell({ text: rowTaskTotal > 0 ? String(rowTaskTotal) : "", bold: true, align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8] }));
-          tableRows.push(new TableRow({ height: { value: 330, rule: HeightRule.EXACTLY }, children: rowCells }));
+          rowCells.push(createCell({ text: rowTaskTotal > 0 ? String(rowTaskTotal) : "", bold: true, align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 95, bottomMargin: 95 }));
+          tableRows.push(new TableRow({ height: { value: 390, rule: HeightRule.EXACTLY }, children: rowCells }));
         });
 
         // TOTAL HOURS Row
-        const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0] })];
+        const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 100, bottomMargin: 100 })];
         weekDays.forEach((dayObj, idx) => {
           const targetDate = normalizeDateStr(dayObj.dateStr);
           const entriesForDay = siteEntries.filter((e) => normalizeDateStr(e.date) === targetDate);
@@ -712,13 +712,13 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           });
 
           siteGrandTotalHours += dayTotal;
-          totalHoursCells.push(createCell({ text: dayTotal > 0 ? String(dayTotal) : "", bold: true, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1] }));
+          totalHoursCells.push(createCell({ text: dayTotal > 0 ? String(dayTotal) : "", bold: true, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1], topMargin: 100, bottomMargin: 100 }));
         });
-        totalHoursCells.push(createCell({ text: String(siteGrandTotalHours), bold: true, align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8] }));
-        tableRows.push(new TableRow({ height: { value: 350, rule: HeightRule.EXACTLY }, children: totalHoursCells }));
+        totalHoursCells.push(createCell({ text: String(siteGrandTotalHours), bold: true, align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 100, bottomMargin: 100 }));
+        tableRows.push(new TableRow({ height: { value: 420, rule: HeightRule.EXACTLY }, children: totalHoursCells }));
 
         // Travel Time Row
-        const travelCells = [createCell({ text: "Travel Time", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0] })];
+        const travelCells = [createCell({ text: "Travel Time", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 100, bottomMargin: 100 })];
         weekDays.forEach((dayObj, idx) => {
           const targetDate = normalizeDateStr(dayObj.dateStr);
           const entriesForDay = siteEntries.filter((e) => normalizeDateStr(e.date) === targetDate);
@@ -731,10 +731,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           });
 
           siteGrandTravelTotal += dayTravel;
-          travelCells.push(createCell({ text: dayTravel > 0 ? String(dayTravel) : "", align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1] }));
+          travelCells.push(createCell({ text: dayTravel > 0 ? String(dayTravel) : "", align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1], topMargin: 100, bottomMargin: 100 }));
         });
-        travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8] }));
-        tableRows.push(new TableRow({ height: { value: 350, rule: HeightRule.EXACTLY }, children: travelCells }));
+        travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 100, bottomMargin: 100 }));
+        tableRows.push(new TableRow({ height: { value: 420, rule: HeightRule.EXACTLY }, children: travelCells }));
 
         // Page 1 Header Table (10,600 DXA Total Width)
         const topHeaderTableP1 = new Table({
