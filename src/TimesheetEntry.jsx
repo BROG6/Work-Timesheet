@@ -507,8 +507,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         colSpan = 1, 
         shading = null, 
         fontSize = 16, 
-        topMargin = 60,  
-        bottomMargin = 60
+        topMargin = 100,  
+        bottomMargin = 100
       }) => {
         return new TableCell({
           columnSpan: colSpan,
@@ -581,25 +581,25 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const siteEntries = siteMap[siteName];
         const tableRows = [];
 
-        // --- PAGE 1: MAIN TIMESHEET TABLE (Optimized compact row height to fit single page) ---
+        // --- PAGE 1: MAIN TIMESHEET TABLE ---
         tableRows.push(
           new TableRow({
-            height: { value: 340, rule: HeightRule.EXACTLY },
+            height: { value: 440, rule: HeightRule.EXACTLY },
             children: [
-              createCell({ text: "Day", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 70, bottomMargin: 70 }),
-              ...daysHeader.map((day, idx) => createCell({ text: day, bold: true, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1], topMargin: 70, bottomMargin: 70 })),
-              createCell({ text: "Totals", bold: true, align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 70, bottomMargin: 70 })
+              createCell({ text: "Day", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 110, bottomMargin: 110 }),
+              ...daysHeader.map((day, idx) => createCell({ text: day, bold: true, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1], topMargin: 110, bottomMargin: 110 })),
+              createCell({ text: "Totals", bold: true, align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 110, bottomMargin: 110 })
             ]
           })
         );
 
         tableRows.push(
           new TableRow({
-            height: { value: 320, rule: HeightRule.EXACTLY },
+            height: { value: 420, rule: HeightRule.EXACTLY },
             children: [
-              createCell({ text: "Date", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 60, bottomMargin: 60 }),
-              ...weekDays.map((d, idx) => createCell({ text: `${d.dayNumber}/${d.dateStr.split('-')[1] || ''}`, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1], topMargin: 60, bottomMargin: 60 })),
-              createCell({ text: "", align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 60, bottomMargin: 60 })
+              createCell({ text: "Date", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 100, bottomMargin: 100 }),
+              ...weekDays.map((d, idx) => createCell({ text: `${d.dayNumber}/${d.dateStr.split('-')[1] || ''}`, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1], topMargin: 100, bottomMargin: 100 })),
+              createCell({ text: "", align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 100, bottomMargin: 100 })
             ]
           })
         );
@@ -612,15 +612,15 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         ];
 
         timingFields.forEach((tf) => {
-          const cells = [createCell({ text: tf.label, bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 55, bottomMargin: 55 })];
+          const cells = [createCell({ text: tf.label, bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 90, bottomMargin: 90 })];
           weekDays.forEach((dayObj, idx) => {
             const targetDate = normalizeDateStr(dayObj.dateStr);
             const entriesForDay = siteEntries.filter((e) => normalizeDateStr(e.date) === targetDate);
             const val = entriesForDay.map(e => e.timeCardDetails?.[tf.key]).filter(Boolean).join(" / ") || "";
-            cells.push(createCell({ text: val, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1], topMargin: 55, bottomMargin: 55 }));
+            cells.push(createCell({ text: val, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1], topMargin: 90, bottomMargin: 90 }));
           });
-          cells.push(createCell({ text: "", colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 55, bottomMargin: 55 }));
-          tableRows.push(new TableRow({ height: { value: 290, rule: HeightRule.EXACTLY }, children: cells }));
+          cells.push(createCell({ text: "", colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 90, bottomMargin: 90 }));
+          tableRows.push(new TableRow({ height: { value: 390, rule: HeightRule.EXACTLY }, children: cells }));
         });
 
         let siteGrandTotalHours = 0;
@@ -628,7 +628,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
         ALL_TEMPLATE_TASKS.forEach((taskLabel) => {
           let rowTaskTotal = 0;
-          const rowCells = [createCell({ text: taskLabel, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 60, bottomMargin: 60 })];
+          const rowCells = [createCell({ text: taskLabel, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 95, bottomMargin: 95 })];
           
           weekDays.forEach((dayObj, idx) => {
             const targetDate = normalizeDateStr(dayObj.dateStr);
@@ -657,14 +657,14 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             }
             
             rowTaskTotal += dayTaskHours;
-            rowCells.push(createCell({ text: dayTaskHours > 0 ? String(dayTaskHours) : "", align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1], topMargin: 60, bottomMargin: 60 }));
+            rowCells.push(createCell({ text: dayTaskHours > 0 ? String(dayTaskHours) : "", align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1], topMargin: 95, bottomMargin: 95 }));
           });
 
-          rowCells.push(createCell({ text: rowTaskTotal > 0 ? String(rowTaskTotal) : "", bold: true, align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 60, bottomMargin: 60 }));
-          tableRows.push(new TableRow({ height: { value: 280, rule: HeightRule.EXACTLY }, children: rowCells }));
+          rowCells.push(createCell({ text: rowTaskTotal > 0 ? String(rowTaskTotal) : "", bold: true, align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 95, bottomMargin: 95 }));
+          tableRows.push(new TableRow({ height: { value: 390, rule: HeightRule.EXACTLY }, children: rowCells }));
         });
 
-        const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 65, bottomMargin: 65 })];
+        const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 100, bottomMargin: 100 })];
         weekDays.forEach((dayObj, idx) => {
           const targetDate = normalizeDateStr(dayObj.dateStr);
           const entriesForDay = siteEntries.filter((e) => normalizeDateStr(e.date) === targetDate);
@@ -677,12 +677,12 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           });
 
           siteGrandTotalHours += dayTotal;
-          totalHoursCells.push(createCell({ text: dayTotal > 0 ? String(dayTotal) : "", bold: true, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1], topMargin: 65, bottomMargin: 65 }));
+          totalHoursCells.push(createCell({ text: dayTotal > 0 ? String(dayTotal) : "", bold: true, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1], topMargin: 100, bottomMargin: 100 }));
         });
-        totalHoursCells.push(createCell({ text: String(siteGrandTotalHours), bold: true, align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 65, bottomMargin: 65 }));
-        tableRows.push(new TableRow({ height: { value: 320, rule: HeightRule.EXACTLY }, children: totalHoursCells }));
+        totalHoursCells.push(createCell({ text: String(siteGrandTotalHours), bold: true, align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 100, bottomMargin: 100 }));
+        tableRows.push(new TableRow({ height: { value: 420, rule: HeightRule.EXACTLY }, children: totalHoursCells }));
 
-        const travelCells = [createCell({ text: "Travel Time", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 65, bottomMargin: 65 })];
+        const travelCells = [createCell({ text: "Travel Time", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0], topMargin: 100, bottomMargin: 100 })];
         weekDays.forEach((dayObj, idx) => {
           const targetDate = normalizeDateStr(dayObj.dateStr);
           const entriesForDay = siteEntries.filter((e) => normalizeDateStr(e.date) === targetDate);
@@ -695,15 +695,21 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           });
 
           siteGrandTravelTotal += dayTravel;
-          travelCells.push(createCell({ text: dayTravel > 0 ? String(dayTravel) : "", align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1], topMargin: 65, bottomMargin: 65 }));
+          travelCells.push(createCell({ text: dayTravel > 0 ? String(dayTravel) : "", align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1], topMargin: 100, bottomMargin: 100 }));
         });
-        travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 65, bottomMargin: 65 }));
-        tableRows.push(new TableRow({ height: { value: 320, rule: HeightRule.EXACTLY }, children: travelCells }));
+        travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8], topMargin: 100, bottomMargin: 100 }));
+        tableRows.push(new TableRow({ height: { value: 420, rule: HeightRule.EXACTLY }, children: travelCells }));
 
-        // Badge cell without background shading (since the picture default color was updated)
+        // Header Table matching template with "SJR BUILDERS" badge on top right
         const logoBadgeCell = new TableCell({
           width: { size: 2200, type: WidthType.DXA },
-          borders: solidBorder,
+          shading: { fill: "F8D7DA", type: ShadingType.CLEAR }, // Soft pink badge background matching template
+          borders: {
+            top: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+            bottom: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+            left: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+            right: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+          },
           verticalAlign: VerticalAlign.CENTER,
           margins: { top: 60, bottom: 60, left: 60, right: 60 },
           children: [
@@ -794,7 +800,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           ],
         });
 
-        // --- PAGE 2: COMMENTS SECTION (Expanded to cover the entire page like original template) ---
+        // --- PAGE 2: COMMENTS SECTION ---
         const allComments = [];
         siteEntries.forEach((entry) => {
           if (entry.tasks) {
@@ -808,25 +814,24 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
         const commentRows = [
           new TableRow({
-            height: { value: 380, rule: HeightRule.EXACTLY },
+            height: { value: 400, rule: HeightRule.EXACTLY },
             children: [
               createCell({ text: "COMMENTS", bold: true, fontSize: 18, colWidth: 10600, topMargin: 20, bottomMargin: 20 })
             ]
           }),
           new TableRow({
-            height: { value: 320, rule: HeightRule.EXACTLY },
+            height: { value: 350, rule: HeightRule.EXACTLY },
             children: [createCell({ text: "If Other – please detail what type of work you were undertaking", fontSize: 14, colWidth: 10600, topMargin: 15, bottomMargin: 15 })]
           })
         ];
 
-        // 38 rows total to span the full vertical page height matching original template layout
-        const TOTAL_COMMENT_ROWS = 38;
+        const TOTAL_COMMENT_ROWS = 32;
         for (let i = 0; i < TOTAL_COMMENT_ROWS; i++) {
           const commentText = allComments[i] || "";
           commentRows.push(
             new TableRow({
-              height: { value: 350, rule: HeightRule.EXACTLY },
-              children: [createCell({ text: commentText, fontSize: 14, colWidth: 10600, topMargin: 15, bottomMargin: 15 })]
+              height: { value: 380, rule: HeightRule.EXACTLY },
+              children: [createCell({ text: commentText, fontSize: 14, colWidth: 10600, topMargin: 20, bottomMargin: 20 })]
             })
           );
         }
