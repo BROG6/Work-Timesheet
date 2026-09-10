@@ -112,10 +112,10 @@ function parseLocalDate(dateInput) {
   return new Date(dateInput);
 }
 
-function getWednesday(d) {
+function getMonday(d) {
   const date = parseLocalDate(d);
   const day = date.getDay();
-  const diff = date.getDate() - ((day + 4) % 7);
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
   return new Date(date.getFullYear(), date.getMonth(), diff);
 }
 
@@ -282,7 +282,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
   });
 
   const [selectedDate, setSelectedDate] = useState(() => formatDate(new Date()));
-  const [currentWednesday, setCurrentWednesday] = useState(() => getWednesday(new Date()));
+  const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()));
   const [weeklyHours, setWeeklyHours] = useState(0);
   const [weekRangeStr, setWeekRangeStr] = useState('');
   const [loadingHours, setLoadingHours] = useState(true);
@@ -334,9 +334,9 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     if (!userId) return;
     setLoadingHours(true);
     try {
-      const currentWed = getWednesday(new Date());
-      const currentTue = new Date(currentWed.getFullYear(), currentWed.getMonth(), currentWed.getDate() + 6);
-      setWeekRangeStr(`${formatDisplayDate(currentWed)} – ${formatDisplayDate(currentTue)}`);
+      const currentMon = getMonday(new Date());
+      const currentSun = new Date(currentMon.getFullYear(), currentMon.getMonth(), currentMon.getDate() + 6);
+      setWeekRangeStr(`${formatDisplayDate(currentMon)} – ${formatDisplayDate(currentSun)}`);
       
       const q = query(collection(db, 'timesheets'), where('userId', '==', userId));
       let querySnapshot;
@@ -347,7 +347,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       }
       
       const validWeekDates = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(currentWed.getFullYear(), currentWed.getMonth(), currentWed.getDate() + i);
+        const d = new Date(currentMon.getFullYear(), currentMon.getMonth(), currentMon.getDate() + i);
         return formatDisplayDate(d);
       });
       
@@ -431,7 +431,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
   }, [selectedDate, userId]);
 
   const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const day = new Date(currentWednesday.getFullYear(), currentWednesday.getMonth(), currentWednesday.getDate() + i);
+    const day = new Date(currentMonday.getFullYear(), currentMonday.getMonth(), currentMonday.getDate() + i);
     return {
       dateStr: formatDate(day),
       dayName: day.toLocaleDateString('en-NZ', { weekday: 'short' }),
@@ -559,7 +559,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
         const rows = xmlDoc.getElementsByTagName("w:tr");
 
-        // Preserve native Word tab stops and runs without forcing line breaks or collapsing runs
         const paragraphs = xmlDoc.getElementsByTagName("w:p");
         for (let p of paragraphs) {
           const runs = p.getElementsByTagName("w:r");
@@ -826,8 +825,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             <button
               type="button"
               onClick={() => {
-                const p = new Date(currentWednesday.getFullYear(), currentWednesday.getMonth(), currentWednesday.getDate() - 7);
-                setCurrentWednesday(p);
+                const p = new Date(currentMonday.getFullYear(), currentMonday.getMonth(), currentMonday.getDate() - 7);
+                setCurrentMonday(p);
               }}
               className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
             >
@@ -840,7 +839,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               <button
                 type="button"
                 onClick={() => {
-                  setCurrentWednesday(getWednesday(new Date()));
+                  setCurrentMonday(getMonday(new Date()));
                   setSelectedDate(todayStr);
                 }}
                 className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded-md font-bold transition-colors"
@@ -850,8 +849,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               <button
                 type="button"
                 onClick={() => {
-                  const n = new Date(currentWednesday.getFullYear(), currentWednesday.getMonth(), currentWednesday.getDate() + 7);
-                  setCurrentWednesday(n);
+                  const n = new Date(currentMonday.getFullYear(), currentMonday.getMonth(), currentMonday.getDate() + 7);
+                  setCurrentMonday(n);
                 }}
                 className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
               >
@@ -928,7 +927,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 onChange={(e) => {
                   if (e.target.value) {
                     setSelectedDate(e.target.value);
-                    setCurrentWednesday(getWednesday(e.target.value));
+                    setCurrentMonday(getMonday(e.target.value));
                   }
                 }}
                 className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500"
