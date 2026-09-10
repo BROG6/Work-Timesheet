@@ -799,47 +799,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           ]
         });
 
-        const docHeaderPage2 = new Header({
-          children: [
-            new Table({
-              layout: TableLayoutType.FIXED,
-              columnWidths: [8640, 2160],
-              width: { size: 10800, type: WidthType.DXA },
-              borders: {
-                top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                insideVertical: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-              },
-              rows: [
-                new TableRow({
-                  children: [
-                    new TableCell({
-                      width: { size: 8640, type: WidthType.DXA },
-                      children: [new Paragraph({ spaceBefore: 0, spaceAfter: 0, children: [] })]
-                    }),
-                    new TableCell({
-                      width: { size: 2160, type: WidthType.DXA },
-                      verticalAlign: VerticalAlign.BOTTOM,
-                      margins: { top: 0, bottom: 20, left: 0, right: 0 },
-                      children: [
-                        new Paragraph({
-                          alignment: AlignmentType.RIGHT,
-                          spaceBefore: 0,
-                          spaceAfter: 0,
-                          children: logo2ImageRun ? [logo2ImageRun] : [],
-                        }),
-                      ],
-                    }),
-                  ],
-                }),
-              ],
-            })
-          ]
-        });
-
         const allComments = [];
         siteEntries.forEach((entry) => {
           if (entry.tasks) {
@@ -886,6 +845,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           rows: tableRows
         });
 
+        // Single continuous document section layout containing both tables sequentially
         const doc = new Document({
           sections: [
             {
@@ -902,22 +862,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               headers: { default: docHeader },
               footers: { default: docFooter },
               children: [
-                timesheetTable
-              ]
-            },
-            {
-              properties: {
-                page: { 
-                  margin: { 
-                    top: 360,
-                    bottom: 360,
-                    left: 500,
-                    right: 500
-                  } 
-                }
-              },
-              headers: { default: docHeaderPage2 },
-              children: [
+                timesheetTable,
+                new Paragraph({ spaceBefore: 280, spaceAfter: 0, children: [] }),
                 commentsTable
               ]
             }
@@ -981,7 +927,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         {/* Header Bar with Logo (Hidden on Mobile) & DOCX Download Button */}
         <div className="border-b border-slate-200 pb-3 mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            {/* Added hidden md:block so logo is hidden on mobile screens */}
             <img src={sjrLogo} alt="SJR Builders Logo" className="h-10 w-auto object-contain hidden md:block" />
             <div>
               <h2 className="text-xl font-bold text-slate-900 leading-tight">Weekly Time Card Entry</h2>
