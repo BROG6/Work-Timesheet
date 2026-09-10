@@ -559,32 +559,29 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
         const rows = xmlDoc.getElementsByTagName("w:tr");
 
+        // Preserve native Word tab stops and runs without forcing line breaks or collapsing runs
         const paragraphs = xmlDoc.getElementsByTagName("w:p");
         for (let p of paragraphs) {
-          const tNodes = p.getElementsByTagName("w:t");
-          let pText = "";
-          for (let tn of tNodes) {
-            pText += tn.textContent;
+          const runs = p.getElementsByTagName("w:r");
+          let fullText = "";
+          for (let r of runs) {
+            const t = r.getElementsByTagName("w:t")[0];
+            if (t) fullText += t.textContent;
           }
           
-          let modified = false;
-          if (pText.includes("Staff Member") || pText.includes("Project")) {
-            let updatedText = pText;
-            if (updatedText.includes("Staff Member")) {
-              updatedText = updatedText.replace(/Staff Member[:\s]*/gi, `Staff Member: ${userName}`);
-            }
-            if (updatedText.includes("Project")) {
-              // Removed vertical line / pipe and added clean spacing
-              updatedText = updatedText.replace(/Project[:\s]*/gi, `     Project: ${siteName}`);
-            }
-            pText = updatedText;
-            modified = true;
-          }
-          
-          if (modified && tNodes.length > 0) {
-            tNodes[0].textContent = pText;
-            for (let i = 1; i < tNodes.length; i++) {
-              tNodes[i].textContent = "";
+          if (fullText.includes("Staff Member") || fullText.includes("Project")) {
+            for (let r of runs) {
+              const t = r.getElementsByTagName("w:t")[0];
+              if (t) {
+                let text = t.textContent;
+                if (text.includes("Staff Member")) {
+                  t.textContent = text.replace(/Staff Member[:\s]*/gi, `Staff Member: ${userName}`);
+                  t.setAttribute("xml:space", "preserve");
+                } else if (text.includes("Project")) {
+                  t.textContent = text.replace(/Project[:\s]*/gi, `Project: ${siteName}`);
+                  t.setAttribute("xml:space", "preserve");
+                }
+              }
             }
           }
         }
