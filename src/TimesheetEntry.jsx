@@ -101,24 +101,37 @@ const ALL_TEMPLATE_TASKS = [
   "" // Blank row preceding TOTAL HOURS matching template layout
 ];
 
+function parseLocalDate(dateInput) {
+  if (!dateInput) return new Date();
+  if (typeof dateInput === 'string' && dateInput.includes('-')) {
+    const [y, m, d] = dateInput.split('-').map(Number);
+    if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+      return new Date(y, m - 1, d);
+    }
+  }
+  return new Date(dateInput);
+}
+
 function getWednesday(d) {
-  const date = new Date(d);
+  const date = parseLocalDate(d);
   const day = date.getDay();
   const diff = date.getDate() - ((day + 4) % 7);
-  return new Date(date.setDate(diff));
+  return new Date(date.getFullYear(), date.getMonth(), diff);
 }
 
 function formatDate(dateObj) {
-  const y = dateObj.getFullYear();
-  const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const d = String(dateObj.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  const d = parseLocalDate(dateObj);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function formatDisplayDate(dateObj) {
-  const day = String(dateObj.getDate()).padStart(2, '0');
-  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const year = dateObj.getFullYear();
+  const d = parseLocalDate(dateObj);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
   return `${day}/${month}/${year}`;
 }
 
@@ -322,21 +335,19 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     setLoadingHours(true);
     try {
       const currentWed = getWednesday(new Date());
-      const currentTue = new Date(currentWed);
-      currentTue.setDate(currentWed.getDate() + 6);
+      const currentTue = new Date(currentWed.getFullYear(), currentWed.getMonth(), currentWed.getDate() + 6);
       setWeekRangeStr(`${formatDisplayDate(currentWed)} – ${formatDisplayDate(currentTue)}`);
       
       const q = query(collection(db, 'timesheets'), where('userId', '==', userId));
       let querySnapshot;
       try {
         querySnapshot = await getDocs(q);
-      } catch (e) {
+      } catch {
         querySnapshot = await getDocsFromCache(q);
       }
       
       const validWeekDates = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(currentWed);
-        d.setDate(currentWed.getDate() + i);
+        const d = new Date(currentWed.getFullYear(), currentWed.getMonth(), currentWed.getDate() + i);
         return formatDisplayDate(d);
       });
       
@@ -420,8 +431,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
   }, [selectedDate, userId]);
 
   const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const day = new Date(currentWednesday);
-    day.setDate(currentWednesday.getDate() + i);
+    const day = new Date(currentWednesday.getFullYear(), currentWednesday.getMonth(), currentWednesday.getDate() + i);
     return {
       dateStr: formatDate(day),
       dayName: day.toLocaleDateString('en-NZ', { weekday: 'short' }),
@@ -549,7 +559,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
         const rows = xmlDoc.getElementsByTagName("w:tr");
 
-        // Robust paragraph-level search and replace (handles Word run-splitting across <w:t> tags)
         const paragraphs = xmlDoc.getElementsByTagName("w:p");
         for (let p of paragraphs) {
           const tNodes = p.getElementsByTagName("w:t");
@@ -559,12 +568,15 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           }
           
           let modified = false;
-          if (pText.includes("Staff Member")) {
-            pText = pText.replace(/Staff Member[:\s]*/gi, `Staff Member: ${userName}`);
-            modified = true;
-          }
-          if (pText.includes("Project")) {
-            pText = pText.replace(/Project[:\s]*/gi, `Project: ${siteName}`);
+          if (pText.includes("Staff Member") || pText.includes("Project")) {
+            let updatedText = pText;
+            if (updatedText.includes("Staff Member")) {
+              updatedText = updatedText.replace(/Staff Member[:\s]*/gi, `Staff Member: ${userName}`);
+            }
+            if (updatedText.includes("Project")) {
+              updatedText = updatedText.replace(/Project[:\s]*/gi, `     |     Project: ${siteName}`);
+            }
+            pText = updatedText;
             modified = true;
           }
           
@@ -816,8 +828,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             <button
               type="button"
               onClick={() => {
-                const p = new Date(currentWednesday);
-                p.setDate(p.getDate() - 7);
+                const p = new Date(currentWednesday.getFullYear(), currentWednesday.getMonth(), currentWednesday.getDate() - 7);
                 setCurrentWednesday(p);
               }}
               className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
@@ -841,8 +852,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               <button
                 type="button"
                 onClick={() => {
-                  const n = new Date(currentWednesday);
-                  n.setDate(n.getDate() + 7);
+                  const n = new Date(currentWednesday.getFullYear(), currentWednesday.getMonth(), currentWednesday.getDate() + 7);
                   setCurrentWednesday(n);
                 }}
                 className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
@@ -1118,4 +1128,3 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     </div>
   );
 }
-
