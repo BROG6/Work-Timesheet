@@ -22,7 +22,6 @@ async function getLogoUint8Array(imageSource) {
 }
 
 // Fixed printable grid dimensions in twips (1/20th of a point)
-// Printable area on standard A4 (210mm / 11906 twips) minus margins = 10,800 twips
 const EXACT_TIMESHEET_COL_WIDTHS = [4000, 850, 850, 850, 850, 850, 850, 850, 850];
 
 // Categorized Task List
@@ -116,7 +115,7 @@ const ALL_TEMPLATE_TASKS = [
 
 function getWednesday(d) {
   const date = new Date(d);
-  const day = date.getDay(); // 0 = Sun, 1 = Mon, 2 = Tue, 3 = Wed, 4 = Thu, 5 = Fri, 6 = Sat
+  const day = date.getDay();
   const diff = date.getDate() - ((day + 4) % 7);
   return new Date(date.setDate(diff));
 }
@@ -519,7 +518,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         right: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
       };
 
-      // Compact Cell Generator (Maximized vertical fit for Page 1)
       const createCell = ({ 
         text = "", 
         bold = false, 
@@ -601,8 +599,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const siteEntries = siteMap[siteName];
         const tableRows = [];
 
-        // --- PAGE 1: MAIN TIMESHEET TABLE ---
-        // Header Row 1: Day Names
         tableRows.push(
           new TableRow({
             children: [
@@ -613,7 +609,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           })
         );
 
-        // Header Row 2: Dates
         tableRows.push(
           new TableRow({
             children: [
@@ -624,7 +619,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           })
         );
 
-        // Timing Rows
         const timingFields = [
           { label: "START TIME", key: "startTime" },
           { label: "TIME LEFT SITE", key: "timeLeftSite" },
@@ -647,7 +641,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         let siteGrandTotalHours = 0;
         let siteGrandTravelTotal = 0;
 
-        // Template Task Rows
         ALL_TEMPLATE_TASKS.forEach((taskLabel) => {
           let rowTaskTotal = 0;
           const rowCells = [createCell({ text: taskLabel, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0] })];
@@ -686,7 +679,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           tableRows.push(new TableRow({ children: rowCells }));
         });
 
-        // TOTAL HOURS Row
         const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0] })];
         weekDays.forEach((dayObj, idx) => {
           const targetDate = normalizeDateStr(dayObj.dateStr);
@@ -705,7 +697,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         totalHoursCells.push(createCell({ text: String(siteGrandTotalHours), bold: true, align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8] }));
         tableRows.push(new TableRow({ children: totalHoursCells }));
 
-        // Travel Time Row
         const travelCells = [createCell({ text: "Travel Time", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0] })];
         weekDays.forEach((dayObj, idx) => {
           const targetDate = normalizeDateStr(dayObj.dateStr);
@@ -724,7 +715,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8] }));
         tableRows.push(new TableRow({ children: travelCells }));
 
-        // Document Header (Branding/Logo placed in official Word Header so it hides in Word Mobile View)
         const docHeader = new Header({
           children: [
             new Table({
@@ -792,7 +782,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           ]
         });
 
-        // Document Footer (Version footer placed in official Word Footer so it hides in Word Mobile View)
         const docFooter = new Footer({
           children: [
             new Paragraph({
@@ -810,7 +799,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           ]
         });
 
-        // --- PAGE 2: COMMENTS SECTION HEADER ---
         const docHeaderPage2 = new Header({
           children: [
             new Table({
@@ -898,7 +886,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           rows: tableRows
         });
 
-        // Document with Page 1 and Page 2 Sections utilizing native Word Headers & Footers
         const doc = new Document({
           sections: [
             {
@@ -991,10 +978,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-        {/* Header Bar with Logo & DOCX Download Button */}
+        {/* Header Bar with Logo (Hidden on Mobile) & DOCX Download Button */}
         <div className="border-b border-slate-200 pb-3 mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <img src={sjrLogo} alt="SJR Builders Logo" className="h-10 w-auto object-contain" />
+            {/* Added hidden md:block so logo is hidden on mobile screens */}
+            <img src={sjrLogo} alt="SJR Builders Logo" className="h-10 w-auto object-contain hidden md:block" />
             <div>
               <h2 className="text-xl font-bold text-slate-900 leading-tight">Weekly Time Card Entry</h2>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
@@ -1318,6 +1306,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             {loading ? "Saving Entry..." : `Submit Entry for ${displayDate(selectedDate)}`}
           </button>
         </form>
+
+        {/* Version Footer (Hidden on Mobile) */}
+        <div className="text-center text-[11px] text-slate-400 mt-6 pt-3 border-t border-slate-100 hidden md:block">
+          Version – August 2026
+        </div>
       </div>
     </div>
   );
