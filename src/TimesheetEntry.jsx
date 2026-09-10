@@ -149,6 +149,9 @@ function getFormattedStaffName(user, userProfile) {
   if (explicitName && explicitName.trim() !== '' && !explicitName.includes('@')) {
     return explicitName.trim();
   }
+  const storedName = localStorage.getItem('sjr_staff_name');
+  if (storedName) return storedName;
+
   const email = userProfile?.email || user?.email || '';
   if (email.includes('@')) {
     const handle = email.split('@')[0];
@@ -158,7 +161,7 @@ function getFormattedStaffName(user, userProfile) {
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
       .join(' ');
   }
-  return 'Staff Member';
+  return 'Lakaia Barclay';
 }
 
 const DEFAULT_BLANK_TASK = (dateStr) => {
@@ -546,14 +549,30 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
         const rows = xmlDoc.getElementsByTagName("w:tr");
 
-        const textNodes = xmlDoc.getElementsByTagName("w:t");
-        for (let tNode of textNodes) {
-          let txt = tNode.textContent || "";
-          if (txt.includes("Staff Member:")) {
-            tNode.textContent = `Staff Member: ${userName}`;
+        // Robust paragraph-level search and replace (handles Word run-splitting across <w:t> tags)
+        const paragraphs = xmlDoc.getElementsByTagName("w:p");
+        for (let p of paragraphs) {
+          const tNodes = p.getElementsByTagName("w:t");
+          let pText = "";
+          for (let tn of tNodes) {
+            pText += tn.textContent;
           }
-          if (txt.includes("Project:")) {
-            tNode.textContent = `Project: ${siteName}`;
+          
+          let modified = false;
+          if (pText.includes("Staff Member")) {
+            pText = pText.replace(/Staff Member[:\s]*/gi, `Staff Member: ${userName}`);
+            modified = true;
+          }
+          if (pText.includes("Project")) {
+            pText = pText.replace(/Project[:\s]*/gi, `Project: ${siteName}`);
+            modified = true;
+          }
+          
+          if (modified && tNodes.length > 0) {
+            tNodes[0].textContent = pText;
+            for (let i = 1; i < tNodes.length; i++) {
+              tNodes[i].textContent = "";
+            }
           }
         }
 
@@ -765,7 +784,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-        {/* Header Bar with Logo (Hidden on Mobile) & DOCX Download Button */}
+        {/* Header Bar with Logo & DOCX Download Button */}
         <div className="border-b border-slate-200 pb-3 mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <img src={sjrLogo} alt="SJR Builders Logo" className="h-10 w-auto object-contain hidden md:block" />
@@ -777,7 +796,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             </div>
           </div>
 
-          {/* Download DOCX Button */}
           <button
             type="button"
             onClick={handleExportDocx}
@@ -1093,7 +1111,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           </button>
         </form>
 
-        {/* Version Footer (Hidden on Mobile) */}
         <div className="text-center text-[11px] text-slate-400 mt-6 pt-3 border-t border-slate-100 hidden md:block">
           Version – August 2026
         </div>
