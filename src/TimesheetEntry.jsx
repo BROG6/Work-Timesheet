@@ -333,7 +333,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       const currentWed = getWednesday(new Date());
       const currentTue = new Date(currentWed);
       currentTue.setDate(currentWed.getDate() + 6);
-      setWeekRangeStr(`${formatDisplayDate(currentWed)} – ${formatDisplayDate(currentTue)}`);
+      setWeekRangeStr(`${formatDisplayDate(currentWed)} â€“ ${formatDisplayDate(currentTue)}`);
       
       const q = query(collection(db, 'timesheets'), where('userId', '==', userId));
       let querySnapshot;
@@ -787,7 +787,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             new Paragraph({
               children: [
                 new TextRun({
-                  text: "Version – August 2026",
+                  text: "Version â€“ August 2026",
                   size: 14,
                   italic: true,
                   color: "555555"
@@ -795,6 +795,47 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               ],
               spaceBefore: 40,
               spaceAfter: 0
+            })
+          ]
+        });
+
+        const docHeaderPage2 = new Header({
+          children: [
+            new Table({
+              layout: TableLayoutType.FIXED,
+              columnWidths: [8640, 2160],
+              width: { size: 10800, type: WidthType.DXA },
+              borders: {
+                top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                insideVertical: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+              },
+              rows: [
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      width: { size: 8640, type: WidthType.DXA },
+                      children: [new Paragraph({ spaceBefore: 0, spaceAfter: 0, children: [] })]
+                    }),
+                    new TableCell({
+                      width: { size: 2160, type: WidthType.DXA },
+                      verticalAlign: VerticalAlign.BOTTOM,
+                      margins: { top: 0, bottom: 20, left: 0, right: 0 },
+                      children: [
+                        new Paragraph({
+                          alignment: AlignmentType.RIGHT,
+                          spaceBefore: 0,
+                          spaceAfter: 0,
+                          children: logo2ImageRun ? [logo2ImageRun] : [],
+                        }),
+                      ],
+                    }),
+                  ],
+                }),
+              ],
             })
           ]
         });
@@ -817,7 +858,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             ]
           }),
           new TableRow({
-            children: [createCell({ text: "If Other – please detail what type of work you were undertaking", fontSize: 15, colWidth: 10800, topMargin: 20, bottomMargin: 20 })]
+            children: [createCell({ text: "If Other â€“ please detail what type of work you were undertaking", fontSize: 15, colWidth: 10800, topMargin: 20, bottomMargin: 20 })]
           })
         ];
 
@@ -845,7 +886,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           rows: tableRows
         });
 
-        // Single continuous document section layout containing both tables sequentially
         const doc = new Document({
           sections: [
             {
@@ -862,8 +902,22 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               headers: { default: docHeader },
               footers: { default: docFooter },
               children: [
-                timesheetTable,
-                new Paragraph({ spaceBefore: 280, spaceAfter: 0, children: [] }),
+                timesheetTable
+              ]
+            },
+            {
+              properties: {
+                page: { 
+                  margin: { 
+                    top: 360,
+                    bottom: 360,
+                    left: 500,
+                    right: 500
+                  } 
+                }
+              },
+              headers: { default: docHeaderPage2 },
+              children: [
                 commentsTable
               ]
             }
@@ -901,7 +955,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       {/* Network Connection Banner */}
       {!isOnline && (
         <div className="bg-amber-500 text-slate-950 px-4 py-2 rounded-lg text-xs font-bold flex items-center justify-between shadow">
-          <span>⚡ Working Offline</span>
+          <span>âš¡ Working Offline</span>
           <span className="font-medium text-[11px]">Saved locally & auto-syncs when online</span>
         </div>
       )}
@@ -927,6 +981,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         {/* Header Bar with Logo (Hidden on Mobile) & DOCX Download Button */}
         <div className="border-b border-slate-200 pb-3 mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
+            {/* Added hidden md:block so logo is hidden on mobile screens */}
             <img src={sjrLogo} alt="SJR Builders Logo" className="h-10 w-auto object-contain hidden md:block" />
             <div>
               <h2 className="text-xl font-bold text-slate-900 leading-tight">Weekly Time Card Entry</h2>
@@ -963,10 +1018,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               }}
               className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
             >
-              ← Prev Week
+              â† Prev Week
             </button>
             <span className="font-bold text-slate-200">
-              {weekDays[0].monthName} {weekDays[0].dayNumber} – {weekDays[6].monthName} {weekDays[6].dayNumber}
+              {weekDays[0].monthName} {weekDays[0].dayNumber} â€“ {weekDays[6].monthName} {weekDays[6].dayNumber}
             </span>
             <div className="flex gap-1.5">
               <button
@@ -988,7 +1043,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }}
                 className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
               >
-                Next Week →
+                Next Week â†’
               </button>
             </div>
           </div>
@@ -1032,7 +1087,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           <div className={`mb-4 p-3 rounded-lg text-sm font-semibold flex items-center gap-2 ${
             statusMessage.type === 'error' ? 'bg-rose-50 border border-rose-200 text-rose-800' : 'bg-emerald-50 border border-emerald-200 text-emerald-800'
           }`}>
-            <span>{statusMessage.type === 'error' ? '⚠️' : '✓'}</span>
+            <span>{statusMessage.type === 'error' ? 'âš ï¸' : 'âœ“'}</span>
             {statusMessage.text}
           </div>
         )}
@@ -1254,7 +1309,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
         {/* Version Footer (Hidden on Mobile) */}
         <div className="text-center text-[11px] text-slate-400 mt-6 pt-3 border-t border-slate-100 hidden md:block">
-          Version – August 2026
+          Version â€“ August 2026
         </div>
       </div>
     </div>
