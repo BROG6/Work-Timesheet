@@ -5,21 +5,9 @@ import {
   collection, doc, setDoc, query, where, getDocs, getDocsFromCache, serverTimestamp 
 } from 'firebase/firestore';
 
-import { 
-  Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, 
-  WidthType, BorderStyle, AlignmentType, ShadingType, ImageRun,
-  VerticalAlign, TableLayoutType, Header, Footer 
-} from 'docx';
+import PZip from 'pizzip';
 
 import sjrLogo from './assets/logo.jpg';
-import logo2 from './assets/logo2.jpg';
-
-// Helper function to safely convert an imported image into binary format offline
-async function getLogoUint8Array(imageSource) {
-  const response = await fetch(imageSource);
-  const arrayBuffer = await response.arrayBuffer();
-  return new Uint8Array(arrayBuffer);
-}
 
 // Fixed printable grid dimensions in twips (1/20th of a point)
 const EXACT_TIMESHEET_COL_WIDTHS = [4000, 850, 850, 850, 850, 850, 850, 850, 850];
@@ -496,58 +484,12 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
-      let logo2ImageRun = null;
-      if (logo2) {
-        try {
-          const logoData = await getLogoUint8Array(logo2);
-          logo2ImageRun = new ImageRun({
-            data: logoData,
-            transformation: { width: 120, height: 44 },
-            type: "jpg",
-          });
-        } catch (e) {
-          console.warn("Could not load Logo 2:", e);
-        }
+      const response = await fetch('/Blank Time Cards.docx');
+      if (!response.ok) {
+        throw new Error("Template file 'Blank Time Cards.docx' not found in public root.");
       }
+      const templateArrayBuffer = await response.arrayBuffer();
 
-      const tableBorderColor = "000000";
-      const thinBorder = {
-        top: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
-        bottom: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
-        left: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
-        right: { style: BorderStyle.SINGLE, size: 1, color: tableBorderColor },
-      };
-
-      const createCell = ({ 
-        text = "", 
-        bold = false, 
-        align = AlignmentType.LEFT, 
-        colWidth = 850, 
-        colSpan = 1, 
-        shading = null, 
-        fontSize = 22, // 11pt = 22 half-points
-        topMargin = 18,
-        bottomMargin = 18
-      }) => {
-        return new TableCell({
-          columnSpan: colSpan,
-          width: { size: colWidth, type: WidthType.DXA },
-          shading: shading ? { fill: shading, type: ShadingType.CLEAR } : undefined,
-          borders: thinBorder,
-          margins: { top: topMargin, bottom: bottomMargin, left: 40, right: 40 },
-          children: [
-            new Paragraph({
-              alignment: align,
-              spaceBefore: 0,
-              spaceAfter: 0,
-              children: [new TextRun({ text: String(text || ""), bold, size: fontSize, font: "Calibri" })]
-            })
-          ]
-        });
-      };
-
-      const daysHeader = ["Wed", "Thu", "Fri", "Sat", "Sun", "Mon", "Tue"];
-      
       const normalizeDateStr = (str) => {
         if (!str) return '';
         const formatted = displayDate(str);
@@ -597,66 +539,74 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
       for (const siteName of sitesToExport) {
         const siteEntries = siteMap[siteName];
-        const tableRows = [];
+        const zip = new PZip(templateArrayBuffer);
+        let docXmlStr = zip.file("word/document.xml").asText();
+        
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
+        const rows = xmlDoc.getElementsByTagName("w:tr");
 
-        tableRows.push(
-          new TableRow({
-            children: [
-              createCell({ text: "Day", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0] }),
-              ...daysHeader.map((day, idx) => createCell({ text: day, bold: true, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1] })),
-              createCell({ text: "Totals", bold: true, align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8] })
-            ]
-          })
-        );
+        const textNodes = xmlDoc.getElementsByTagName("w:t");
+        for (let tNode of textNodes) {
+          let txt = tNode.textContent || "";
+          if (txt.includes("Staff Member:")) {
+            tNode.textContent = `Staff Member: ${userName}`;
+          }
+          if (txt.includes("Project:")) {
+            tNode.textContent = `Project: ${siteName}`;
+          }
+        }
 
-        tableRows.push(
-          new TableRow({
-            children: [
-              createCell({ text: "Date", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0] }),
-              ...weekDays.map((d, idx) => createCell({ text: `${d.dayNumber}/${d.dateStr.split('-')[1] || ''}`, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1] })),
-              createCell({ text: "", align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8] })
-            ]
-          })
-        );
+        function getCellText(cell) {
+          const tNodes = cell.getElementsByTagName("w:t");
+          let str = "";
+          for (let tn of tNodes) str += tn.textContent;
+          return str;
+        }
 
-        const timingFields = [
-          { label: "START TIME", key: "startTime" },
-          { label: "TIME LEFT SITE", key: "timeLeftSite" },
-          { label: "TIME RETURNED", key: "timeReturned" },
-          { label: "TIME FINISHED", key: "timeFinished" }
-        ];
+        function setCellText(cell, text) {
+          const tNodes = cell.getElementsByTagName("w:t");
+          if (tNodes.length > 0) {
+            tNodes[0].textContent = text;
+            for (let i = 1; i < tNodes.length; i++) {
+              tNodes[i].textContent = "";
+            }
+          } else {
+            const pNodes = cell.getElementsByTagName("w:p");
+            if (pNodes.length > 0) {
+              const r = xmlDoc.createElement("w:r");
+              const t = xmlDoc.createElement("w:t");
+              t.textContent = text;
+              r.appendChild(t);
+              pNodes[0].appendChild(r);
+            }
+          }
+        }
 
-        timingFields.forEach((tf) => {
-          const cells = [createCell({ text: tf.label, bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0] })];
-          weekDays.forEach((dayObj, idx) => {
+        function fillTimingRow(cells, timingKey, entries, days) {
+          days.forEach((dayObj, idx) => {
+            if (!cells[idx + 1]) return;
             const targetDate = normalizeDateStr(dayObj.dateStr);
-            const entriesForDay = siteEntries.filter((e) => normalizeDateStr(e.date) === targetDate);
-            const val = entriesForDay.map(e => e.timeCardDetails?.[tf.key]).filter(Boolean).join(" / ") || "";
-            cells.push(createCell({ text: val, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1] }));
+            const entriesForDay = entries.filter(e => normalizeDateStr(e.date) === targetDate);
+            const val = entriesForDay.map(e => e.timeCardDetails?.[timingKey]).filter(Boolean).join(" / ") || "";
+            setCellText(cells[idx + 1], val);
           });
-          cells.push(createCell({ text: "", colWidth: EXACT_TIMESHEET_COL_WIDTHS[8] }));
-          tableRows.push(new TableRow({ children: cells }));
-        });
+        }
 
-        let siteGrandTotalHours = 0;
-        let siteGrandTravelTotal = 0;
-
-        ALL_TEMPLATE_TASKS.forEach((taskLabel) => {
+        function fillTaskRow(cells, taskLabel, entries, days) {
           let rowTaskTotal = 0;
-          const rowCells = [createCell({ text: taskLabel, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0] })];
-          
-          weekDays.forEach((dayObj, idx) => {
+          days.forEach((dayObj, idx) => {
+            if (!cells[idx + 1]) return;
             const targetDate = normalizeDateStr(dayObj.dateStr);
-            const entriesForDay = siteEntries.filter((e) => normalizeDateStr(e.date) === targetDate);
+            const entriesForDay = entries.filter(e => normalizeDateStr(e.date) === targetDate);
             let dayTaskHours = 0;
 
             if (entriesForDay.length > 0 && taskLabel !== "") {
-              entriesForDay.forEach((entryForDay) => {
+              entriesForDay.forEach(entryForDay => {
                 if (entryForDay.tasks) {
-                  entryForDay.tasks.forEach((t) => {
+                  entryForDay.tasks.forEach(t => {
                     const tName = (t.taskName || '').toLowerCase().trim();
                     const lName = taskLabel.toLowerCase().trim();
-                    
                     const nameMatches =
                       tName === lName ||
                       (lName.includes("pto") && (tName.includes("other work") || tName.includes("pto"))) ||
@@ -670,264 +620,101 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }
               });
             }
-            
             rowTaskTotal += dayTaskHours;
-            rowCells.push(createCell({ text: dayTaskHours > 0 ? String(dayTaskHours) : "", align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1] }));
+            setCellText(cells[idx + 1], dayTaskHours > 0 ? String(dayTaskHours) : "");
           });
-
-          rowCells.push(createCell({ text: rowTaskTotal > 0 ? String(rowTaskTotal) : "", bold: true, align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8] }));
-          tableRows.push(new TableRow({ children: rowCells }));
-        });
-
-        const totalHoursCells = [createCell({ text: "TOTAL HOURS", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0] })];
-        weekDays.forEach((dayObj, idx) => {
-          const targetDate = normalizeDateStr(dayObj.dateStr);
-          const entriesForDay = siteEntries.filter((e) => normalizeDateStr(e.date) === targetDate);
-          let dayTotal = 0;
-
-          entriesForDay.forEach((entryForDay) => {
-            if (entryForDay.tasks) {
-              dayTotal += entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
-            }
-          });
-
-          siteGrandTotalHours += dayTotal;
-          totalHoursCells.push(createCell({ text: dayTotal > 0 ? String(dayTotal) : "", bold: true, align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1] }));
-        });
-        totalHoursCells.push(createCell({ text: String(siteGrandTotalHours), bold: true, align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8] }));
-        tableRows.push(new TableRow({ children: totalHoursCells }));
-
-        const travelCells = [createCell({ text: "Travel Time", bold: true, colWidth: EXACT_TIMESHEET_COL_WIDTHS[0] })];
-        weekDays.forEach((dayObj, idx) => {
-          const targetDate = normalizeDateStr(dayObj.dateStr);
-          const entriesForDay = siteEntries.filter((e) => normalizeDateStr(e.date) === targetDate);
-          let dayTravel = 0;
-
-          entriesForDay.forEach((entryForDay) => {
-            if (entryForDay.tasks) {
-              dayTravel += entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.travelTime) || 0), 0);
-            }
-          });
-
-          siteGrandTravelTotal += dayTravel;
-          travelCells.push(createCell({ text: dayTravel > 0 ? String(dayTravel) : "", align: AlignmentType.CENTER, colWidth: EXACT_TIMESHEET_COL_WIDTHS[idx + 1] }));
-        });
-        travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8] }));
-        tableRows.push(new TableRow({ children: travelCells }));
-
-        const docHeader = new Header({
-          children: [
-            new Table({
-              layout: TableLayoutType.FIXED,
-              columnWidths: [4860, 3780, 2160],
-              width: { size: 10800, type: WidthType.DXA },
-              borders: {
-                top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                insideVertical: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-              },
-              rows: [
-                new TableRow({
-                  children: [
-                    new TableCell({
-                      width: { size: 4860, type: WidthType.DXA },
-                      verticalAlign: VerticalAlign.BOTTOM,
-                      margins: { top: 0, bottom: 20, left: 0, right: 0 },
-                      children: [
-                        new Paragraph({
-                          spaceBefore: 0,
-                          spaceAfter: 20,
-                          children: [
-                            new TextRun({ text: "Staff Member: ", bold: true, size: 22, font: "Calibri" }),
-                            new TextRun({ text: userName, size: 22, font: "Calibri" }),
-                          ],
-                        }),
-                      ],
-                    }),
-                    new TableCell({
-                      width: { size: 3780, type: WidthType.DXA },
-                      verticalAlign: VerticalAlign.BOTTOM,
-                      margins: { top: 0, bottom: 20, left: 0, right: 0 },
-                      children: [
-                        new Paragraph({
-                          spaceBefore: 0,
-                          spaceAfter: 20,
-                          children: [
-                            new TextRun({ text: "Project: ", bold: true, size: 22, font: "Calibri" }),
-                            new TextRun({ text: siteName, size: 22, font: "Calibri" }),
-                          ],
-                        }),
-                      ],
-                    }),
-                    new TableCell({
-                      width: { size: 2160, type: WidthType.DXA },
-                      verticalAlign: VerticalAlign.BOTTOM,
-                      margins: { top: 0, bottom: 20, left: 0, right: 0 },
-                      children: [
-                        new Paragraph({
-                          alignment: AlignmentType.RIGHT,
-                          spaceBefore: 0,
-                          spaceAfter: 0,
-                          children: logo2ImageRun ? [logo2ImageRun] : [],
-                        }),
-                      ],
-                    }),
-                  ],
-                }),
-              ],
-            })
-          ]
-        });
-
-        const docFooter = new Footer({
-          children: [
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: "Version – August 2026",
-                  size: 18,
-                  italic: true,
-                  color: "555555"
-                })
-              ],
-              spaceBefore: 40,
-              spaceAfter: 0
-            })
-          ]
-        });
-
-        const docHeaderPage2 = new Header({
-          children: [
-            new Table({
-              layout: TableLayoutType.FIXED,
-              columnWidths: [8640, 2160],
-              width: { size: 10800, type: WidthType.DXA },
-              borders: {
-                top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-                insideVertical: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-              },
-              rows: [
-                new TableRow({
-                  children: [
-                    new TableCell({
-                      width: { size: 8640, type: WidthType.DXA },
-                      children: [new Paragraph({ spaceBefore: 0, spaceAfter: 0, children: [] })]
-                    }),
-                    new TableCell({
-                      width: { size: 2160, type: WidthType.DXA },
-                      verticalAlign: VerticalAlign.BOTTOM,
-                      margins: { top: 0, bottom: 20, left: 0, right: 0 },
-                      children: [
-                        new Paragraph({
-                          alignment: AlignmentType.RIGHT,
-                          spaceBefore: 0,
-                          spaceAfter: 0,
-                          children: logo2ImageRun ? [logo2ImageRun] : [],
-                        }),
-                      ],
-                    }),
-                  ],
-                }),
-              ],
-            })
-          ]
-        });
-
-        const allComments = [];
-        siteEntries.forEach((entry) => {
-          if (entry.tasks) {
-            entry.tasks.forEach((t) => {
-              if (t.comments && t.comments.trim()) {
-                allComments.push(`${displayDate(entry.date)}: ${t.comments.trim()}`);
-              }
-            });
+          if (cells[8]) {
+            setCellText(cells[8], rowTaskTotal > 0 ? String(rowTaskTotal) : "");
           }
-        });
-
-        const commentRows = [
-          new TableRow({
-            children: [
-              createCell({ text: "COMMENTS", bold: true, fontSize: 22, colWidth: 10800, topMargin: 30, bottomMargin: 30 })
-            ]
-          }),
-          new TableRow({
-            children: [createCell({ text: "If Other – please detail what type of work you were undertaking", fontSize: 22, colWidth: 10800, topMargin: 20, bottomMargin: 20 })]
-          })
-        ];
-
-        const TOTAL_COMMENT_ROWS = 32;
-        for (let i = 0; i < TOTAL_COMMENT_ROWS; i++) {
-          const commentText = allComments[i] || "";
-          commentRows.push(
-            new TableRow({
-              children: [createCell({ text: commentText, fontSize: 22, colWidth: 10800, topMargin: 16, bottomMargin: 16 })]
-            })
-          );
         }
 
-        const commentsTable = new Table({
-          layout: TableLayoutType.FIXED,
-          columnWidths: [10800],
-          width: { size: 10800, type: WidthType.DXA },
-          rows: commentRows
-        });
+        function fillTotalHoursRow(cells, entries, days) {
+          let siteGrandTotalHours = 0;
+          days.forEach((dayObj, idx) => {
+            if (!cells[idx + 1]) return;
+            const targetDate = normalizeDateStr(dayObj.dateStr);
+            const entriesForDay = entries.filter(e => normalizeDateStr(e.date) === targetDate);
+            let dayTotal = 0;
+            entriesForDay.forEach(entryForDay => {
+              if (entryForDay.tasks) {
+                dayTotal += entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
+              }
+            });
+            siteGrandTotalHours += dayTotal;
+            setCellText(cells[idx + 1], dayTotal > 0 ? String(dayTotal) : "");
+          });
+          if (cells[8]) {
+            setCellText(cells[8], siteGrandTotalHours > 0 ? String(siteGrandTotalHours) : "");
+          }
+        }
 
-        const timesheetTable = new Table({
-          layout: TableLayoutType.FIXED,
-          columnWidths: EXACT_TIMESHEET_COL_WIDTHS,
-          width: { size: 10800, type: WidthType.DXA },
-          rows: tableRows
-        });
+        function fillTravelRow(cells, entries, days) {
+          let siteGrandTravelTotal = 0;
+          days.forEach((dayObj, idx) => {
+            if (!cells[idx + 1]) return;
+            const targetDate = normalizeDateStr(dayObj.dateStr);
+            const entriesForDay = entries.filter(e => normalizeDateStr(e.date) === targetDate);
+            let dayTravel = 0;
+            entriesForDay.forEach(entryForDay => {
+              if (entryForDay.tasks) {
+                dayTravel += entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.travelTime) || 0), 0);
+              }
+            });
+            siteGrandTravelTotal += dayTravel;
+            setCellText(cells[idx + 1], dayTravel > 0 ? String(dayTravel) : "");
+          });
+          if (cells[8]) {
+            setCellText(cells[8], siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "");
+          }
+        }
 
-        const doc = new Document({
-          sections: [
-            {
-              properties: {
-                page: { 
-                  margin: { 
-                    top: 360,    
-                    bottom: 360, 
-                    left: 500,   
-                    right: 500   
-                  } 
-                }
-              },
-              headers: { default: docHeader },
-              footers: { default: docFooter },
-              children: [
-                timesheetTable
-              ]
-            },
-            {
-              properties: {
-                page: { 
-                  margin: { 
-                    top: 360,
-                    bottom: 360,
-                    left: 500,
-                    right: 500
-                  } 
-                }
-              },
-              headers: { default: docHeaderPage2 },
-              children: [
-                commentsTable
-              ]
+        for (let tr of rows) {
+          const cells = tr.getElementsByTagName("w:tc");
+          if (cells.length === 0) continue;
+          
+          const firstCellText = getCellText(cells[0]).trim();
+          
+          if (firstCellText === "Date") {
+            weekDays.forEach((dayObj, idx) => {
+              if (cells[idx + 1]) {
+                const dateParts = dayObj.dateStr.split('-');
+                const displayDDMM = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}` : dayObj.dateStr;
+                setCellText(cells[idx + 1], displayDDMM);
+              }
+            });
+          } else if (firstCellText === "START TIME") {
+            fillTimingRow(cells, "startTime", siteEntries, weekDays);
+          } else if (firstCellText === "TIME LEFT SITE") {
+            fillTimingRow(cells, "timeLeftSite", siteEntries, weekDays);
+          } else if (firstCellText === "TIME RETURNED") {
+            fillTimingRow(cells, "timeReturned", siteEntries, weekDays);
+          } else if (firstCellText === "TIME FINISHED") {
+            fillTimingRow(cells, "timeFinished", siteEntries, weekDays);
+          } else if (firstCellText === "TOTAL HOURS") {
+            fillTotalHoursRow(cells, siteEntries, weekDays);
+          } else if (firstCellText === "Travel Time") {
+            fillTravelRow(cells, siteEntries, weekDays);
+          } else {
+            const matchedTask = ALL_TEMPLATE_TASKS.find(task => task.trim() === firstCellText);
+            if (matchedTask) {
+              fillTaskRow(cells, matchedTask, siteEntries, weekDays);
             }
-          ]
-        });
+          }
+        }
 
+        const serializer = new XMLSerializer();
+        const updatedXmlStr = serializer.serializeToString(xmlDoc);
+        zip.file("word/document.xml", updatedXmlStr);
+
+        const blob = zip.generate({
+          type: 'blob',
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        });
+        
         const safeUserName = userName.replace(/[^a-zA-Z0-9_\-]/g, '_');
         const safeSiteName = siteName.replace(/[^a-zA-Z0-9_\-]/g, '_');
         const weekStartStr = weekDays[0].dateStr;
-        const blob = await Packer.toBlob(doc);
+        
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
@@ -942,7 +729,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
       console.error("DOCX export error:", err);
-      setStatusMessage({ type: 'error', text: "Failed to generate DOCX file." });
+      setStatusMessage({ type: 'error', text: "Failed to generate DOCX file from template." });
     } finally {
       setExportingDocx(false);
     }
@@ -981,7 +768,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         {/* Header Bar with Logo (Hidden on Mobile) & DOCX Download Button */}
         <div className="border-b border-slate-200 pb-3 mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            {/* Added hidden md:block so logo is hidden on mobile screens */}
             <img src={sjrLogo} alt="SJR Builders Logo" className="h-10 w-auto object-contain hidden md:block" />
             <div>
               <h2 className="text-xl font-bold text-slate-900 leading-tight">Weekly Time Card Entry</h2>
