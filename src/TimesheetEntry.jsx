@@ -574,7 +574,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               updatedText = updatedText.replace(/Staff Member[:\s]*/gi, `Staff Member: ${userName}`);
             }
             if (updatedText.includes("Project")) {
-              updatedText = updatedText.replace(/Project[:\s]*/gi, `     |     Project: ${siteName}`);
+              // Removed vertical line / pipe and added clean spacing
+              updatedText = updatedText.replace(/Project[:\s]*/gi, `     Project: ${siteName}`);
             }
             pText = updatedText;
             modified = true;
