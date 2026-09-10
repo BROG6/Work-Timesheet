@@ -8,7 +8,7 @@ import {
 import { 
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, 
   WidthType, BorderStyle, AlignmentType, ShadingType, ImageRun,
-  VerticalAlign, TableLayoutType 
+  VerticalAlign, TableLayoutType, Header, Footer 
 } from 'docx';
 
 import sjrLogo from './assets/logo.jpg';
@@ -497,19 +497,12 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
   const handleExportDocx = async () => {
     setExportingDocx(true);
     try {
-      let logo2ImageRunP1 = null;
-      let logo2ImageRunP2 = null;
+      let logo2ImageRun = null;
       if (logo2) {
         try {
-          const logoDataP1 = await getLogoUint8Array(logo2);
-          const logoDataP2 = await getLogoUint8Array(logo2);
-          logo2ImageRunP1 = new ImageRun({
-            data: logoDataP1,
-            transformation: { width: 120, height: 44 },
-            type: "jpg",
-          });
-          logo2ImageRunP2 = new ImageRun({
-            data: logoDataP2,
+          const logoData = await getLogoUint8Array(logo2);
+          logo2ImageRun = new ImageRun({
+            data: logoData,
             transformation: { width: 120, height: 44 },
             type: "jpg",
           });
@@ -731,120 +724,132 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         travelCells.push(createCell({ text: siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", align: AlignmentType.RIGHT, colWidth: EXACT_TIMESHEET_COL_WIDTHS[8] }));
         tableRows.push(new TableRow({ children: travelCells }));
 
-        // Page 1 Header Table
-        const topHeaderTableP1 = new Table({
-          layout: TableLayoutType.FIXED,
-          columnWidths: [4860, 3780, 2160],
-          width: { size: 10800, type: WidthType.DXA },
-          borders: {
-            top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-            bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-            left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-            right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-            insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-            insideVertical: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-          },
-          rows: [
-            new TableRow({
-              children: [
-                new TableCell({
-                  width: { size: 4860, type: WidthType.DXA },
-                  verticalAlign: VerticalAlign.BOTTOM,
-                  margins: { top: 0, bottom: 20, left: 0, right: 0 },
-                  children: [
-                    new Paragraph({
-                      spaceBefore: 0,
-                      spaceAfter: 20,
-                      children: [
-                        new TextRun({ text: "Staff Member: ", bold: true, size: 18, font: "Calibri" }),
-                        new TextRun({ text: userName, size: 18, font: "Calibri" }),
-                      ],
-                    }),
-                  ],
-                }),
-                new TableCell({
-                  width: { size: 3780, type: WidthType.DXA },
-                  verticalAlign: VerticalAlign.BOTTOM,
-                  margins: { top: 0, bottom: 20, left: 0, right: 0 },
-                  children: [
-                    new Paragraph({
-                      spaceBefore: 0,
-                      spaceAfter: 20,
-                      children: [
-                        new TextRun({ text: "Project: ", bold: true, size: 18, font: "Calibri" }),
-                        new TextRun({ text: siteName, size: 18, font: "Calibri" }),
-                      ],
-                    }),
-                  ],
-                }),
-                new TableCell({
-                  width: { size: 2160, type: WidthType.DXA },
-                  verticalAlign: VerticalAlign.BOTTOM,
-                  margins: { top: 0, bottom: 20, left: 0, right: 0 },
-                  children: [
-                    new Paragraph({
-                      alignment: AlignmentType.RIGHT,
-                      spaceBefore: 0,
-                      spaceAfter: 0,
-                      children: logo2ImageRunP1 ? [logo2ImageRunP1] : [],
-                    }),
-                  ],
-                }),
-              ],
-            }),
-          ],
-        });
-
-        // Page 1 Footer Paragraph
-        const versionParagraph = new Paragraph({
+        // Document Header (Branding/Logo placed in official Word Header so it hides in Word Mobile View)
+        const docHeader = new Header({
           children: [
-            new TextRun({
-              text: "Version – August 2026",
-              size: 14,
-              italic: true,
-              color: "555555"
-            })
-          ],
-          spaceBefore: 40,
-          spaceAfter: 0
-        });
-
-        // --- PAGE 2: COMMENTS SECTION ---
-        const topHeaderTableP2 = new Table({
-          layout: TableLayoutType.FIXED,
-          columnWidths: [8640, 2160],
-          width: { size: 10800, type: WidthType.DXA },
-          borders: {
-            top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-            bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-            left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-            right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-            insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-            insideVertical: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-          },
-          rows: [
-            new TableRow({
-              children: [
-                new TableCell({
-                  width: { size: 8640, type: WidthType.DXA },
-                  children: [new Paragraph({ spaceBefore: 0, spaceAfter: 0, children: [] })]
-                }),
-                new TableCell({
-                  width: { size: 2160, type: WidthType.DXA },
-                  verticalAlign: VerticalAlign.BOTTOM,
-                  margins: { top: 0, bottom: 20, left: 0, right: 0 },
+            new Table({
+              layout: TableLayoutType.FIXED,
+              columnWidths: [4860, 3780, 2160],
+              width: { size: 10800, type: WidthType.DXA },
+              borders: {
+                top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                insideVertical: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+              },
+              rows: [
+                new TableRow({
                   children: [
-                    new Paragraph({
-                      alignment: AlignmentType.RIGHT,
-                      spaceBefore: 0,
-                      spaceAfter: 0,
-                      children: logo2ImageRunP2 ? [logo2ImageRunP2] : [],
+                    new TableCell({
+                      width: { size: 4860, type: WidthType.DXA },
+                      verticalAlign: VerticalAlign.BOTTOM,
+                      margins: { top: 0, bottom: 20, left: 0, right: 0 },
+                      children: [
+                        new Paragraph({
+                          spaceBefore: 0,
+                          spaceAfter: 20,
+                          children: [
+                            new TextRun({ text: "Staff Member: ", bold: true, size: 18, font: "Calibri" }),
+                            new TextRun({ text: userName, size: 18, font: "Calibri" }),
+                          ],
+                        }),
+                      ],
+                    }),
+                    new TableCell({
+                      width: { size: 3780, type: WidthType.DXA },
+                      verticalAlign: VerticalAlign.BOTTOM,
+                      margins: { top: 0, bottom: 20, left: 0, right: 0 },
+                      children: [
+                        new Paragraph({
+                          spaceBefore: 0,
+                          spaceAfter: 20,
+                          children: [
+                            new TextRun({ text: "Project: ", bold: true, size: 18, font: "Calibri" }),
+                            new TextRun({ text: siteName, size: 18, font: "Calibri" }),
+                          ],
+                        }),
+                      ],
+                    }),
+                    new TableCell({
+                      width: { size: 2160, type: WidthType.DXA },
+                      verticalAlign: VerticalAlign.BOTTOM,
+                      margins: { top: 0, bottom: 20, left: 0, right: 0 },
+                      children: [
+                        new Paragraph({
+                          alignment: AlignmentType.RIGHT,
+                          spaceBefore: 0,
+                          spaceAfter: 0,
+                          children: logo2ImageRun ? [logo2ImageRun] : [],
+                        }),
+                      ],
                     }),
                   ],
                 }),
               ],
-            }),
-          ],
+            })
+          ]
+        });
+
+        // Document Footer (Version footer placed in official Word Footer so it hides in Word Mobile View)
+        const docFooter = new Footer({
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "Version – August 2026",
+                  size: 14,
+                  italic: true,
+                  color: "555555"
+                })
+              ],
+              spaceBefore: 40,
+              spaceAfter: 0
+            })
+          ]
+        });
+
+        // --- PAGE 2: COMMENTS SECTION HEADER ---
+        const docHeaderPage2 = new Header({
+          children: [
+            new Table({
+              layout: TableLayoutType.FIXED,
+              columnWidths: [8640, 2160],
+              width: { size: 10800, type: WidthType.DXA },
+              borders: {
+                top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                insideVertical: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+              },
+              rows: [
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      width: { size: 8640, type: WidthType.DXA },
+                      children: [new Paragraph({ spaceBefore: 0, spaceAfter: 0, children: [] })]
+                    }),
+                    new TableCell({
+                      width: { size: 2160, type: WidthType.DXA },
+                      verticalAlign: VerticalAlign.BOTTOM,
+                      margins: { top: 0, bottom: 20, left: 0, right: 0 },
+                      children: [
+                        new Paragraph({
+                          alignment: AlignmentType.RIGHT,
+                          spaceBefore: 0,
+                          spaceAfter: 0,
+                          children: logo2ImageRun ? [logo2ImageRun] : [],
+                        }),
+                      ],
+                    }),
+                  ],
+                }),
+              ],
+            })
+          ]
         });
 
         const allComments = [];
@@ -893,24 +898,24 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           rows: tableRows
         });
 
-        // Document with Page 1 and Page 2 Sections
+        // Document with Page 1 and Page 2 Sections utilizing native Word Headers & Footers
         const doc = new Document({
           sections: [
             {
               properties: {
                 page: { 
                   margin: { 
-                    top: 360,    // ~0.63 cm top margin
-                    bottom: 360, // ~0.63 cm bottom margin
-                    left: 500,   // ~0.88 cm left margin
-                    right: 500   // ~0.88 cm right margin
+                    top: 360,    
+                    bottom: 360, 
+                    left: 500,   
+                    right: 500   
                   } 
                 }
               },
+              headers: { default: docHeader },
+              footers: { default: docFooter },
               children: [
-                topHeaderTableP1,
-                timesheetTable,
-                versionParagraph
+                timesheetTable
               ]
             },
             {
@@ -924,8 +929,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   } 
                 }
               },
+              headers: { default: docHeaderPage2 },
               children: [
-                topHeaderTableP2,
                 commentsTable
               ]
             }
