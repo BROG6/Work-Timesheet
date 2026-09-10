@@ -796,7 +796,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         {/* Header Bar with Logo & DOCX Download Button */}
         <div className="border-b border-slate-200 pb-3 mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <img src={sjrLogo} alt="SJR Builders Logo" className="h-10 w-auto object-contain hidden md:block" />
+            <img src={sjrLogo} alt="SJR Builders Logo" className="h-10 w-auto object-contain" />
             <div>
               <h2 className="text-xl font-bold text-slate-900 leading-tight">Weekly Time Card Entry</h2>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
