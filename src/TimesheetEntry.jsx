@@ -556,7 +556,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
         const rows = xmlDoc.getElementsByTagName("w:tr");
 
-        // Robust paragraph-level search and replace (handles Word run-splitting across <w:t> tags)
         const paragraphs = xmlDoc.getElementsByTagName("w:p");
         for (let p of paragraphs) {
           const tNodes = p.getElementsByTagName("w:t");
@@ -791,13 +790,13 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-        {/* Header Bar with Logo & DOCX Download Button */}
-        <div className="border-b border-slate-200 pb-3 mb-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <img src={sjrLogo} alt="SJR Builders Logo" className="h-10 w-auto object-contain hidden md:block" />
-            <div>
-              <h2 className="text-xl font-bold text-slate-900 leading-tight">Weekly Time Card Entry</h2>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
+        {/* Header Bar with Logo & DOCX Download Button (Fixed layout collision with min-w-0 / flex-wrap) */}
+        <div className="border-b border-slate-200 pb-3 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <img src={sjrLogo} alt="SJR Builders Logo" className="h-10 w-auto object-contain hidden md:block flex-shrink-0" />
+            <div className="min-w-0">
+              <h2 className="text-xl font-bold text-slate-900 leading-tight truncate">Weekly Time Card Entry</h2>
+              <p className="text-xs text-slate-500 font-medium mt-0.5 truncate">
                 Logged for: <span className="text-slate-800 font-semibold">{userName}</span>
               </p>
             </div>
@@ -807,7 +806,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             type="button"
             onClick={handleExportDocx}
             disabled={exportingDocx}
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-3 rounded-lg shadow transition-colors disabled:opacity-50 cursor-pointer"
+            className="self-start sm:self-auto flex-shrink-0 flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-3 rounded-lg shadow transition-colors disabled:opacity-50 cursor-pointer"
             title="Download Time Card DOCX (One per Site)"
           >
             <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
