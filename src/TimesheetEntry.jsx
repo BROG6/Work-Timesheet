@@ -333,7 +333,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       const currentWed = getWednesday(new Date());
       const currentTue = new Date(currentWed);
       currentTue.setDate(currentWed.getDate() + 6);
-      setWeekRangeStr(`${formatDisplayDate(currentWed)} â€“ ${formatDisplayDate(currentTue)}`);
+      setWeekRangeStr(`${formatDisplayDate(currentWed)} – ${formatDisplayDate(currentTue)}`);
       
       const q = query(collection(db, 'timesheets'), where('userId', '==', userId));
       let querySnapshot;
@@ -787,7 +787,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             new Paragraph({
               children: [
                 new TextRun({
-                  text: "Version â€“ August 2026",
+                  text: "Version – August 2026",
                   size: 14,
                   italic: true,
                   color: "555555"
@@ -858,7 +858,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             ]
           }),
           new TableRow({
-            children: [createCell({ text: "If Other â€“ please detail what type of work you were undertaking", fontSize: 15, colWidth: 10800, topMargin: 20, bottomMargin: 20 })]
+            children: [createCell({ text: "If Other – please detail what type of work you were undertaking", fontSize: 15, colWidth: 10800, topMargin: 20, bottomMargin: 20 })]
           })
         ];
 
@@ -955,7 +955,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       {/* Network Connection Banner */}
       {!isOnline && (
         <div className="bg-amber-500 text-slate-950 px-4 py-2 rounded-lg text-xs font-bold flex items-center justify-between shadow">
-          <span>âš¡ Working Offline</span>
+          <span>⚡ Working Offline</span>
           <span className="font-medium text-[11px]">Saved locally & auto-syncs when online</span>
         </div>
       )}
@@ -1018,10 +1018,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               }}
               className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
             >
-              â† Prev Week
+              ← Prev Week
             </button>
             <span className="font-bold text-slate-200">
-              {weekDays[0].monthName} {weekDays[0].dayNumber} â€“ {weekDays[6].monthName} {weekDays[6].dayNumber}
+              {weekDays[0].monthName} {weekDays[0].dayNumber} – {weekDays[6].monthName} {weekDays[6].dayNumber}
             </span>
             <div className="flex gap-1.5">
               <button
@@ -1043,7 +1043,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }}
                 className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
               >
-                Next Week â†’
+                Next Week →
               </button>
             </div>
           </div>
@@ -1087,7 +1087,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           <div className={`mb-4 p-3 rounded-lg text-sm font-semibold flex items-center gap-2 ${
             statusMessage.type === 'error' ? 'bg-rose-50 border border-rose-200 text-rose-800' : 'bg-emerald-50 border border-emerald-200 text-emerald-800'
           }`}>
-            <span>{statusMessage.type === 'error' ? 'âš ï¸' : 'âœ“'}</span>
+            <span>{statusMessage.type === 'error' ? '⚠️' : '✓'}</span>
             {statusMessage.text}
           </div>
         )}
@@ -1309,7 +1309,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
         {/* Version Footer (Hidden on Mobile) */}
         <div className="text-center text-[11px] text-slate-400 mt-6 pt-3 border-t border-slate-100 hidden md:block">
-          Version â€“ August 2026
+          Version – August 2026
         </div>
       </div>
     </div>
