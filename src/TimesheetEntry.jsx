@@ -525,7 +525,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         colWidth = 850, 
         colSpan = 1, 
         shading = null, 
-        fontSize = 15,
+        fontSize = 22, // 11pt = 22 half-points
         topMargin = 18,
         bottomMargin = 18
       }) => {
@@ -741,8 +741,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                           spaceBefore: 0,
                           spaceAfter: 20,
                           children: [
-                            new TextRun({ text: "Staff Member: ", bold: true, size: 18, font: "Calibri" }),
-                            new TextRun({ text: userName, size: 18, font: "Calibri" }),
+                            new TextRun({ text: "Staff Member: ", bold: true, size: 22, font: "Calibri" }),
+                            new TextRun({ text: userName, size: 22, font: "Calibri" }),
                           ],
                         }),
                       ],
@@ -756,8 +756,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                           spaceBefore: 0,
                           spaceAfter: 20,
                           children: [
-                            new TextRun({ text: "Project: ", bold: true, size: 18, font: "Calibri" }),
-                            new TextRun({ text: siteName, size: 18, font: "Calibri" }),
+                            new TextRun({ text: "Project: ", bold: true, size: 22, font: "Calibri" }),
+                            new TextRun({ text: siteName, size: 22, font: "Calibri" }),
                           ],
                         }),
                       ],
@@ -788,7 +788,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               children: [
                 new TextRun({
                   text: "Version – August 2026",
-                  size: 14,
+                  size: 18,
                   italic: true,
                   color: "555555"
                 })
@@ -854,11 +854,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const commentRows = [
           new TableRow({
             children: [
-              createCell({ text: "COMMENTS", bold: true, fontSize: 18, colWidth: 10800, topMargin: 30, bottomMargin: 30 })
+              createCell({ text: "COMMENTS", bold: true, fontSize: 22, colWidth: 10800, topMargin: 30, bottomMargin: 30 })
             ]
           }),
           new TableRow({
-            children: [createCell({ text: "If Other – please detail what type of work you were undertaking", fontSize: 15, colWidth: 10800, topMargin: 20, bottomMargin: 20 })]
+            children: [createCell({ text: "If Other – please detail what type of work you were undertaking", fontSize: 22, colWidth: 10800, topMargin: 20, bottomMargin: 20 })]
           })
         ];
 
@@ -867,7 +867,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           const commentText = allComments[i] || "";
           commentRows.push(
             new TableRow({
-              children: [createCell({ text: commentText, fontSize: 15, colWidth: 10800, topMargin: 16, bottomMargin: 16 })]
+              children: [createCell({ text: commentText, fontSize: 22, colWidth: 10800, topMargin: 16, bottomMargin: 16 })]
             })
           );
         }
