@@ -146,22 +146,29 @@ function isFriday(dateStr) {
 
 function getFormattedStaffName(user, userProfile) {
   const explicitName = userProfile?.name || userProfile?.fullName || userProfile?.userName || user?.displayName;
+  let fullName = '';
   if (explicitName && explicitName.trim() !== '' && !explicitName.includes('@')) {
-    return explicitName.trim();
+    fullName = explicitName.trim();
+  } else {
+    const storedName = localStorage.getItem('sjr_staff_name');
+    if (storedName) {
+      fullName = storedName;
+    } else {
+      const email = userProfile?.email || user?.email || '';
+      if (email.includes('@')) {
+        const handle = email.split('@')[0];
+        fullName = handle
+          .split(/[\._\-]/)
+          .filter(Boolean)
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+          .join(' ');
+      } else {
+        fullName = 'Lakaia Barclay';
+      }
+    }
   }
-  const storedName = localStorage.getItem('sjr_staff_name');
-  if (storedName) return storedName;
-
-  const email = userProfile?.email || user?.email || '';
-  if (email.includes('@')) {
-    const handle = email.split('@')[0];
-    return handle
-      .split(/[\._\-]/)
-      .filter(Boolean)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-      .join(' ');
-  }
-  return 'Lakaia Barclay';
+  // Return just the first name
+  return fullName.split(' ')[0];
 }
 
 const DEFAULT_BLANK_TASK = (dateStr) => {
