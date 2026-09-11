@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from './firebaseConfig';
 import { 
-  collection, doc, setDoc, query, where, getDocs, getDocsFromCache, serverTimestamp 
+  collection, doc, setDoc, deleteDoc, query, where, getDocs, getDocsFromCache, serverTimestamp 
 } from 'firebase/firestore';
 
 import PZip from 'pizzip';
@@ -182,7 +182,8 @@ const createBlankSite = (dateStr, initialProject = '') => ({
   timeFinished: isFriday(dateStr) ? '15:30' : '16:30',
   timeLeftSite: '',
   timeReturned: '',
-  tasks: [createBlankTask(dateStr)]
+  tasks: [createBlankTask(dateStr)],
+  isSubmitted: false
 });
 
 function SiteAutoCompleteInput({ value, onChange, existingSites }) {
@@ -264,7 +265,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
   const [weekRangeStr, setWeekRangeStr] = useState('');
   const [loadingHours, setLoadingHours] = useState(true);
 
-  // Multi-Site State: Holds an array of site objects for the selected date
   const [siteEntries, setSiteEntries] = useState(() => [
     createBlankSite(
       formatDate(new Date()),
@@ -340,20 +340,20 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       
       const validWeekDates = Array.from({ length: 7 }, (_, i) => {
         const d = new Date(currentWed.getFullYear(), currentWed.getMonth(), currentWed.getDate() + i);
-        return formatDisplayDate(d);
+        return formatDate(d);
       });
       
       let total = 0;
       querySnapshot.forEach((docSnap) => {
         const data = docSnap.data();
-        if (validWeekDates.includes(displayDate(data.date))) {
+        if (validWeekDates.includes(data.date)) {
           total += parseFloat(data.totalHours) || 0;
         }
       });
       setWeeklyHours(total);
     } catch (err) {
       console.warn("Could not retrieve weekly hours:", err);
-    } finally {
+    } font-medium {
       setLoadingHours(false);
     }
   }, [userId]);
@@ -364,7 +364,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     }
   }, [userId, fetchStaffWeeklyHours]);
 
-  // Load existing entry documents for selected date
   useEffect(() => {
     let isMounted = true;
     async function loadDayEntries() {
@@ -401,7 +400,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 hours: t.hours !== undefined ? String(t.hours) : (isFriday(selectedDate) ? '8' : '9.25'),
                 travelTime: t.travelTime !== undefined ? String(t.travelTime) : '',
                 comments: t.comments || ''
-              }))
+              })),
+              isSubmitted: true
             };
           });
           setSiteEntries(loadedSites);
@@ -435,13 +435,42 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     return sum + site.tasks.reduce((tSum, t) => tSum + (parseFloat(t.hours) || 0), 0);
   }, 0);
 
-  // Helper functions for updating multi-site state
   const addSiteBlock = () => {
     setSiteEntries((prev) => [...prev, createBlankSite(selectedDate, '')]);
   };
 
   const removeSiteBlock = (siteId) => {
     setSiteEntries((prev) => prev.filter((site) => site.id !== siteId));
+  };
+
+  const handleDeleteSubmittedSite = async (siteItem) => {
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete the entry for "${siteItem.project || 'Unassigned Site'}" on ${displayDate(selectedDate)}?`
+    );
+    if (!confirmDelete) return;
+
+    setLoading(true);
+    try {
+      const projectTitle = siteItem.project.trim() || "General / Unassigned";
+      const safeSiteKey = projectTitle.replace(/[^a-zA-Z0-9_\-]/g, '_');
+      const docId = `${userId}_${selectedDate}_${safeSiteKey}`;
+
+      await deleteDoc(doc(db, 'timesheets', docId));
+
+      setSiteEntries((prev) => {
+        const remaining = prev.filter((s) => s.id !== siteItem.id);
+        return remaining.length > 0 ? remaining : [createBlankSite(selectedDate, '')];
+      });
+
+      await fetchStaffWeeklyHours();
+      setStatusMessage({ type: 'success', text: `Deleted site entry for ${projectTitle}.` });
+      setTimeout(() => setStatusMessage(null), 4000);
+    } catch (err) {
+      console.error("Delete error:", err);
+      setStatusMessage({ type: 'error', text: "Failed to delete site entry from database." });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const updateSiteField = (siteId, field, value) => {
@@ -534,6 +563,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }
       }
 
+      setSiteEntries((prev) => prev.map((s) => ({ ...s, isSubmitted: true })));
       setExistingSites(updatedSitesList);
       localStorage.setItem('sjr_known_sites', JSON.stringify(updatedSitesList));
       if (siteEntries[0]?.project) {
@@ -566,17 +596,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       }
       const templateArrayBuffer = await response.arrayBuffer();
 
-      const normalizeDateStr = (str) => {
-        if (!str) return '';
-        const formatted = displayDate(str);
-        const parts = formatted.split('/');
-        if (parts.length === 3) {
-          return `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[2]}`;
-        }
-        return str;
-      };
-
-      const validDisplayDates = weekDays.map((d) => normalizeDateStr(d.dateStr));
+      const validDates = weekDays.map((d) => d.dateStr);
       let weeklyEntries = [];
 
       if (userId) {
@@ -589,7 +609,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }
         querySnapshot.forEach((docSnap) => {
           const data = docSnap.data();
-          if (validDisplayDates.includes(normalizeDateStr(data.date))) {
+          if (validDates.includes(data.date)) {
             weeklyEntries.push(data);
           }
         });
@@ -613,13 +633,117 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
       const sitesToExport = Object.keys(siteMap);
 
+      function setCellText(cell, text) {
+        const tNodes = cell.getElementsByTagName("w:t");
+        if (tNodes.length > 0) {
+          tNodes[0].textContent = text;
+          tNodes[0].setAttribute("xml:space", "preserve");
+          for (let i = 1; i < tNodes.length; i++) {
+            tNodes[i].textContent = "";
+          }
+        } else {
+          const pNodes = cell.getElementsByTagName("w:p");
+          if (pNodes.length > 0) {
+            const r = xmlDoc.createElement("w:r");
+            const t = xmlDoc.createElement("w:t");
+            t.textContent = text;
+            t.setAttribute("xml:space", "preserve");
+            r.appendChild(t);
+            pNodes[0].appendChild(r);
+          }
+        }
+      }
+
+      function fillTimingRow(cells, timingKey, siteEntriesForExport, days) {
+        days.forEach((dayObj, idx) => {
+          if (!cells[idx + 1]) return;
+          const entriesForDay = siteEntriesForExport.filter(e => e.date === dayObj.dateStr);
+          const val = entriesForDay.map(e => e.timeCardDetails?.[timingKey]).filter(Boolean).join(" / ") || "";
+          setCellText(cells[idx + 1], val);
+        });
+      }
+
+      function fillTaskRow(cells, taskLabel, siteEntriesForExport, days) {
+        let rowTaskTotal = 0;
+        days.forEach((dayObj, idx) => {
+          if (!cells[idx + 1]) return;
+          const entriesForDay = siteEntriesForExport.filter(e => e.date === dayObj.dateStr);
+          let dayTaskHours = 0;
+
+          if (entriesForDay.length > 0 && taskLabel !== "") {
+            entriesForDay.forEach(entryForDay => {
+              if (entryForDay.tasks) {
+                entryForDay.tasks.forEach(t => {
+                  const tName = (t.taskName || '').toLowerCase().trim();
+                  const lName = taskLabel.toLowerCase().trim();
+                  const nameMatches =
+                    tName === lName ||
+                    (lName.includes("pto") && (tName.includes("other work") || tName.includes("pto"))) ||
+                    (lName.includes("specify") && tName.includes("other leave")) ||
+                    (lName.length > 4 && tName.length > 4 && lName.startsWith(tName));
+
+                  if (nameMatches) {
+                    dayTaskHours += parseFloat(t.hours) || 0;
+                  }
+                });
+              }
+            });
+          }
+          rowTaskTotal += dayTaskHours;
+          setCellText(cells[idx + 1], dayTaskHours > 0 ? String(dayTaskHours) : "");
+        });
+        if (cells[8]) {
+          setCellText(cells[8], rowTaskTotal > 0 ? String(rowTaskTotal) : "");
+        }
+      }
+
+      function fillTotalHoursRow(cells, siteEntriesForExport, days) {
+        let siteGrandTotalHours = 0;
+        days.forEach((dayObj, idx) => {
+          if (!cells[idx + 1]) return;
+          const entriesForDay = siteEntriesForExport.filter(e => e.date === dayObj.dateStr);
+          let dayTotal = 0;
+          entriesForDay.forEach(entryForDay => {
+            if (entryForDay.tasks) {
+              dayTotal += entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
+            }
+          });
+          siteGrandTotalHours += dayTotal;
+          setCellText(cells[idx + 1], dayTotal > 0 ? String(dayTotal) : "");
+        });
+        if (cells[8]) {
+          setCellText(cells[8], siteGrandTotalHours > 0 ? String(siteGrandTotalHours) : "");
+        }
+      }
+
+      function fillTravelRow(cells, siteEntriesForExport, days) {
+        let siteGrandTravelTotal = 0;
+        days.forEach((dayObj, idx) => {
+          if (!cells[idx + 1]) return;
+          const entriesForDay = siteEntriesForExport.filter(e => e.date === dayObj.dateStr);
+          let dayTravel = 0;
+          entriesForDay.forEach(entryForDay => {
+            if (entryForDay.tasks) {
+              dayTravel += entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.travelTime) || 0), 0);
+            }
+          });
+          siteGrandTravelTotal += dayTravel;
+          setCellText(cells[idx + 1], dayTravel > 0 ? String(dayTravel) : "");
+        });
+        if (cells[8]) {
+          setCellText(cells[8], siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "");
+        }
+      }
+
+      const cleanText = (str) => (str || '').replace(/\s+/g, ' ').trim();
+
       for (const siteName of sitesToExport) {
-        const siteEntries = siteMap[siteName];
+        const siteEntriesForExport = siteMap[siteName];
         const zip = new PZip(templateArrayBuffer);
         let docXmlStr = zip.file("word/document.xml").asText();
         
         const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
+        var xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
         const rows = xmlDoc.getElementsByTagName("w:tr");
         const paragraphs = xmlDoc.getElementsByTagName("w:p");
 
@@ -633,69 +757,20 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           }
 
           if (fullText.includes("Staff Member") || fullText.includes("Project")) {
-            let staffContained = !fullText.includes("Staff Member") || Array.from(tNodes).some(n => n.textContent.includes("Staff Member"));
-            let projectContained = !fullText.includes("Project") || Array.from(tNodes).some(n => n.textContent.includes("Project"));
-
-            if (staffContained && projectContained) {
-              let needsStaffColonWipe = false;
-              let needsProjectColonWipe = false;
-
-              for (let i = 0; i < tNodes.length; i++) {
-                let nodeText = tNodes[i].textContent;
-                let modified = false;
-
-                if (nodeText.includes("Staff Member")) {
-                  if (nodeText.includes("Staff Member:")) {
-                    nodeText = nodeText.replace(/Staff Member:\s*/, `Staff Member: ${userName} `);
-                  } else {
-                    nodeText = nodeText.replace("Staff Member", `Staff Member: ${userName} `);
-                    needsStaffColonWipe = true;
-                  }
-                  modified = true;
-                } 
-                
-                if (nodeText.includes("Project")) {
-                  if (nodeText.includes("Project:")) {
-                    nodeText = nodeText.replace(/Project:\s*/, `Project: ${siteName} `);
-                  } else {
-                    nodeText = nodeText.replace("Project", `Project: ${siteName} `);
-                    needsProjectColonWipe = true;
-                  }
-                  modified = true;
-                } 
-                
-                if (!modified && nodeText.includes(":")) {
-                  if (needsStaffColonWipe) {
-                    nodeText = nodeText.replace(":", "");
-                    needsStaffColonWipe = false;
-                    modified = true;
-                  } else if (needsProjectColonWipe) {
-                    nodeText = nodeText.replace(":", "");
-                    needsProjectColonWipe = false;
-                    modified = true;
-                  }
-                }
-
-                if (modified) {
-                  tNodes[i].textContent = nodeText;
-                  tNodes[i].setAttribute("xml:space", "preserve");
-                }
-              }
-            } else {
-              let combinedText = "";
-              if (fullText.includes("Staff Member") && fullText.includes("Project")) {
-                combinedText = `Staff Member: ${userName}          Project: ${siteName}`;
-              } else if (fullText.includes("Staff Member")) {
-                combinedText = `Staff Member: ${userName}`;
-              } else if (fullText.includes("Project")) {
-                combinedText = `Project: ${siteName}`;
-              }
-              
-              tNodes[0].textContent = combinedText;
-              tNodes[0].setAttribute("xml:space", "preserve");
-              for (let i = 1; i < tNodes.length; i++) {
-                tNodes[i].textContent = "";
-              }
+            let combinedText = fullText;
+            if (fullText.includes("Staff Member")) {
+              combinedText = combinedText.replace(/Staff Member:\s*/g, `Staff Member: ${userName} `)
+                                         .replace(/Staff Member\b/g, `Staff Member: ${userName} `);
+            }
+            if (fullText.includes("Project")) {
+              combinedText = combinedText.replace(/Project:\s*/g, `Project: ${siteName} `)
+                                         .replace(/Project\b/g, `Project: ${siteName} `);
+            }
+            
+            tNodes[0].textContent = combinedText;
+            tNodes[0].setAttribute("xml:space", "preserve");
+            for (let i = 1; i < tNodes.length; i++) {
+              tNodes[i].textContent = "";
             }
           }
         }
@@ -706,112 +781,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           for (let tn of tNodes) str += tn.textContent;
           return str;
         }
-
-        function setCellText(cell, text) {
-          const tNodes = cell.getElementsByTagName("w:t");
-          if (tNodes.length > 0) {
-            tNodes[0].textContent = text;
-            for (let i = 1; i < tNodes.length; i++) {
-              tNodes[i].textContent = "";
-            }
-          } else {
-            const pNodes = cell.getElementsByTagName("w:p");
-            if (pNodes.length > 0) {
-              const r = xmlDoc.createElement("w:r");
-              const t = xmlDoc.createElement("w:t");
-              t.textContent = text;
-              r.appendChild(t);
-              pNodes[0].appendChild(r);
-            }
-          }
-        }
-
-        function fillTimingRow(cells, timingKey, entries, days) {
-          days.forEach((dayObj, idx) => {
-            if (!cells[idx + 1]) return;
-            const targetDate = normalizeDateStr(dayObj.dateStr);
-            const entriesForDay = entries.filter(e => normalizeDateStr(e.date) === targetDate);
-            const val = entriesForDay.map(e => e.timeCardDetails?.[timingKey]).filter(Boolean).join(" / ") || "";
-            setCellText(cells[idx + 1], val);
-          });
-        }
-
-        function fillTaskRow(cells, taskLabel, entries, days) {
-          let rowTaskTotal = 0;
-          days.forEach((dayObj, idx) => {
-            if (!cells[idx + 1]) return;
-            const targetDate = normalizeDateStr(dayObj.dateStr);
-            const entriesForDay = entries.filter(e => normalizeDateStr(e.date) === targetDate);
-            let dayTaskHours = 0;
-
-            if (entriesForDay.length > 0 && taskLabel !== "") {
-              entriesForDay.forEach(entryForDay => {
-                if (entryForDay.tasks) {
-                  entryForDay.tasks.forEach(t => {
-                    const tName = (t.taskName || '').toLowerCase().trim();
-                    const lName = taskLabel.toLowerCase().trim();
-                    const nameMatches =
-                      tName === lName ||
-                      (lName.includes("pto") && (tName.includes("other work") || tName.includes("pto"))) ||
-                      (lName.includes("specify") && tName.includes("other leave")) ||
-                      (lName.length > 4 && tName.length > 4 && lName.startsWith(tName));
-
-                    if (nameMatches) {
-                      dayTaskHours += parseFloat(t.hours) || 0;
-                    }
-                  });
-                }
-              });
-            }
-            rowTaskTotal += dayTaskHours;
-            setCellText(cells[idx + 1], dayTaskHours > 0 ? String(dayTaskHours) : "");
-          });
-          if (cells[8]) {
-            setCellText(cells[8], rowTaskTotal > 0 ? String(rowTaskTotal) : "");
-          }
-        }
-
-        function fillTotalHoursRow(cells, entries, days) {
-          let siteGrandTotalHours = 0;
-          days.forEach((dayObj, idx) => {
-            if (!cells[idx + 1]) return;
-            const targetDate = normalizeDateStr(dayObj.dateStr);
-            const entriesForDay = entries.filter(e => normalizeDateStr(e.date) === targetDate);
-            let dayTotal = 0;
-            entriesForDay.forEach(entryForDay => {
-              if (entryForDay.tasks) {
-                dayTotal += entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
-              }
-            });
-            siteGrandTotalHours += dayTotal;
-            setCellText(cells[idx + 1], dayTotal > 0 ? String(dayTotal) : "");
-          });
-          if (cells[8]) {
-            setCellText(cells[8], siteGrandTotalHours > 0 ? String(siteGrandTotalHours) : "");
-          }
-        }
-
-        function fillTravelRow(cells, entries, days) {
-          let siteGrandTravelTotal = 0;
-          days.forEach((dayObj, idx) => {
-            if (!cells[idx + 1]) return;
-            const targetDate = normalizeDateStr(dayObj.dateStr);
-            const entriesForDay = entries.filter(e => normalizeDateStr(e.date) === targetDate);
-            let dayTravel = 0;
-            entriesForDay.forEach(entryForDay => {
-              if (entryForDay.tasks) {
-                dayTravel += entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.travelTime) || 0), 0);
-              }
-            });
-            siteGrandTravelTotal += dayTravel;
-            setCellText(cells[idx + 1], dayTravel > 0 ? String(dayTravel) : "");
-          });
-          if (cells[8]) {
-            setCellText(cells[8], siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "");
-          }
-        }
-
-        const cleanText = (str) => (str || '').replace(/\s+/g, ' ').trim();
 
         for (let tr of rows) {
           const cells = tr.getElementsByTagName("w:tc");
@@ -828,21 +797,21 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               }
             });
           } else if (firstCellText === "START TIME") {
-            fillTimingRow(cells, "startTime", siteEntries, weekDays);
+            fillTimingRow(cells, "startTime", siteEntriesForExport, weekDays);
           } else if (firstCellText === "TIME LEFT SITE") {
-            fillTimingRow(cells, "timeLeftSite", siteEntries, weekDays);
+            fillTimingRow(cells, "timeLeftSite", siteEntriesForExport, weekDays);
           } else if (firstCellText === "TIME RETURNED") {
-            fillTimingRow(cells, "timeReturned", siteEntries, weekDays);
+            fillTimingRow(cells, "timeReturned", siteEntriesForExport, weekDays);
           } else if (firstCellText === "TIME FINISHED") {
-            fillTimingRow(cells, "timeFinished", siteEntries, weekDays);
+            fillTimingRow(cells, "timeFinished", siteEntriesForExport, weekDays);
           } else if (firstCellText === "TOTAL HOURS") {
-            fillTotalHoursRow(cells, siteEntries, weekDays);
+            fillTotalHoursRow(cells, siteEntriesForExport, weekDays);
           } else if (firstCellText === "Travel Time") {
-            fillTravelRow(cells, siteEntries, weekDays);
+            fillTravelRow(cells, siteEntriesForExport, weekDays);
           } else {
             const matchedTask = ALL_TEMPLATE_TASKS.find(task => cleanText(task) === cleanText(firstCellText));
             if (matchedTask) {
-              fillTaskRow(cells, matchedTask, siteEntries, weekDays);
+              fillTaskRow(cells, matchedTask, siteEntriesForExport, weekDays);
             }
           }
         }
@@ -1046,15 +1015,32 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   <span className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">
                     Site #{siteIndex + 1} ({siteHours} hrs)
                   </span>
-                  {siteEntries.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeSiteBlock(siteItem.id)}
-                      className="text-xs text-rose-600 hover:text-rose-800 font-bold"
-                    >
-                      Remove Site
-                    </button>
-                  )}
+                  
+                  <div className="flex items-center gap-3">
+                    {siteItem.isSubmitted && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSubmittedSite(siteItem)}
+                        className="flex items-center gap-1 bg-rose-100 hover:bg-rose-200 text-rose-700 px-2 py-1 rounded text-xs font-bold transition-colors"
+                        title="Delete this site entry from database"
+                      >
+                        <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                          <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                        </svg>
+                        Delete Entry
+                      </button>
+                    )}
+
+                    {!siteItem.isSubmitted && siteEntries.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeSiteBlock(siteItem.id)}
+                        className="text-xs text-rose-600 hover:text-rose-800 font-bold"
+                      >
+                        Remove Site
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div>
