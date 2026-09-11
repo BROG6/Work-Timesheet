@@ -6,13 +6,8 @@ import {
 } from 'firebase/firestore';
 
 import PZip from 'pizzip';
-
 import sjrLogo from './assets/logo.jpg';
 
-// Fixed printable grid dimensions in twips (1/20th of a point)
-const EXACT_TIMESHEET_COL_WIDTHS = [4000, 850, 850, 850, 850, 850, 850, 850, 850];
-
-// Categorized Task List
 const TASK_CATEGORIES = {
   "Site Setup & Earthworks": [
     "Demolition",
@@ -63,7 +58,6 @@ const TASK_CATEGORIES = {
   ]
 };
 
-// Exact template tasks matching "Blank Time Cards.docx" layout (Wednesday through Tuesday)
 const ALL_TEMPLATE_TASKS = [
   "Demolition",
   "Profile/Set Up",
@@ -98,7 +92,7 @@ const ALL_TEMPLATE_TASKS = [
   "Bereavement Leave",
   "Training",
   "Other Leave (please specify)",
-  "" // Blank row preceding TOTAL HOURS matching template layout
+  ""
 ];
 
 function parseLocalDate(dateInput) {
@@ -148,13 +142,8 @@ function displayDate(dateStr) {
 
 function isFriday(dateStr) {
   if (!dateStr) return false;
-  const parts = dateStr.split('-');
-  if (parts.length === 3) {
-    const [year, month, day] = parts.map(Number);
-    const d = new Date(year, month - 1, day);
-    return d.getDay() === 5;
-  }
-  return false;
+  const d = parseLocalDate(dateStr);
+  return d.getDay() === 5;
 }
 
 function getFormattedStaffName(user, userProfile) {
@@ -177,17 +166,24 @@ function getFormattedStaffName(user, userProfile) {
   return 'Lakaia Barclay';
 }
 
-const DEFAULT_BLANK_TASK = (dateStr) => {
-  const isFri = isFriday(dateStr);
-  return {
-    id: Date.now() + Math.random(),
-    categoryGroup: "Framing & Envelope",
-    taskName: "Wall Framing",
-    hours: isFri ? '8' : '9.25',
-    travelTime: '',
-    comments: ''
-  };
-};
+const createBlankTask = (dateStr) => ({
+  id: Date.now() + Math.random(),
+  categoryGroup: "Framing & Envelope",
+  taskName: "Wall Framing",
+  hours: isFriday(dateStr) ? '8' : '9.25',
+  travelTime: '',
+  comments: ''
+});
+
+const createBlankSite = (dateStr, initialProject = '') => ({
+  id: Date.now() + Math.random(),
+  project: initialProject,
+  startTime: '07:00',
+  timeFinished: isFriday(dateStr) ? '15:30' : '16:30',
+  timeLeftSite: '',
+  timeReturned: '',
+  tasks: [createBlankTask(dateStr)]
+});
 
 function SiteAutoCompleteInput({ value, onChange, existingSites }) {
   const [suggestions, setSuggestions] = useState([]);
@@ -262,6 +258,24 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [existingSites, setExistingSites] = useState([]);
+  const [selectedDate, setSelectedDate] = useState(() => formatDate(new Date()));
+  const [currentWednesday, setCurrentWednesday] = useState(() => getWednesday(new Date()));
+  const [weeklyHours, setWeeklyHours] = useState(0);
+  const [weekRangeStr, setWeekRangeStr] = useState('');
+  const [loadingHours, setLoadingHours] = useState(true);
+
+  // Multi-Site State: Holds an array of site objects for the selected date
+  const [siteEntries, setSiteEntries] = useState(() => [
+    createBlankSite(
+      formatDate(new Date()),
+      localStorage.getItem(`sjr_last_project_${userId}`) || localStorage.getItem('last_site_name') || ''
+    )
+  ]);
+
+  const [loading, setLoading] = useState(false);
+  const [exportingDocx, setExportingDocx] = useState(false);
+  const [fetchingDay, setFetchingDay] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(null);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -273,28 +287,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
-
-  const [project, setProject] = useState(() => {
-    if (userId) {
-      return localStorage.getItem(`sjr_last_project_${userId}`) || localStorage.getItem('last_site_name') || '';
-    }
-    return localStorage.getItem('last_site_name') || '';
-  });
-
-  const [selectedDate, setSelectedDate] = useState(() => formatDate(new Date()));
-  const [currentWednesday, setCurrentWednesday] = useState(() => getWednesday(new Date()));
-  const [weeklyHours, setWeeklyHours] = useState(0);
-  const [weekRangeStr, setWeekRangeStr] = useState('');
-  const [loadingHours, setLoadingHours] = useState(true);
-  const [startTime, setStartTime] = useState('07:00');
-  const [timeFinished, setTimeFinished] = useState(() => (isFriday(formatDate(new Date())) ? '15:30' : '16:30'));
-  const [timeLeftSite, setTimeLeftSite] = useState('');
-  const [timeReturned, setTimeReturned] = useState('');
-  const [tasks, setTasks] = useState(() => [DEFAULT_BLANK_TASK(formatDate(new Date()))]);
-  const [loading, setLoading] = useState(false);
-  const [exportingDocx, setExportingDocx] = useState(false);
-  const [fetchingDay, setFetchingDay] = useState(false);
-  const [statusMessage, setStatusMessage] = useState(null);
 
   useEffect(() => {
     async function fetchSites() {
@@ -372,9 +364,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     }
   }, [userId, fetchStaffWeeklyHours]);
 
+  // Load existing entry documents for selected date
   useEffect(() => {
     let isMounted = true;
-    async function loadDayEntry() {
+    async function loadDayEntries() {
       if (!userId || !selectedDate) return;
       setFetchingDay(true);
       try {
@@ -390,18 +383,18 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           querySnapshot = await getDocsFromCache(q);
         }
         if (!isMounted) return;
+
         if (!querySnapshot.empty) {
-          const docData = querySnapshot.docs[querySnapshot.docs.length - 1].data();
-          if (docData.project) setProject(docData.project);
-          if (docData.timeCardDetails) {
-            setStartTime(docData.timeCardDetails.startTime || '07:00');
-            setTimeFinished(docData.timeCardDetails.timeFinished || (isFriday(selectedDate) ? '15:30' : '16:30'));
-            setTimeLeftSite(docData.timeCardDetails.timeLeftSite || '');
-            setTimeReturned(docData.timeCardDetails.timeReturned || '');
-          }
-          if (docData.tasks?.length > 0) {
-            setTasks(
-              docData.tasks.map((t) => ({
+          const loadedSites = querySnapshot.docs.map((docSnap) => {
+            const data = docSnap.data();
+            return {
+              id: Date.now() + Math.random(),
+              project: data.project || '',
+              startTime: data.timeCardDetails?.startTime || '07:00',
+              timeFinished: data.timeCardDetails?.timeFinished || (isFriday(selectedDate) ? '15:30' : '16:30'),
+              timeLeftSite: data.timeCardDetails?.timeLeftSite || '',
+              timeReturned: data.timeCardDetails?.timeReturned || '',
+              tasks: (data.tasks || []).map((t) => ({
                 id: Date.now() + Math.random(),
                 categoryGroup: t.taskCategoryGroup || t.categoryGroup || "Framing & Envelope",
                 taskName: t.taskName || t.category || "Wall Framing",
@@ -409,22 +402,20 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 travelTime: t.travelTime !== undefined ? String(t.travelTime) : '',
                 comments: t.comments || ''
               }))
-            );
-          }
+            };
+          });
+          setSiteEntries(loadedSites);
         } else {
-          setStartTime('07:00');
-          setTimeFinished(isFriday(selectedDate) ? '15:30' : '16:30');
-          setTimeLeftSite('');
-          setTimeReturned('');
-          setTasks([DEFAULT_BLANK_TASK(selectedDate)]);
+          const defaultProject = localStorage.getItem(`sjr_last_project_${userId}`) || localStorage.getItem('last_site_name') || '';
+          setSiteEntries([createBlankSite(selectedDate, defaultProject)]);
         }
       } catch (err) {
         console.warn("Cache load note:", err);
-      } finally {
+      } font-medium {
         if (isMounted) setFetchingDay(false);
       }
     }
-    loadDayEntry();
+    loadDayEntries();
     return () => {
       isMounted = false;
     };
@@ -440,55 +431,127 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     };
   });
 
-  const totalHours = tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
+  const grandTotalHours = siteEntries.reduce((sum, site) => {
+    return sum + site.tasks.reduce((tSum, t) => tSum + (parseFloat(t.hours) || 0), 0);
+  }, 0);
+
+  // Helper functions for updating multi-site state
+  const addSiteBlock = () => {
+    setSiteEntries((prev) => [...prev, createBlankSite(selectedDate, '')]);
+  };
+
+  const removeSiteBlock = (siteId) => {
+    setSiteEntries((prev) => prev.filter((site) => site.id !== siteId));
+  };
+
+  const updateSiteField = (siteId, field, value) => {
+    setSiteEntries((prev) =>
+      prev.map((site) => (site.id === siteId ? { ...site, [field]: value } : site))
+    );
+  };
+
+  const addTaskToSite = (siteId) => {
+    setSiteEntries((prev) =>
+      prev.map((site) =>
+        site.id === siteId
+          ? { ...site, tasks: [...site.tasks, createBlankTask(selectedDate)] }
+          : site
+      )
+    );
+  };
+
+  const removeTaskFromSite = (siteId, taskId) => {
+    setSiteEntries((prev) =>
+      prev.map((site) =>
+        site.id === siteId
+          ? { ...site, tasks: site.tasks.filter((t) => t.id !== taskId) }
+          : site
+      )
+    );
+  };
+
+  const updateTaskInSite = (siteId, taskId, field, value) => {
+    setSiteEntries((prev) =>
+      prev.map((site) => {
+        if (site.id !== siteId) return site;
+        const updatedTasks = site.tasks.map((t) => {
+          if (t.id !== taskId) return t;
+          if (field === 'categoryGroup') {
+            return { ...t, categoryGroup: value, taskName: TASK_CATEGORIES[value][0] };
+          }
+          return { ...t, [field]: value };
+        });
+        return { ...site, tasks: updatedTasks };
+      })
+    );
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (totalHours <= 0) {
+    if (grandTotalHours <= 0) {
       alert("Please enter valid task hours before submitting.");
       return;
     }
+
     setLoading(true);
-
-    const safeSiteKey = (project || "General_Unassigned").trim().replace(/[^a-zA-Z0-9_\-]/g, '_');
-    const docId = `${userId}_${selectedDate}_${safeSiteKey}`;
-
-    const payload = {
-      userId,
-      userName,
-      companyCode: activeProfile?.companyCode || activeProfile?.companyId || 'SJR Builders',
-      project: project || "General / Unassigned",
-      date: selectedDate,
-      timeCardDetails: { startTime, timeFinished, timeLeftSite, timeReturned },
-      tasks: tasks.map((t) => ({
-        taskCategoryGroup: t.categoryGroup,
-        taskName: t.taskName,
-        hours: parseFloat(t.hours) || 0,
-        travelTime: t.travelTime ? parseFloat(t.travelTime) : 0,
-        comments: t.comments
-      })),
-      totalHours,
-      status: 'pending',
-      updatedAt: serverTimestamp()
-    };
+    let updatedSitesList = [...existingSites];
 
     try {
-      await setDoc(doc(db, 'timesheets', docId), payload, { merge: true });
-      await fetchStaffWeeklyHours();
+      for (const site of siteEntries) {
+        const siteTotalHours = site.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
+        const projectTitle = site.project.trim() || "General / Unassigned";
+        const safeSiteKey = projectTitle.replace(/[^a-zA-Z0-9_\-]/g, '_');
+        const docId = `${userId}_${selectedDate}_${safeSiteKey}`;
 
-      if (project && !existingSites.includes(project)) {
-        const updated = [...existingSites, project];
-        setExistingSites(updated);
-        localStorage.setItem('sjr_known_sites', JSON.stringify(updated));
+        const payload = {
+          userId,
+          userName,
+          companyCode: activeProfile?.companyCode || activeProfile?.companyId || 'SJR Builders',
+          project: projectTitle,
+          date: selectedDate,
+          timeCardDetails: {
+            startTime: site.startTime,
+            timeFinished: site.timeFinished,
+            timeLeftSite: site.timeLeftSite,
+            timeReturned: site.timeReturned
+          },
+          tasks: site.tasks.map((t) => ({
+            taskCategoryGroup: t.categoryGroup,
+            taskName: t.taskName,
+            hours: parseFloat(t.hours) || 0,
+            travelTime: t.travelTime ? parseFloat(t.travelTime) : 0,
+            comments: t.comments
+          })),
+          totalHours: siteTotalHours,
+          status: 'pending',
+          updatedAt: serverTimestamp()
+        };
+
+        await setDoc(doc(db, 'timesheets', docId), payload, { merge: true });
+
+        if (site.project && !updatedSitesList.includes(site.project.trim())) {
+          updatedSitesList.push(site.project.trim());
+        }
       }
+
+      setExistingSites(updatedSitesList);
+      localStorage.setItem('sjr_known_sites', JSON.stringify(updatedSitesList));
+      if (siteEntries[0]?.project) {
+        localStorage.setItem(`sjr_last_project_${userId}`, siteEntries[0].project);
+        localStorage.setItem('last_site_name', siteEntries[0].project);
+      }
+
+      await fetchStaffWeeklyHours();
       setStatusMessage({
         type: 'success',
-        text: isOnline ? `Entry saved for ${displayDate(selectedDate)}!` : `Saved locally! Will sync automatically when back online.`
+        text: isOnline
+          ? `Entries saved for ${displayDate(selectedDate)}!`
+          : `Saved locally! Will sync automatically when back online.`
       });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
       console.error("Submission error:", err);
-      setStatusMessage({ type: 'error', text: "Could not write entry locally. Check storage settings." });
+      setStatusMessage({ type: 'error', text: "Could not write entries. Check storage settings." });
     } finally {
       setLoading(false);
     }
@@ -560,7 +623,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const rows = xmlDoc.getElementsByTagName("w:tr");
         const paragraphs = xmlDoc.getElementsByTagName("w:p");
 
-        // SURGICAL PARAGRAPH TEXT REPLACEMENT
         for (let p of paragraphs) {
           const tNodes = p.getElementsByTagName("w:t");
           if (tNodes.length === 0) continue;
@@ -575,7 +637,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             let projectContained = !fullText.includes("Project") || Array.from(tNodes).some(n => n.textContent.includes("Project"));
 
             if (staffContained && projectContained) {
-              // Surgical node-by-node update
               let needsStaffColonWipe = false;
               let needsProjectColonWipe = false;
 
@@ -621,7 +682,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 }
               }
             } else {
-              // Fallback for fragmented tags
               let combinedText = "";
               if (fullText.includes("Staff Member") && fullText.includes("Project")) {
                 combinedText = `Staff Member: ${userName}          Project: ${siteName}`;
@@ -751,6 +811,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           }
         }
 
+        const cleanText = (str) => (str || '').replace(/\s+/g, ' ').trim();
+
         for (let tr of rows) {
           const cells = tr.getElementsByTagName("w:tc");
           if (cells.length === 0) continue;
@@ -778,7 +840,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           } else if (firstCellText === "Travel Time") {
             fillTravelRow(cells, siteEntries, weekDays);
           } else {
-            const matchedTask = ALL_TEMPLATE_TASKS.find(task => task.trim() === firstCellText);
+            const matchedTask = ALL_TEMPLATE_TASKS.find(task => cleanText(task) === cleanText(firstCellText));
             if (matchedTask) {
               fillTaskRow(cells, matchedTask, siteEntries, weekDays);
             }
@@ -848,7 +910,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
-        {/* Header Bar with Logo & DOCX Download Button */}
+        {/* Header Bar */}
         <div className="border-b border-slate-200 pb-3 mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <img src={sjrLogo} alt="SJR Builders Logo" className="h-10 w-auto object-contain" />
@@ -874,7 +936,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           </button>
         </div>
 
-        {/* 7-Day Navigation (Wednesday start matching template) */}
+        {/* 7-Day Navigation */}
         <div className="bg-slate-900 text-white p-3 rounded-xl mb-5 shadow-inner">
           <div className="flex items-center justify-between mb-3 text-xs">
             <button
@@ -945,7 +1007,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
         {fetchingDay && (
           <div className="text-center py-2 text-xs font-semibold text-slate-500 animate-pulse">
-            Loading entry for {displayDate(selectedDate)}...
+            Loading entries for {displayDate(selectedDate)}...
           </div>
         )}
 
@@ -958,218 +1020,205 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                Project Name / Site
-              </label>
-              <SiteAutoCompleteInput
-                value={project}
-                onChange={(val) => {
-                  setProject(val);
-                  if (userId) localStorage.setItem(`sjr_last_project_${userId}`, val);
-                  localStorage.setItem('last_site_name', val);
-                }}
-                existingSites={existingSites}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Selected Date</label>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => {
-                  if (e.target.value) {
-                    setSelectedDate(e.target.value);
-                    setCurrentWednesday(getWednesday(e.target.value));
-                  }
-                }}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500"
-                required
-              />
-            </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Selected Date</label>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => {
+                if (e.target.value) {
+                  setSelectedDate(e.target.value);
+                  setCurrentWednesday(getWednesday(e.target.value));
+                }
+              }}
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500"
+              required
+            />
           </div>
 
-          {/* On-Site Hours */}
-          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-            <span className="block text-xs font-bold text-slate-700 uppercase mb-2">On-Site Hours (Optional)</span>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <label className="text-slate-500 font-medium">Start Time</label>
-                <input
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5 text-slate-800 font-medium"
-                />
-              </div>
-              <div>
-                <label className="text-slate-500 font-medium">Time Finished</label>
-                <input
-                  type="time"
-                  value={timeFinished}
-                  onChange={(e) => setTimeFinished(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5 text-slate-800 font-medium"
-                />
-              </div>
-              <div>
-                <label className="text-slate-500 font-medium">Time Left Site</label>
-                <input
-                  type="time"
-                  value={timeLeftSite}
-                  onChange={(e) => setTimeLeftSite(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5 text-slate-800 font-medium"
-                />
-              </div>
-              <div>
-                <label className="text-slate-500 font-medium">Time Returned</label>
-                <input
-                  type="time"
-                  value={timeReturned}
-                  onChange={(e) => setTimeReturned(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded p-1.5 mt-0.5 text-slate-800 font-medium"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Tasks List */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-1">
-              <span className="text-xs font-bold text-slate-700 uppercase">Tasks Completed</span>
-              <span className="text-xs font-semibold text-emerald-700">Total: {totalHours} hrs</span>
-            </div>
-
-            {tasks.map((taskItem, index) => (
-              <div key={taskItem.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-slate-500 uppercase">Task #{index + 1}</span>
-                  {tasks.length > 1 && (
+          {/* Site Entries List */}
+          {siteEntries.map((siteItem, siteIndex) => {
+            const siteHours = siteItem.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
+            return (
+              <div key={siteItem.id} className="border-2 border-slate-300 rounded-xl p-4 bg-slate-50/50 space-y-4 relative">
+                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                  <span className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">
+                    Site #{siteIndex + 1} ({siteHours} hrs)
+                  </span>
+                  {siteEntries.length > 1 && (
                     <button
                       type="button"
-                      onClick={() => setTasks((prev) => prev.filter((t) => t.id !== taskItem.id))}
-                      className="text-xs text-rose-600 hover:text-rose-800 font-semibold"
+                      onClick={() => removeSiteBlock(siteItem.id)}
+                      className="text-xs text-rose-600 hover:text-rose-800 font-bold"
                     >
-                      Remove
+                      Remove Site
                     </button>
                   )}
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Category Group</label>
-                    <select
-                      value={taskItem.categoryGroup}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setTasks((prev) =>
-                          prev.map((t) =>
-                            t.id === taskItem.id ? { ...t, categoryGroup: val, taskName: TASK_CATEGORIES[val][0] } : t
-                          )
-                        );
-                      }}
-                      className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800"
-                    >
-                      {Object.keys(TASK_CATEGORIES).map((group) => (
-                        <option key={group} value={group}>{group}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Task Undertaken</label>
-                    <select
-                      value={taskItem.taskName}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setTasks((prev) =>
-                          prev.map((t) => (t.id === taskItem.id ? { ...t, taskName: val } : t))
-                        );
-                      }}
-                      className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800"
-                    >
-                      {TASK_CATEGORIES[taskItem.categoryGroup]?.map((t) => (
-                        <option key={t} value={t}>{t}</option>
-                      )) || <option value={taskItem.taskName}>{taskItem.taskName}</option>}
-                    </select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Task Hours</label>
-                    <input
-                      type="number"
-                      step="0.25"
-                      value={taskItem.hours}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setTasks((prev) =>
-                          prev.map((t) => (t.id === taskItem.id ? { ...t, hours: val } : t))
-                        );
-                      }}
-                      className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Travel Time (Hrs)</label>
-                    <input
-                      type="number"
-                      step="0.25"
-                      value={taskItem.travelTime}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setTasks((prev) =>
-                          prev.map((t) => (t.id === taskItem.id ? { ...t, travelTime: val } : t))
-                        );
-                      }}
-                      className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500"
-                    />
-                  </div>
-                </div>
+
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Comments / Work Details</label>
-                  <textarea
-                    rows="2"
-                    value={taskItem.comments}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setTasks((prev) =>
-                        prev.map((t) => (t.id === taskItem.id ? { ...t, comments: val } : t))
-                      );
-                    }}
-                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500"
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Project Name / Site
+                  </label>
+                  <SiteAutoCompleteInput
+                    value={siteItem.project}
+                    onChange={(val) => updateSiteField(siteItem.id, 'project', val)}
+                    existingSites={existingSites}
                   />
                 </div>
-              </div>
-            ))}
 
-            <button
-              type="button"
-              onClick={() =>
-                setTasks((prev) => [
-                  ...prev,
-                  {
-                    id: Date.now() + Math.random(),
-                    categoryGroup: "Framing & Envelope",
-                    taskName: "Wall Framing",
-                    hours: '0',
-                    travelTime: '',
-                    comments: ''
-                  }
-                ])
-              }
-              className="w-full py-2 px-3 border-2 border-dashed border-emerald-600 text-emerald-700 font-bold rounded-lg hover:bg-emerald-50 text-sm transition-colors"
-            >
-              + Add Another Task
-            </button>
-          </div>
+                {/* On-Site Hours for this Site */}
+                <div className="bg-white p-3 rounded-lg border border-slate-200">
+                  <span className="block text-xs font-bold text-slate-700 uppercase mb-2">On-Site Hours (Optional)</span>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <label className="text-slate-500 font-medium">Start Time</label>
+                      <input
+                        type="time"
+                        value={siteItem.startTime}
+                        onChange={(e) => updateSiteField(siteItem.id, 'startTime', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded p-1.5 mt-0.5 text-slate-800 font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 font-medium">Time Finished</label>
+                      <input
+                        type="time"
+                        value={siteItem.timeFinished}
+                        onChange={(e) => updateSiteField(siteItem.id, 'timeFinished', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded p-1.5 mt-0.5 text-slate-800 font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 font-medium">Time Left Site</label>
+                      <input
+                        type="time"
+                        value={siteItem.timeLeftSite}
+                        onChange={(e) => updateSiteField(siteItem.id, 'timeLeftSite', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded p-1.5 mt-0.5 text-slate-800 font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 font-medium">Time Returned</label>
+                      <input
+                        type="time"
+                        value={siteItem.timeReturned}
+                        onChange={(e) => updateSiteField(siteItem.id, 'timeReturned', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded p-1.5 mt-0.5 text-slate-800 font-medium"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tasks List for this Site */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 uppercase">Tasks Completed</span>
+                  </div>
+
+                  {siteItem.tasks.map((taskItem, taskIndex) => (
+                    <div key={taskItem.id} className="p-3 bg-white rounded-lg border border-slate-200 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-500 uppercase">Task #{taskIndex + 1}</span>
+                        {siteItem.tasks.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeTaskFromSite(siteItem.id, taskItem.id)}
+                            className="text-xs text-rose-600 hover:text-rose-800 font-semibold"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Category Group</label>
+                          <select
+                            value={taskItem.categoryGroup}
+                            onChange={(e) => updateTaskInSite(siteItem.id, taskItem.id, 'categoryGroup', e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-800"
+                          >
+                            {Object.keys(TASK_CATEGORIES).map((group) => (
+                              <option key={group} value={group}>{group}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Task Undertaken</label>
+                          <select
+                            value={taskItem.taskName}
+                            onChange={(e) => updateTaskInSite(siteItem.id, taskItem.id, 'taskName', e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-800"
+                          >
+                            {TASK_CATEGORIES[taskItem.categoryGroup]?.map((t) => (
+                              <option key={t} value={t}>{t}</option>
+                            )) || <option value={taskItem.taskName}>{taskItem.taskName}</option>}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Task Hours</label>
+                          <input
+                            type="number"
+                            step="0.25"
+                            value={taskItem.hours}
+                            onChange={(e) => updateTaskInSite(siteItem.id, taskItem.id, 'hours', e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Travel Time (Hrs)</label>
+                          <input
+                            type="number"
+                            step="0.25"
+                            value={taskItem.travelTime}
+                            onChange={(e) => updateTaskInSite(siteItem.id, taskItem.id, 'travelTime', e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Comments / Work Details</label>
+                        <textarea
+                          rows="2"
+                          value={taskItem.comments}
+                          onChange={(e) => updateTaskInSite(siteItem.id, taskItem.id, 'comments', e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => addTaskToSite(siteItem.id)}
+                    className="w-full py-2 px-3 border border-dashed border-emerald-600 text-emerald-700 font-bold rounded-lg hover:bg-emerald-50 text-xs transition-colors"
+                  >
+                    + Add Task to {siteItem.project || "Site"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Add Another Site Button */}
+          <button
+            type="button"
+            onClick={addSiteBlock}
+            className="w-full py-3 px-4 border-2 border-dashed border-blue-600 text-blue-700 font-bold rounded-xl hover:bg-blue-50 text-sm transition-colors flex items-center justify-center gap-2"
+          >
+            <span>+ Add Another Site For Today</span>
+          </button>
 
           <button
             type="submit"
             disabled={loading}
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors disabled:opacity-50 mt-4 cursor-pointer"
           >
-            {loading ? "Saving Entry..." : `Submit Entry for ${displayDate(selectedDate)}`}
+            {loading ? "Saving Entries..." : `Submit Entries (${grandTotalHours} hrs total)`}
           </button>
         </form>
 
