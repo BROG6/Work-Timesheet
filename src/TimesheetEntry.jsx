@@ -411,7 +411,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }
       } catch (err) {
         console.warn("Cache load note:", err);
-      } font-medium {
+      } finally {
         if (isMounted) setFetchingDay(false);
       }
     }
