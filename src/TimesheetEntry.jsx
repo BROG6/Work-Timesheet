@@ -757,18 +757,21 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           }
 
           if (fullText.includes("Staff Member") || fullText.includes("Project")) {
-            let combinedText = fullText;
-            if (fullText.includes("Staff Member")) {
-              combinedText = combinedText.replace(/Staff Member:\s*([^\r\n]*)?/g, `Staff Member: ${userName}`);
-            }
-            if (fullText.includes("Project")) {
-              combinedText = combinedText.replace(/Project:\s*([^\r\n]*)?/g, `Project: ${siteName}`);
-            }
-            
-            tNodes[0].textContent = combinedText;
-            tNodes[0].setAttribute("xml:space", "preserve");
-            for (let i = 1; i < tNodes.length; i++) {
-              tNodes[i].textContent = "";
+            if (fullText.includes("Staff Member") && fullText.includes("Project")) {
+              tNodes[0].textContent = `Staff Member: ${userName}      Project: ${siteName}`;
+              for (let i = 1; i < tNodes.length; i++) {
+                tNodes[i].textContent = "";
+              }
+            } else if (fullText.includes("Staff Member")) {
+              tNodes[0].textContent = fullText.replace(/Staff Member:\s*([^\r\n]*)?/g, `Staff Member: ${userName}`);
+              for (let i = 1; i < tNodes.length; i++) {
+                tNodes[i].textContent = "";
+              }
+            } else if (fullText.includes("Project")) {
+              tNodes[0].textContent = fullText.replace(/Project:\s*([^\r\n]*)?/g, `Project: ${siteName}`);
+              for (let i = 1; i < tNodes.length; i++) {
+                tNodes[i].textContent = "";
+              }
             }
           }
         }
