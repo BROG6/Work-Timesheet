@@ -560,38 +560,81 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const rows = xmlDoc.getElementsByTagName("w:tr");
         const paragraphs = xmlDoc.getElementsByTagName("w:p");
 
-        // CLEAN PARAGRAPH TEXT REPLACEMENT
+        // SURGICAL PARAGRAPH TEXT REPLACEMENT
         for (let p of paragraphs) {
-          const runs = p.getElementsByTagName("w:r");
+          const tNodes = p.getElementsByTagName("w:t");
+          if (tNodes.length === 0) continue;
+
           let fullText = "";
-          
-          // Gather all text to see what's in this paragraph
-          for (let r of runs) {
-            const tNodes = r.getElementsByTagName("w:t");
-            for (let i = 0; i < tNodes.length; i++) {
-              fullText += tNodes[i].textContent;
-            }
+          for (let i = 0; i < tNodes.length; i++) {
+            fullText += tNodes[i].textContent;
           }
-          
+
           if (fullText.includes("Staff Member") || fullText.includes("Project")) {
-            let firstTextNodeFound = false;
-            
-            for (let r of runs) {
-              const tNodes = r.getElementsByTagName("w:t");
+            let staffContained = !fullText.includes("Staff Member") || Array.from(tNodes).some(n => n.textContent.includes("Staff Member"));
+            let projectContained = !fullText.includes("Project") || Array.from(tNodes).some(n => n.textContent.includes("Project"));
+
+            if (staffContained && projectContained) {
+              // Surgical node-by-node update
+              let needsStaffColonWipe = false;
+              let needsProjectColonWipe = false;
+
               for (let i = 0; i < tNodes.length; i++) {
-                if (!firstTextNodeFound) {
-                  if (fullText.includes("Staff Member")) {
-                    // This explicitly sets it without the colon
-                    tNodes[i].textContent = `Staff Member ${userName}`;
-                  } else if (fullText.includes("Project")) {
-                    tNodes[i].textContent = `Project: ${siteName}`;
+                let nodeText = tNodes[i].textContent;
+                let modified = false;
+
+                if (nodeText.includes("Staff Member")) {
+                  if (nodeText.includes("Staff Member:")) {
+                    nodeText = nodeText.replace(/Staff Member:\s*/, `Staff Member: ${userName} `);
+                  } else {
+                    nodeText = nodeText.replace("Staff Member", `Staff Member: ${userName} `);
+                    needsStaffColonWipe = true;
                   }
-                  tNodes[i].setAttribute("xml:space", "preserve");
-                  firstTextNodeFound = true;
-                } else {
-                  // Wipe out all other text nodes in this paragraph to eliminate hidden colons
-                  tNodes[i].textContent = "";
+                  modified = true;
+                } 
+                
+                if (nodeText.includes("Project")) {
+                  if (nodeText.includes("Project:")) {
+                    nodeText = nodeText.replace(/Project:\s*/, `Project: ${siteName} `);
+                  } else {
+                    nodeText = nodeText.replace("Project", `Project: ${siteName} `);
+                    needsProjectColonWipe = true;
+                  }
+                  modified = true;
+                } 
+                
+                if (!modified && nodeText.includes(":")) {
+                  if (needsStaffColonWipe) {
+                    nodeText = nodeText.replace(":", "");
+                    needsStaffColonWipe = false;
+                    modified = true;
+                  } else if (needsProjectColonWipe) {
+                    nodeText = nodeText.replace(":", "");
+                    needsProjectColonWipe = false;
+                    modified = true;
+                  }
                 }
+
+                if (modified) {
+                  tNodes[i].textContent = nodeText;
+                  tNodes[i].setAttribute("xml:space", "preserve");
+                }
+              }
+            } else {
+              // Fallback for fragmented tags
+              let combinedText = "";
+              if (fullText.includes("Staff Member") && fullText.includes("Project")) {
+                combinedText = `Staff Member: ${userName}          Project: ${siteName}`;
+              } else if (fullText.includes("Staff Member")) {
+                combinedText = `Staff Member: ${userName}`;
+              } else if (fullText.includes("Project")) {
+                combinedText = `Project: ${siteName}`;
+              }
+              
+              tNodes[0].textContent = combinedText;
+              tNodes[0].setAttribute("xml:space", "preserve");
+              for (let i = 1; i < tNodes.length; i++) {
+                tNodes[i].textContent = "";
               }
             }
           }
