@@ -574,7 +574,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               if (t) {
                 let text = t.textContent;
                 if (text.includes("Staff Member")) {
-                  t.textContent = text.replace(/Staff Member[:\s]*/gi, `${userName}`);
+                  t.textContent = text.replace(/Staff Member\s*[:]?\s*/gi, `${userName}`);
                   t.setAttribute("xml:space", "preserve");
                 } else if (text.includes("Project")) {
                   t.textContent = text.replace(/Project[:\s]*/gi, `Project: ${siteName}`);
