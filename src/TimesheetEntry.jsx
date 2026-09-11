@@ -558,27 +558,39 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
         const rows = xmlDoc.getElementsByTagName("w:tr");
-
         const paragraphs = xmlDoc.getElementsByTagName("w:p");
+
+        // CLEAN PARAGRAPH TEXT REPLACEMENT
         for (let p of paragraphs) {
           const runs = p.getElementsByTagName("w:r");
           let fullText = "";
+          
+          // Gather all text to see what's in this paragraph
           for (let r of runs) {
-            const t = r.getElementsByTagName("w:t")[0];
-            if (t) fullText += t.textContent;
+            const tNodes = r.getElementsByTagName("w:t");
+            for (let i = 0; i < tNodes.length; i++) {
+              fullText += tNodes[i].textContent;
+            }
           }
           
           if (fullText.includes("Staff Member") || fullText.includes("Project")) {
+            let firstTextNodeFound = false;
+            
             for (let r of runs) {
-              const t = r.getElementsByTagName("w:t")[0];
-              if (t) {
-                let text = t.textContent;
-                if (text.includes("Staff Member")) {
-                  t.textContent = text.replace(/Staff Member\s*[:]?\s*/gi, `${userName}`);
-                  t.setAttribute("xml:space", "preserve");
-                } else if (text.includes("Project")) {
-                  t.textContent = text.replace(/Project[:\s]*/gi, `Project: ${siteName}`);
-                  t.setAttribute("xml:space", "preserve");
+              const tNodes = r.getElementsByTagName("w:t");
+              for (let i = 0; i < tNodes.length; i++) {
+                if (!firstTextNodeFound) {
+                  if (fullText.includes("Staff Member")) {
+                    // This explicitly sets it without the colon
+                    tNodes[i].textContent = `Staff Member ${userName}`;
+                  } else if (fullText.includes("Project")) {
+                    tNodes[i].textContent = `Project: ${siteName}`;
+                  }
+                  tNodes[i].setAttribute("xml:space", "preserve");
+                  firstTextNodeFound = true;
+                } else {
+                  // Wipe out all other text nodes in this paragraph to eliminate hidden colons
+                  tNodes[i].textContent = "";
                 }
               }
             }
