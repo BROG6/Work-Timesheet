@@ -163,7 +163,7 @@ function getFormattedStaffName(user, userProfile) {
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
       .join(' ');
   }
-  return 'Lakaia Barclay';
+  return 'Staff Member';
 }
 
 const createBlankTask = (dateStr) => ({
@@ -759,12 +759,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           if (fullText.includes("Staff Member") || fullText.includes("Project")) {
             let combinedText = fullText;
             if (fullText.includes("Staff Member")) {
-              combinedText = combinedText.replace(/Staff Member:\s*/g, `Staff Member: ${userName} `)
-                                         .replace(/Staff Member\b/g, `Staff Member: ${userName} `);
+              combinedText = combinedText.replace(/Staff Member:\s*([^\r\n]*)?/g, `Staff Member: ${userName}`);
             }
             if (fullText.includes("Project")) {
-              combinedText = combinedText.replace(/Project:\s*/g, `Project: ${siteName} `)
-                                         .replace(/Project\b/g, `Project: ${siteName} `);
+              combinedText = combinedText.replace(/Project:\s*([^\r\n]*)?/g, `Project: ${siteName}`);
             }
             
             tNodes[0].textContent = combinedText;
@@ -1021,7 +1019,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                       <button
                         type="button"
                         onClick={() => handleDeleteSubmittedSite(siteItem)}
-                        className="flex items-center gap-1 bg-rose-100 hover:bg-rose-200 text-rose-700 px-2 py-1 rounded text-xs font-bold transition-colors"
+                        className="flex items-center gap-1 bg-rose-100 hover:bg-rose-200 text-rose-700 px-2 py-1 rounded text-xs font-bold transition-colors cursor-pointer"
                         title="Delete this site entry from database"
                       >
                         <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
@@ -1035,7 +1033,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                       <button
                         type="button"
                         onClick={() => removeSiteBlock(siteItem.id)}
-                        className="text-xs text-rose-600 hover:text-rose-800 font-bold"
+                        className="text-xs text-rose-600 hover:text-rose-800 font-bold cursor-pointer"
                       >
                         Remove Site
                       </button>
@@ -1111,7 +1109,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                           <button
                             type="button"
                             onClick={() => removeTaskFromSite(siteItem.id, taskItem.id)}
-                            className="text-xs text-rose-600 hover:text-rose-800 font-semibold"
+                            className="text-xs text-rose-600 hover:text-rose-800 font-semibold cursor-pointer"
                           >
                             Remove
                           </button>
@@ -1181,7 +1179,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   <button
                     type="button"
                     onClick={() => addTaskToSite(siteItem.id)}
-                    className="w-full py-2 px-3 border border-dashed border-emerald-600 text-emerald-700 font-bold rounded-lg hover:bg-emerald-50 text-xs transition-colors"
+                    className="w-full py-2 px-3 border border-dashed border-emerald-600 text-emerald-700 font-bold rounded-lg hover:bg-emerald-50 text-xs transition-colors cursor-pointer"
                   >
                     + Add Task to {siteItem.project || "Site"}
                   </button>
@@ -1194,7 +1192,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           <button
             type="button"
             onClick={addSiteBlock}
-            className="w-full py-3 px-4 border-2 border-dashed border-blue-600 text-blue-700 font-bold rounded-xl hover:bg-blue-50 text-sm transition-colors flex items-center justify-center gap-2"
+            className="w-full py-3 px-4 border-2 border-dashed border-blue-600 text-blue-700 font-bold rounded-xl hover:bg-blue-50 text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
           >
             <span>+ Add Another Site For Today</span>
           </button>
