@@ -826,14 +826,15 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         });
         
-        const safeUserName = userName.replace(/[^a-zA-Z0-9_\-]/g, '_');
-        const safeSiteName = siteName.replace(/[^a-zA-Z0-9_\-]/g, '_');
         const weekStartStr = weekDays[0].dateStr;
+        // Split the YYYY-MM-DD string to format as dd-mm-yy
+        const [year, month, day] = weekStartStr.split('-');
+        const formattedDate = `${day}-${month}-${year.slice(-2)}`;
         
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = `TimeCard_${safeUserName}_${safeSiteName}_${weekStartStr}.docx`;
+        link.download = `Time Cards ${formattedDate}.docx`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
