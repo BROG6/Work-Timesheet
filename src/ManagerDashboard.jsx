@@ -110,6 +110,7 @@ export default function ManagerDashboard({ userProfile }) {
   const [loading, setLoading] = useState(true);
   const [filterUser, setFilterUser] = useState('ALL');
   const [filterProject, setFilterProject] = useState('ALL');
+  const [showWorkerList, setShowWorkerList] = useState(false);
 
   // Calendar week view state starting Wednesday
   const [currentWednesday, setCurrentWednesday] = useState(() => getWednesday(new Date()));
@@ -175,6 +176,22 @@ export default function ManagerDashboard({ userProfile }) {
     }
   };
 
+  // Handler for deleting a worker/user record from Firestore
+  const handleDeleteUser = async (userId, userName) => {
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete worker "${userName || 'this worker'}"? This will remove their user record from the manager database.`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      await deleteDoc(doc(db, 'users', userId));
+      setUsers((prev) => prev.filter((u) => u.uid !== userId));
+    } catch (err) {
+      console.error("Error deleting user:", err);
+      alert("Failed to delete worker.");
+    }
+  };
+
   const userMap = {};
   users.forEach((u) => {
     userMap[u.uid] = u.name || u.email;
@@ -195,7 +212,7 @@ export default function ManagerDashboard({ userProfile }) {
 
   const uniqueProjects = Array.from(new Set(timesheets.map((t) => t.project || 'General / Unassigned')));
 
-  // Generate 7 days starting Wednesday through Tuesday, dynamically calculating daily hours based on selected filters
+  // Generate 7 days starting Wednesday through Tuesday
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const day = new Date(currentWednesday);
     day.setDate(currentWednesday.getDate() + i);
@@ -278,7 +295,6 @@ export default function ManagerDashboard({ userProfile }) {
       right: { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" }
     };
 
-    // Compact Cell formatting (size 14 = 7pt)
     const makeCell = (text, bold = false, align = AlignmentType.LEFT, widthPct = null) => {
       return new TableCell({
         borders: thinBorder,
@@ -293,10 +309,8 @@ export default function ManagerDashboard({ userProfile }) {
       });
     };
 
-    // Active dates for the calendar week (DD/MM/YYYY)
     const activeDates = weekDays.map((d) => d.dateStr);
 
-    // Get active entries for the week based on current user filter
     const activeWeekEntries = timesheets.filter((t) => {
       const matchesUser = filterUser === 'ALL' || t.userId === filterUser || t.userName === filterUser;
       return activeDates.includes(displayDate(t.date)) && matchesUser;
@@ -307,7 +321,6 @@ export default function ManagerDashboard({ userProfile }) {
       return;
     }
 
-    // Determine target sites to export (either selected site or all unique sites)
     let sitesToExport = [];
     if (filterProject === 'ALL') {
       sitesToExport = Array.from(new Set(activeWeekEntries.map((t) => t.project || 'General')));
@@ -318,7 +331,6 @@ export default function ManagerDashboard({ userProfile }) {
     const fileStartStr = weekStartStr.replaceAll('/', '-');
     const fileEndStr = weekEndStr.replaceAll('/', '-');
 
-    // Loop through each site and generate a distinct DOCX file
     for (const siteName of sitesToExport) {
       const siteEntries = activeWeekEntries.filter(
         (t) => (t.project || 'General / Unassigned') === siteName || (t.project || 'General') === siteName
@@ -326,14 +338,12 @@ export default function ManagerDashboard({ userProfile }) {
 
       if (siteEntries.length === 0) continue;
 
-      // Find staff members who worked on this specific site during the week
       const staffKeysOnSite = Array.from(new Set(siteEntries.map((t) => t.userId || t.userName)));
       const staffOnSite = staffKeysOnSite.map((key) => {
         const opt = staffOptions.find((s) => s.value === key);
         return { key, label: opt ? opt.label : key };
       });
 
-      // Build document sections for this site
       const buildStaffSectionForSite = (staffMember) => {
         const staffSiteEntries = siteEntries.filter(
           (t) => t.userId === staffMember.key || t.userName === staffMember.key
@@ -444,7 +454,6 @@ export default function ManagerDashboard({ userProfile }) {
         ];
         tableRows.push(new TableRow({ children: travelCells }));
 
-        // Collect Comments
         const commentParagraphs = [
           new Paragraph({
             children: [new TextRun({ text: "COMMENTS", bold: true, size: 16 })],
@@ -511,7 +520,6 @@ export default function ManagerDashboard({ userProfile }) {
         sections: docSections
       });
 
-      // Format site name safely for file naming
       const safeSiteName = siteName.replace(/[^a-zA-Z0-9_\-]/g, '_');
 
       const blob = await Packer.toBlob(docxDocument);
@@ -545,25 +553,82 @@ export default function ManagerDashboard({ userProfile }) {
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
+            onClick={() => setShowWorkerList(!showWorkerList)}
+            className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs px-3.5 py-2 rounded-lg transition-colors shadow-sm"
+          >
+            {showWorkerList ? 'Hide Workers Roster' : `Manage Workers (${users.length})`}
+          </button>
+
+          <button
+            type="button"
             onClick={handleExportDOCX}
             className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs px-3.5 py-2 rounded-lg transition-colors shadow-sm"
           >
             Export Time Cards (.docx per site)
           </button>
           
-          {/* Work Hours Metric Badge */}
           <div className="bg-slate-800 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-700 font-semibold flex items-center gap-2">
             <span>Work Hours:</span>
             <strong className="text-emerald-400 text-sm">{totalFilteredHours} hrs</strong>
           </div>
 
-          {/* Travel Hours Metric Badge */}
           <div className="bg-slate-800 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-700 font-semibold flex items-center gap-2">
             <span>Travel Hours:</span>
             <strong className="text-amber-400 text-sm">{totalFilteredTravelHours} hrs</strong>
           </div>
         </div>
       </div>
+
+      {/* Workers Roster Panel (Collapsible / Toggleable) */}
+      {showWorkerList && (
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Registered Staff & Workers</h2>
+              <p className="text-xs text-slate-500 font-medium">Manage team members registered in the system</p>
+            </div>
+            <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg">
+              Total: {users.length}
+            </span>
+          </div>
+
+          {users.length === 0 ? (
+            <p className="text-xs text-slate-400 italic">No registered users found.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {users.map((worker) => {
+                const displayName = worker.name || worker.email || 'Unnamed Worker';
+                return (
+                  <div
+                    key={worker.uid}
+                    className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                  >
+                    <div className="truncate pr-2">
+                      <p className="font-bold text-slate-800 truncate">{displayName}</p>
+                      {worker.email && worker.name && (
+                        <p className="text-slate-500 text-[11px] truncate">{worker.email}</p>
+                      )}
+                      {worker.role && (
+                        <span className="inline-block mt-0.5 text-[10px] font-semibold uppercase text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded">
+                          {worker.role}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteUser(worker.uid, displayName)}
+                      className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-bold px-2.5 py-1.5 rounded-lg transition-colors flex-shrink-0"
+                      title="Delete this worker profile"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Weekly Roundup Calendar (Wed to Tue) */}
       <div className="bg-slate-900 text-white p-4 rounded-xl shadow-md border border-slate-800">
