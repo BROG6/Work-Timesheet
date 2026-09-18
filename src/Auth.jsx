@@ -4,10 +4,13 @@ import {
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
   signInWithPopup, 
+  signInWithCredential,
   GoogleAuthProvider, 
   signOut 
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { Capacitor } from '@capacitor/core';
+import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 
 export default function Auth({ user, setUser, setUserProfile }) {
   const [isRegistering, setIsRegistering] = useState(false);
@@ -76,18 +79,29 @@ export default function Auth({ user, setUser, setUserProfile }) {
     }
   };
 
-  // Handle Google Sign-In
+  // Handle Hybrid Google Sign-In (Native Android + Web)
   const handleGoogleSignIn = async () => {
     setError('');
     setLoading(true);
 
     try {
-      const provider = new GoogleAuthProvider();
-      const userCredential = await signInWithPopup(auth, provider);
+      let userCredential;
+
+      if (Capacitor.isNativePlatform()) {
+        // Native Android Flow
+        const googleUser = await GoogleAuth.signIn();
+        const credential = GoogleAuthProvider.credential(googleUser.authentication.idToken);
+        userCredential = await signInWithCredential(auth, credential);
+      } else {
+        // Web Browser Flow
+        const provider = new GoogleAuthProvider();
+        userCredential = await signInWithPopup(auth, provider);
+      }
+
       await handleAuthSuccess(userCredential.user);
     } catch (err) {
       console.error("Google sign-in error:", err);
-      setError(err.message.replace('Firebase: ', ''));
+      setError(err.message ? err.message.replace('Firebase: ', '') : 'Google Sign-In failed');
     } finally {
       setLoading(false);
     }
