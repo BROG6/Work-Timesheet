@@ -5,14 +5,23 @@ import { doc, getDoc, getDocFromCache } from 'firebase/firestore';
 import Auth from './Auth';
 import TimesheetEntry from './TimesheetEntry';
 import ManagerDashboard from './ManagerDashboard';
-import { useOnlineStatus } from './useOnlineStatus'; // 1. Import hook
+import { useOnlineStatus } from './useOnlineStatus';
+import { Capacitor } from '@capacitor/core';
+import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   
-  const isOnline = useOnlineStatus(); // 2. Listen to network status
+  const isOnline = useOnlineStatus();
+
+  // Initialize Native Google Auth for Android/iOS devices
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      GoogleAuth.initialize();
+    }
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
