@@ -23,17 +23,17 @@ subprojects {
         if (project.hasProperty("android")) {
             android {
                 compileOptions {
-                    sourceCompatibility JavaVersion.VERSION_21
-                    targetCompatibility JavaVersion.VERSION_21
+                    sourceCompatibility JavaVersion.VERSION_17
+                    targetCompatibility JavaVersion.VERSION_17
                 }
             }
         }
         
-        // Force Kotlin tasks across all modules (including plugins) to target JVM 21
+        // Force Kotlin tasks across all modules (including plugins) to target JVM 17
         project.tasks.matching { it.name.contains("Kotlin") }.configureEach {
             try {
                 kotlinOptions {
-                    jvmTarget = "21"
+                    jvmTarget = "17"
                 }
             } catch (Exception e) {
                 // Ignore tasks that do not expose kotlinOptions
