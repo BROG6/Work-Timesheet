@@ -636,8 +636,9 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       });
 
       const sitesToExport = Object.keys(siteMap);
+      const nativeFileUris = [];
 
-      function setCellText(cell, text) {
+      function setCellText(cell, text, xmlDoc) {
         const tNodes = cell.getElementsByTagName("w:t");
         if (tNodes.length > 0) {
           tNodes[0].textContent = text;
@@ -658,16 +659,16 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }
       }
 
-      function fillTimingRow(cells, timingKey, siteEntriesForExport, days) {
+      function fillTimingRow(cells, timingKey, siteEntriesForExport, days, xmlDoc) {
         days.forEach((dayObj, idx) => {
           if (!cells[idx + 1]) return;
           const entriesForDay = siteEntriesForExport.filter(e => e.date === dayObj.dateStr);
           const val = entriesForDay.map(e => e.timeCardDetails?.[timingKey]).filter(Boolean).join(" / ") || "";
-          setCellText(cells[idx + 1], val);
+          setCellText(cells[idx + 1], val, xmlDoc);
         });
       }
 
-      function fillTaskRow(cells, taskLabel, siteEntriesForExport, days) {
+      function fillTaskRow(cells, taskLabel, siteEntriesForExport, days, xmlDoc) {
         let rowTaskTotal = 0;
         days.forEach((dayObj, idx) => {
           if (!cells[idx + 1]) return;
@@ -694,14 +695,14 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             });
           }
           rowTaskTotal += dayTaskHours;
-          setCellText(cells[idx + 1], dayTaskHours > 0 ? String(dayTaskHours) : "");
+          setCellText(cells[idx + 1], dayTaskHours > 0 ? String(dayTaskHours) : "", xmlDoc);
         });
         if (cells[8]) {
-          setCellText(cells[8], rowTaskTotal > 0 ? String(rowTaskTotal) : "");
+          setCellText(cells[8], rowTaskTotal > 0 ? String(rowTaskTotal) : "", xmlDoc);
         }
       }
 
-      function fillTotalHoursRow(cells, siteEntriesForExport, days) {
+      function fillTotalHoursRow(cells, siteEntriesForExport, days, xmlDoc) {
         let siteGrandTotalHours = 0;
         days.forEach((dayObj, idx) => {
           if (!cells[idx + 1]) return;
@@ -713,14 +714,14 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             }
           });
           siteGrandTotalHours += dayTotal;
-          setCellText(cells[idx + 1], dayTotal > 0 ? String(dayTotal) : "");
+          setCellText(cells[idx + 1], dayTotal > 0 ? String(dayTotal) : "", xmlDoc);
         });
         if (cells[8]) {
-          setCellText(cells[8], siteGrandTotalHours > 0 ? String(siteGrandTotalHours) : "");
+          setCellText(cells[8], siteGrandTotalHours > 0 ? String(siteGrandTotalHours) : "", xmlDoc);
         }
       }
 
-      function fillTravelRow(cells, siteEntriesForExport, days) {
+      function fillTravelRow(cells, siteEntriesForExport, days, xmlDoc) {
         let siteGrandTravelTotal = 0;
         days.forEach((dayObj, idx) => {
           if (!cells[idx + 1]) return;
@@ -732,10 +733,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             }
           });
           siteGrandTravelTotal += dayTravel;
-          setCellText(cells[idx + 1], dayTravel > 0 ? String(dayTravel) : "");
+          setCellText(cells[idx + 1], dayTravel > 0 ? String(dayTravel) : "", xmlDoc);
         });
         if (cells[8]) {
-          setCellText(cells[8], siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "");
+          setCellText(cells[8], siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", xmlDoc);
         }
       }
 
@@ -798,25 +799,25 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               if (cells[idx + 1]) {
                 const dateParts = dayObj.dateStr.split('-');
                 const displayDDMM = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}` : dayObj.dateStr;
-                setCellText(cells[idx + 1], displayDDMM);
+                setCellText(cells[idx + 1], displayDDMM, xmlDoc);
               }
             });
           } else if (firstCellText === "START TIME") {
-            fillTimingRow(cells, "startTime", siteEntriesForExport, weekDays);
+            fillTimingRow(cells, "startTime", siteEntriesForExport, weekDays, xmlDoc);
           } else if (firstCellText === "TIME LEFT SITE") {
-            fillTimingRow(cells, "timeLeftSite", siteEntriesForExport, weekDays);
+            fillTimingRow(cells, "timeLeftSite", siteEntriesForExport, weekDays, xmlDoc);
           } else if (firstCellText === "TIME RETURNED") {
-            fillTimingRow(cells, "timeReturned", siteEntriesForExport, weekDays);
+            fillTimingRow(cells, "timeReturned", siteEntriesForExport, weekDays, xmlDoc);
           } else if (firstCellText === "TIME FINISHED") {
-            fillTimingRow(cells, "timeFinished", siteEntriesForExport, weekDays);
+            fillTimingRow(cells, "timeFinished", siteEntriesForExport, weekDays, xmlDoc);
           } else if (firstCellText === "TOTAL HOURS") {
-            fillTotalHoursRow(cells, siteEntriesForExport, weekDays);
+            fillTotalHoursRow(cells, siteEntriesForExport, weekDays, xmlDoc);
           } else if (firstCellText === "Travel Time") {
-            fillTravelRow(cells, siteEntriesForExport, weekDays);
+            fillTravelRow(cells, siteEntriesForExport, weekDays, xmlDoc);
           } else {
             const matchedTask = ALL_TEMPLATE_TASKS.find(task => cleanText(task) === cleanText(firstCellText));
             if (matchedTask) {
-              fillTaskRow(cells, matchedTask, siteEntriesForExport, weekDays);
+              fillTaskRow(cells, matchedTask, siteEntriesForExport, weekDays, xmlDoc);
             }
           }
         }
@@ -831,13 +832,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const fileName = `Time Cards ${siteName.replace(/[^a-zA-Z0-9_\-]/g, '_')} ${formattedDate}.docx`;
 
         if (Capacitor.isNativePlatform()) {
-          // Generate uint8array binary content from PZip
           const content = zip.generate({
             type: 'uint8array',
             mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           });
 
-          // Convert binary array to Blob and read as Base64 Data URL
           const blob = new Blob([content], {
             type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           });
@@ -846,27 +845,19 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             const reader = new FileReader();
             reader.onerror = reject;
             reader.onloadend = () => {
-              // Extract raw Base64 string without header prefix
               const base64String = reader.result.split(',')[1];
               resolve(base64String);
             };
             reader.readAsDataURL(blob);
           });
 
-          // Write file to Cache directory
           const savedFile = await Filesystem.writeFile({
             path: fileName,
             data: base64Data,
             directory: Directory.Cache,
           });
 
-          // Trigger native Android share sheet with URI
-          await Share.share({
-            title: 'Export Time Card',
-            text: `Time card DOCX for ${siteName}`,
-            url: savedFile.uri,
-            dialogTitle: 'Share or Save DOCX',
-          });
+          nativeFileUris.push(savedFile.uri);
         } else {
           const blob = zip.generate({
             type: 'blob',
@@ -881,6 +872,16 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           document.body.removeChild(link);
           URL.revokeObjectURL(url);
         }
+      }
+
+      // Single native Share invocation for all created files
+      if (Capacitor.isNativePlatform() && nativeFileUris.length > 0) {
+        await Share.share({
+          title: 'Export Time Cards',
+          text: `Time cards for week of ${weekDays[0].dateStr}`,
+          files: nativeFileUris,
+          dialogTitle: 'Share Time Cards',
+        });
       }
 
       setStatusMessage({ type: 'success', text: `Exported ${sitesToExport.length} site time card(s)!` });
