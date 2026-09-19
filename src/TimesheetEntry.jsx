@@ -743,6 +743,13 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
       const cleanText = (str) => (str || '').replace(/\s+/g, ' ').trim();
 
+      // Format current week date as dd/mm/yy for strict naming rule
+      const weekStartStr = weekDays[0].dateStr;
+      const [year, month, day] = weekStartStr.split('-');
+      const formattedDateStr = `${day}/${month}/${year.slice(-2)}`;
+
+      let siteIndexCounter = 0;
+
       for (const siteName of sitesToExport) {
         const siteEntriesForExport = siteMap[siteName];
         const zip = new PZip(templateArrayBuffer);
@@ -827,11 +834,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const updatedXmlStr = serializer.serializeToString(xmlDoc);
         zip.file("word/document.xml", updatedXmlStr);
 
-        const weekStartStr = weekDays[0].dateStr;
-        const [year, month, day] = weekStartStr.split('-');
-        const formattedDate = `${day}-${month}-${year.slice(-2)}`;
-        const sanitizedSite = siteName.replace(/[^a-zA-Z0-9_-]/g, '_');
-        const fileName = `Time_Cards_${sanitizedSite}_${formattedDate}.docx`;
+        // Strictly name files as "Time Cards dd/mm/yy" (or "Time Cards dd/mm/yy (1).docx")
+        const fileSuffix = siteIndexCounter > 0 ? ` (${siteIndexCounter})` : '';
+        const fileName = `Time Cards ${formattedDateStr}${fileSuffix}.docx`;
+        siteIndexCounter++;
 
         if (Capacitor.isNativePlatform()) {
           const content = zip.generate({ type: 'uint8array' });
@@ -843,7 +849,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           }
           const base64Data = window.btoa(binary);
 
-          // Write to Cache Directory for standard sharing
+          // Write to Cache Directory for external app share sheet
           const writtenFile = await Filesystem.writeFile({
             path: fileName,
             data: base64Data,
@@ -851,13 +857,12 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             recursive: true
           });
 
-          // Fetch native content provider URI
           const uriResult = await Filesystem.getUri({
             path: fileName,
             directory: Directory.Cache,
           });
 
-          // Fallback to Documents directory for native file browser access
+          // Write to Documents Directory so file remains available locally on native device
           await Filesystem.writeFile({
             path: fileName,
             data: base64Data,
@@ -896,7 +901,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             });
             setStatusMessage({ type: 'success', text: `Exported ${sitesToExport.length} site time card(s)!` });
           } catch (shareErr) {
-            // User cancelled share dialogue or target app refused provider access
             if (!shareErr?.message?.includes('canceled') && !shareErr?.message?.includes('cancelled')) {
               console.warn("Share warning:", shareErr);
               setStatusMessage({ type: 'success', text: `Saved to Documents folder on device.` });
