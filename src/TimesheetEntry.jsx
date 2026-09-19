@@ -5,6 +5,10 @@ import {
   collection, doc, setDoc, deleteDoc, query, where, getDocs, getDocsFromCache, serverTimestamp 
 } from 'firebase/firestore';
 
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
+
 import PZip from 'pizzip';
 import sjrLogo from './assets/logo.jpg';
 
@@ -821,27 +825,43 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const updatedXmlStr = serializer.serializeToString(xmlDoc);
         zip.file("word/document.xml", updatedXmlStr);
 
-        const blob = zip.generate({
-          type: 'blob',
-          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        });
-        
         const weekStartStr = weekDays[0].dateStr;
-        // Split the YYYY-MM-DD string to format as dd-mm-yy
         const [year, month, day] = weekStartStr.split('-');
         const formattedDate = `${day}-${month}-${year.slice(-2)}`;
-        
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `Time Cards ${formattedDate}.docx`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        const fileName = `Time Cards ${siteName.replace(/[^a-zA-Z0-9_\-]/g, '_')} ${formattedDate}.docx`;
+
+        if (Capacitor.isNativePlatform()) {
+          const base64Data = zip.generate({ type: 'base64' });
+          
+          const savedFile = await Filesystem.writeFile({
+            path: fileName,
+            data: base64Data,
+            directory: Directory.Cache
+          });
+
+          await Share.share({
+            title: 'Export Time Card',
+            text: `Time card DOCX for ${siteName}`,
+            url: savedFile.uri,
+            dialogTitle: 'Share or Save DOCX'
+          });
+        } else {
+          const blob = zip.generate({
+            type: 'blob',
+            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        }
       }
 
-      setStatusMessage({ type: 'success', text: `Exported ${sitesToExport.length} site time card(s) matching template!` });
+      setStatusMessage({ type: 'success', text: `Exported ${sitesToExport.length} site time card(s)!` });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
       console.error("DOCX export error:", err);
