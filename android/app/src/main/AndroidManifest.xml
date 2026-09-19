@@ -33,6 +33,15 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- Google Auth Plugin Metadata Requirements -->
+        <meta-data 
+            android:name="com.google.android.gms.games.APP_ID" 
+            android:value="@string/server_client_id" />
+        <meta-data 
+            android:name="custom_url_scheme" 
+            android:value="@string/custom_url_scheme" />
+
     </application>
 
     <!-- Permissions -->
