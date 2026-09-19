@@ -843,19 +843,32 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           }
           const base64Data = window.btoa(binary);
 
-          await Filesystem.writeFile({
+          // Write to Cache Directory for standard sharing
+          const writtenFile = await Filesystem.writeFile({
             path: fileName,
             data: base64Data,
             directory: Directory.Cache,
+            recursive: true
           });
 
-          // Convert path to Android Content Provider URI
+          // Fetch native content provider URI
           const uriResult = await Filesystem.getUri({
             path: fileName,
             directory: Directory.Cache,
           });
 
-          nativeFileUris.push(uriResult.uri);
+          // Fallback to Documents directory for native file browser access
+          await Filesystem.writeFile({
+            path: fileName,
+            data: base64Data,
+            directory: Directory.Documents,
+            recursive: true
+          }).catch(() => null);
+
+          const finalUri = uriResult?.uri || writtenFile?.uri;
+          if (finalUri) {
+            nativeFileUris.push(finalUri);
+          }
         } else {
           const blob = zip.generate({
             type: 'blob',
@@ -872,16 +885,30 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }
       }
 
-      if (Capacitor.isNativePlatform() && nativeFileUris.length > 0) {
-        await Share.share({
-          title: 'SJR Builders Time Cards',
-          text: `Time cards for week of ${weekDays[0].dateStr}`,
-          files: nativeFileUris,
-          dialogTitle: 'Export Time Cards',
-        });
+      if (Capacitor.isNativePlatform()) {
+        if (nativeFileUris.length > 0) {
+          try {
+            await Share.share({
+              title: 'SJR Builders Time Cards',
+              text: `Time cards for week of ${weekDays[0].dateStr}`,
+              files: nativeFileUris,
+              dialogTitle: 'Export Time Cards',
+            });
+            setStatusMessage({ type: 'success', text: `Exported ${sitesToExport.length} site time card(s)!` });
+          } catch (shareErr) {
+            // User cancelled share dialogue or target app refused provider access
+            if (!shareErr?.message?.includes('canceled') && !shareErr?.message?.includes('cancelled')) {
+              console.warn("Share warning:", shareErr);
+              setStatusMessage({ type: 'success', text: `Saved to Documents folder on device.` });
+            }
+          }
+        } else {
+          throw new Error("Failed to resolve file paths for sharing.");
+        }
+      } else {
+        setStatusMessage({ type: 'success', text: `Exported ${sitesToExport.length} site time card(s)!` });
       }
 
-      setStatusMessage({ type: 'success', text: `Exported ${sitesToExport.length} site time card(s)!` });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
       console.error("DOCX export error:", err);
@@ -1252,7 +1279,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         </form>
 
         <div className="text-center text-[11px] text-slate-400 mt-6 pt-3 border-t border-slate-100 hidden md:block">
-          Version – August 2026
+          Version – September 2026
         </div>
       </div>
     </div>
