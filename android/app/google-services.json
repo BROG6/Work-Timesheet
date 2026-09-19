@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "986683715840",
+    "project_id": "timesheet-a258f",
+    "storage_bucket": "timesheet-a258f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:986683715840:android:24f518e1cbef99b0c703e5",
+        "android_client_info": {
+          "package_name": "com.sjr.timesheet"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "986683715840-0equ6a76vactdgdl1pi5lho8pbflj4vl.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sjr.timesheet",
+            "certificate_hash": "62f07ca4482e9d57c2c00d6d7d8bd37d873c44dc"
+          }
+        },
+        {
+          "client_id": "986683715840-nhh48oah5umm7rkoshutep1gvcq5l2b0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sjr.timesheet",
+            "certificate_hash": "b194ccf5dbbdcc9c3f43a06ad4111b0debf3da86"
+          }
+        },
+        {
+          "client_id": "986683715840-4rlu9o0a5glc1dquec2ljolbo0iom3iv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCSvTiNmxMcGLB_I_NRtGu3H2hF00K4p5c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "986683715840-4rlu9o0a5glc1dquec2ljolbo0iom3iv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
