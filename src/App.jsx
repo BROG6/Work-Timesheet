@@ -16,10 +16,14 @@ export default function App() {
   
   const isOnline = useOnlineStatus();
 
-  // Initialize Native Google Auth for Android/iOS devices
+  // Initialize Native Google Auth with Web Client ID
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
-      GoogleAuth.initialize();
+      GoogleAuth.initialize({
+        clientId: '986683715840-4rlu9o0a5glc1dquec2ljolbo0iom3iv.apps.googleusercontent.com',
+        scopes: ['profile', 'email'],
+        grantOfflineAccess: true,
+      });
     }
   }, []);
 
@@ -67,13 +71,22 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     if (!isOnline) {
       const confirmLogout = window.confirm(
         "You are currently offline. If you sign out now, you will need internet to log back in. Are you sure?"
       );
       if (!confirmLogout) return;
     }
+
+    try {
+      if (Capacitor.isNativePlatform()) {
+        await GoogleAuth.signOut();
+      }
+    } catch (err) {
+      console.warn("Native Google SignOut error:", err);
+    }
+
     signOut(auth);
   };
 
