@@ -620,6 +620,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       }
 
       if (weeklyEntries.length === 0) {
+        alert("No submitted entries found for this week to export.");
         setStatusMessage({ type: 'error', text: "No submitted entries found for this week to export." });
         setTimeout(() => setStatusMessage(null), 4000);
         setExportingDocx(false);
@@ -829,35 +830,32 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const weekStartStr = weekDays[0].dateStr;
         const [year, month, day] = weekStartStr.split('-');
         const formattedDate = `${day}-${month}-${year.slice(-2)}`;
-        const fileName = `Time Cards ${siteName.replace(/[^a-zA-Z0-9_\-]/g, '_')} ${formattedDate}.docx`;
+        const sanitizedSite = siteName.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const fileName = `Time_Cards_${sanitizedSite}_${formattedDate}.docx`;
 
         if (Capacitor.isNativePlatform()) {
-          const content = zip.generate({
-            type: 'uint8array',
-            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          });
+          const content = zip.generate({ type: 'uint8array' });
+          let binary = '';
+          const bytes = new Uint8Array(content);
+          const len = bytes.byteLength;
+          for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          const base64Data = window.btoa(binary);
 
-          const blob = new Blob([content], {
-            type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          });
-
-          const base64Data = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onerror = reject;
-            reader.onloadend = () => {
-              const base64String = reader.result.split(',')[1];
-              resolve(base64String);
-            };
-            reader.readAsDataURL(blob);
-          });
-
-          const savedFile = await Filesystem.writeFile({
+          await Filesystem.writeFile({
             path: fileName,
             data: base64Data,
             directory: Directory.Cache,
           });
 
-          nativeFileUris.push(savedFile.uri);
+          // Convert path to Android Content Provider URI
+          const uriResult = await Filesystem.getUri({
+            path: fileName,
+            directory: Directory.Cache,
+          });
+
+          nativeFileUris.push(uriResult.uri);
         } else {
           const blob = zip.generate({
             type: 'blob',
@@ -874,13 +872,12 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }
       }
 
-      // Single native Share invocation for all created files
       if (Capacitor.isNativePlatform() && nativeFileUris.length > 0) {
         await Share.share({
-          title: 'Export Time Cards',
+          title: 'SJR Builders Time Cards',
           text: `Time cards for week of ${weekDays[0].dateStr}`,
           files: nativeFileUris,
-          dialogTitle: 'Share Time Cards',
+          dialogTitle: 'Export Time Cards',
         });
       }
 
@@ -888,7 +885,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
       console.error("DOCX export error:", err);
-      setStatusMessage({ type: 'error', text: "Failed to generate DOCX file from template." });
+      alert(`Export Failed: ${err?.message || JSON.stringify(err)}`);
+      setStatusMessage({ type: 'error', text: `Export failed: ${err?.message || "Error generating document"}` });
     } finally {
       setExportingDocx(false);
     }
