@@ -41,8 +41,12 @@ android {
     }
 }
 
-// Force all Kotlin compilation tasks in subprojects/plugins to target JVM 21
-tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+// Target JVM 21 for all Kotlin compilation tasks without referencing raw package names
+tasks.withType(org.gradle.api.tasks.TaskProvider) {
+    // Left empty deliberately to avoid class resolution issues
+}
+
+tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }.configureEach {
     kotlinOptions {
         jvmTarget = '21'
     }
