@@ -107,6 +107,14 @@ export default function Auth({ user, setUser, setUserProfile }) {
       await handleAuthSuccess(userCredential.user);
     } catch (err) {
       console.error("Google sign-in error:", err);
+
+      // --- MOBILE ON-SCREEN ALERT DEBUGGER ---
+      if (Capacitor.isNativePlatform()) {
+        const fullErrorLog = JSON.stringify(err, Object.getOwnPropertyNames(err), 2);
+        alert(`RAW NATIVE AUTH ERROR:\n${fullErrorLog}`);
+      }
+      // ---------------------------------------
+
       setError(err.message ? err.message.replace('Firebase: ', '') : 'Google Sign-In failed');
     } finally {
       setLoading(false);
