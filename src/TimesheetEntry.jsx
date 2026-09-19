@@ -99,6 +99,12 @@ const ALL_TEMPLATE_TASKS = [
   ""
 ];
 
+// Helper: Collision-proof unique ID generator
+const generateUniqueId = () => `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+// Helper: Precise floating-point rounding for hours calculations
+const safeRound = (val) => Math.round((parseFloat(val) || 0) * 100) / 100;
+
 function parseLocalDate(dateInput) {
   if (!dateInput) return new Date();
   if (typeof dateInput === 'string' && dateInput.includes('-')) {
@@ -171,7 +177,7 @@ function getFormattedStaffName(user, userProfile) {
 }
 
 const createBlankTask = (dateStr) => ({
-  id: Date.now() + Math.random(),
+  id: generateUniqueId(),
   categoryGroup: "Framing & Envelope",
   taskName: "Wall Framing",
   hours: isFriday(dateStr) ? '8' : '9.25',
@@ -180,7 +186,7 @@ const createBlankTask = (dateStr) => ({
 });
 
 const createBlankSite = (dateStr, initialProject = '') => ({
-  id: Date.now() + Math.random(),
+  id: generateUniqueId(),
   project: initialProject,
   startTime: '07:00',
   timeFinished: isFriday(dateStr) ? '15:30' : '16:30',
@@ -334,7 +340,17 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       const currentTue = new Date(currentWed.getFullYear(), currentWed.getMonth(), currentWed.getDate() + 6);
       setWeekRangeStr(`${formatDisplayDate(currentWed)} – ${formatDisplayDate(currentTue)}`);
       
-      const q = query(collection(db, 'timesheets'), where('userId', '==', userId));
+      const startDateStr = formatDate(currentWed);
+      const endDateStr = formatDate(currentTue);
+
+      // Date-bounded query prevents performance degradation
+      const q = query(
+        collection(db, 'timesheets'),
+        where('userId', '==', userId),
+        where('date', '>=', startDateStr),
+        where('date', '<=', endDateStr)
+      );
+      
       let querySnapshot;
       try {
         querySnapshot = await getDocs(q);
@@ -342,19 +358,12 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         querySnapshot = await getDocsFromCache(q);
       }
       
-      const validWeekDates = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(currentWed.getFullYear(), currentWed.getMonth(), currentWed.getDate() + i);
-        return formatDate(d);
-      });
-      
       let total = 0;
       querySnapshot.forEach((docSnap) => {
         const data = docSnap.data();
-        if (validWeekDates.includes(data.date)) {
-          total += parseFloat(data.totalHours) || 0;
-        }
+        total += parseFloat(data.totalHours) || 0;
       });
-      setWeeklyHours(total);
+      setWeeklyHours(safeRound(total));
     } catch (err) {
       console.warn("Could not retrieve weekly hours:", err);
     } finally {
@@ -391,14 +400,14 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           const loadedSites = querySnapshot.docs.map((docSnap) => {
             const data = docSnap.data();
             return {
-              id: Date.now() + Math.random(),
+              id: generateUniqueId(),
               project: data.project || '',
               startTime: data.timeCardDetails?.startTime || '07:00',
               timeFinished: data.timeCardDetails?.timeFinished || (isFriday(selectedDate) ? '15:30' : '16:30'),
               timeLeftSite: data.timeCardDetails?.timeLeftSite || '',
               timeReturned: data.timeCardDetails?.timeReturned || '',
               tasks: (data.tasks || []).map((t) => ({
-                id: Date.now() + Math.random(),
+                id: generateUniqueId(),
                 categoryGroup: t.taskCategoryGroup || t.categoryGroup || "Framing & Envelope",
                 taskName: t.taskName || t.category || "Wall Framing",
                 hours: t.hours !== undefined ? String(t.hours) : (isFriday(selectedDate) ? '8' : '9.25'),
@@ -435,9 +444,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     };
   });
 
-  const grandTotalHours = siteEntries.reduce((sum, site) => {
-    return sum + site.tasks.reduce((tSum, t) => tSum + (parseFloat(t.hours) || 0), 0);
-  }, 0);
+  const grandTotalHours = safeRound(
+    siteEntries.reduce((sum, site) => {
+      return sum + site.tasks.reduce((tSum, t) => tSum + (parseFloat(t.hours) || 0), 0);
+    }, 0)
+  );
 
   const addSiteBlock = () => {
     setSiteEntries((prev) => [...prev, createBlankSite(selectedDate, '')]);
@@ -531,7 +542,9 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
     try {
       for (const site of siteEntries) {
-        const siteTotalHours = site.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
+        const siteTotalHours = safeRound(
+          site.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0)
+        );
         const projectTitle = site.project.trim() || "General / Unassigned";
         const safeSiteKey = projectTitle.replace(/[^a-zA-Z0-9_\-]/g, '_');
         const docId = `${userId}_${selectedDate}_${safeSiteKey}`;
@@ -600,11 +613,17 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       }
       const templateArrayBuffer = await response.arrayBuffer();
 
-      const validDates = weekDays.map((d) => d.dateStr);
+      const startDateStr = weekDays[0].dateStr;
+      const endDateStr = weekDays[6].dateStr;
       let weeklyEntries = [];
 
       if (userId) {
-        const q = query(collection(db, 'timesheets'), where('userId', '==', userId));
+        const q = query(
+          collection(db, 'timesheets'),
+          where('userId', '==', userId),
+          where('date', '>=', startDateStr),
+          where('date', '<=', endDateStr)
+        );
         let querySnapshot;
         try {
           querySnapshot = await getDocs(q);
@@ -612,10 +631,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           querySnapshot = await getDocsFromCache(q);
         }
         querySnapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          if (validDates.includes(data.date)) {
-            weeklyEntries.push(data);
-          }
+          weeklyEntries.push(docSnap.data());
         });
       }
 
@@ -696,10 +712,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             });
           }
           rowTaskTotal += dayTaskHours;
-          setCellText(cells[idx + 1], dayTaskHours > 0 ? String(dayTaskHours) : "", xmlDoc);
+          setCellText(cells[idx + 1], dayTaskHours > 0 ? String(safeRound(dayTaskHours)) : "", xmlDoc);
         });
         if (cells[8]) {
-          setCellText(cells[8], rowTaskTotal > 0 ? String(rowTaskTotal) : "", xmlDoc);
+          setCellText(cells[8], rowTaskTotal > 0 ? String(safeRound(rowTaskTotal)) : "", xmlDoc);
         }
       }
 
@@ -715,10 +731,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             }
           });
           siteGrandTotalHours += dayTotal;
-          setCellText(cells[idx + 1], dayTotal > 0 ? String(dayTotal) : "", xmlDoc);
+          setCellText(cells[idx + 1], dayTotal > 0 ? String(safeRound(dayTotal)) : "", xmlDoc);
         });
         if (cells[8]) {
-          setCellText(cells[8], siteGrandTotalHours > 0 ? String(siteGrandTotalHours) : "", xmlDoc);
+          setCellText(cells[8], siteGrandTotalHours > 0 ? String(safeRound(siteGrandTotalHours)) : "", xmlDoc);
         }
       }
 
@@ -734,29 +750,29 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             }
           });
           siteGrandTravelTotal += dayTravel;
-          setCellText(cells[idx + 1], dayTravel > 0 ? String(dayTravel) : "", xmlDoc);
+          setCellText(cells[idx + 1], dayTravel > 0 ? String(safeRound(dayTravel)) : "", xmlDoc);
         });
         if (cells[8]) {
-          setCellText(cells[8], siteGrandTravelTotal > 0 ? String(siteGrandTravelTotal) : "", xmlDoc);
+          setCellText(cells[8], siteGrandTravelTotal > 0 ? String(safeRound(siteGrandTravelTotal)) : "", xmlDoc);
         }
       }
 
       const cleanText = (str) => (str || '').replace(/\s+/g, ' ').trim();
 
-      // Format current week date as dd/mm/yy for strict naming rule
+      // Format date string for Android filesystem: replace slashes with hyphens to avoid path truncation
       const weekStartStr = weekDays[0].dateStr;
       const [year, month, day] = weekStartStr.split('-');
-      const formattedDateStr = `${day}/${month}/${year.slice(-2)}`;
+      const formattedDateStr = `${day}-${month}-${year.slice(-2)}`;
 
       let siteIndexCounter = 0;
 
       for (const siteName of sitesToExport) {
         const siteEntriesForExport = siteMap[siteName];
         const zip = new PZip(templateArrayBuffer);
-        let docXmlStr = zip.file("word/document.xml").asText();
+        const docXmlStr = zip.file("word/document.xml").asText();
         
         const parser = new DOMParser();
-        var xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
+        const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
         const rows = xmlDoc.getElementsByTagName("w:tr");
         const paragraphs = xmlDoc.getElementsByTagName("w:p");
 
@@ -834,7 +850,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const updatedXmlStr = serializer.serializeToString(xmlDoc);
         zip.file("word/document.xml", updatedXmlStr);
 
-        // Strictly name files as "Time Cards dd/mm/yy" (or "Time Cards dd/mm/yy (1).docx")
+        // Uses hyphens (e.g. Time Cards 16-09-26.docx) to prevent Android path truncation
         const fileSuffix = siteIndexCounter > 0 ? ` (${siteIndexCounter})` : '';
         const fileName = `Time Cards ${formattedDateStr}${fileSuffix}.docx`;
         siteIndexCounter++;
@@ -1082,7 +1098,9 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
           {/* Site Entries List */}
           {siteEntries.map((siteItem, siteIndex) => {
-            const siteHours = siteItem.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
+            const siteHours = safeRound(
+              siteItem.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0)
+            );
             return (
               <div key={siteItem.id} className="border-2 border-slate-300 rounded-xl p-4 bg-slate-50/50 space-y-4 relative">
                 <div className="flex justify-between items-center border-b border-slate-200 pb-2">
