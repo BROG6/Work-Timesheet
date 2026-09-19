@@ -831,19 +831,41 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const fileName = `Time Cards ${siteName.replace(/[^a-zA-Z0-9_\-]/g, '_')} ${formattedDate}.docx`;
 
         if (Capacitor.isNativePlatform()) {
-          const base64Data = zip.generate({ type: 'base64' });
-          
+          // Generate uint8array binary content from PZip
+          const content = zip.generate({
+            type: 'uint8array',
+            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          });
+
+          // Convert binary array to Blob and read as Base64 Data URL
+          const blob = new Blob([content], {
+            type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          });
+
+          const base64Data = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onerror = reject;
+            reader.onloadend = () => {
+              // Extract raw Base64 string without header prefix
+              const base64String = reader.result.split(',')[1];
+              resolve(base64String);
+            };
+            reader.readAsDataURL(blob);
+          });
+
+          // Write file to Cache directory
           const savedFile = await Filesystem.writeFile({
             path: fileName,
             data: base64Data,
-            directory: Directory.Cache
+            directory: Directory.Cache,
           });
 
+          // Trigger native Android share sheet with URI
           await Share.share({
             title: 'Export Time Card',
             text: `Time card DOCX for ${siteName}`,
             url: savedFile.uri,
-            dialogTitle: 'Share or Save DOCX'
+            dialogTitle: 'Share or Save DOCX',
           });
         } else {
           const blob = zip.generate({
