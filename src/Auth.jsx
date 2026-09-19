@@ -41,8 +41,8 @@ export default function Auth({ user, setUser, setUserProfile }) {
       await setDoc(userDocRef, profileData);
     }
 
-    setUser(authUser);
-    setUserProfile(profileData);
+    if (setUserProfile) setUserProfile(profileData);
+    if (setUser) setUser(authUser);
   };
 
   // Handle User Registration
@@ -90,7 +90,13 @@ export default function Auth({ user, setUser, setUserProfile }) {
       if (Capacitor.isNativePlatform()) {
         // Native Android Flow
         const googleUser = await GoogleAuth.signIn();
-        const credential = GoogleAuthProvider.credential(googleUser.authentication.idToken);
+        const idToken = googleUser.authentication?.idToken || googleUser.idToken;
+
+        if (!idToken) {
+          throw new Error("Failed to retrieve Google ID Token from native auth response.");
+        }
+
+        const credential = GoogleAuthProvider.credential(idToken);
         userCredential = await signInWithCredential(auth, credential);
       } else {
         // Web Browser Flow
@@ -108,9 +114,16 @@ export default function Auth({ user, setUser, setUserProfile }) {
   };
 
   const handleLogout = async () => {
+    try {
+      if (Capacitor.isNativePlatform()) {
+        await GoogleAuth.signOut();
+      }
+    } catch (err) {
+      console.warn("Native Google signout error:", err);
+    }
     await signOut(auth);
-    setUser(null);
-    setUserProfile(null);
+    if (setUser) setUser(null);
+    if (setUserProfile) setUserProfile(null);
   };
 
   if (user) {
@@ -166,7 +179,7 @@ export default function Auth({ user, setUser, setUserProfile }) {
               d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.27 0 3.21 2.68 1.2 6.6l4.07 3.15c.95-2.85 3.6-4.96 6.73-4.96z"
             />
           </svg>
-          <span>Continue with Google</span>
+          <span>{loading ? "Authenticating..." : "Continue with Google"}</span>
         </button>
 
         <div className="flex items-center my-4">
