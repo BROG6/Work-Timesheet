@@ -1,10 +1,13 @@
 {
   "appId": "com.sjr.timesheet",
-  "appName": "Work Timesheet",
+  "appName": "SJR Builders Timesheet",
   "webDir": "dist",
   "plugins": {
     "GoogleAuth": {
-      "scopes": ["profile", "email"],
+      "scopes": [
+        "profile",
+        "email"
+      ],
       "serverClientId": "986683715840-4rlu9o0a5glc1dquec2ljolbo0iom3iv.apps.googleusercontent.com",
       "forceCodeForRefreshToken": true
     }

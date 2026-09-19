@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Work Timesheet</string>
-    <string name="title_activity_main">Work Timesheet</string>
+    <string name="app_name">SJR Builders Timesheet</string>
+    <string name="title_activity_main">SJR Builders Timesheet</string>
     <string name="package_name">com.sjr.timesheet</string>
     <string name="custom_url_scheme">com.googleusercontent.apps.986683715840-4rlu9o0a5glc1dquec2ljolbo0iom3iv</string>
     <string name="server_client_id">986683715840-4rlu9o0a5glc1dquec2ljolbo0iom3iv.apps.googleusercontent.com</string>
