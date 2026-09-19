@@ -910,8 +910,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         if (nativeFileUris.length > 0) {
           try {
             await Share.share({
-              title: 'SJR Builders Time Cards',
-              text: `Time cards for week of ${weekDays[0].dateStr}`,
               files: nativeFileUris,
               dialogTitle: 'Export Time Cards',
             });
