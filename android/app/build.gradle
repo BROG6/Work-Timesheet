@@ -9,10 +9,6 @@ android {
         targetCompatibility JavaVersion.VERSION_21
     }
 
-    kotlinOptions {
-        jvmTarget = '21'
-    }
-
     defaultConfig {
         applicationId "com.sjr.timesheet"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -42,6 +38,13 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
+    }
+}
+
+// Force all Kotlin compilation tasks in subprojects/plugins to target JVM 21
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    kotlinOptions {
+        jvmTarget = '21'
     }
 }
 
