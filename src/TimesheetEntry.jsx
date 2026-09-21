@@ -116,6 +116,43 @@ function parseLocalDate(dateInput) {
   return new Date(dateInput);
 }
 
+function isFriday(dateStr) {
+  if (!dateStr) return false;
+  const d = parseLocalDate(dateStr);
+  return d.getDay() === 5;
+}
+
+/**
+ * Calculates net decimal work hours from HH:mm start and finish strings.
+ * Standard Mon-Thu 07:00 to 16:30 (9.5 gross - 0.25 break) -> 9.25 hrs
+ * Standard Friday  07:00 to 15:30 (8.5 gross - 0.50 break) -> 8.00 hrs
+ */
+function calculateHoursFromTimes(startTime, timeFinished, dateStr) {
+  if (!startTime || !timeFinished) {
+    return isFriday(dateStr) ? 8 : 9.25;
+  }
+
+  const [startH, startM] = startTime.split(':').map(Number);
+  const [finishH, finishM] = timeFinished.split(':').map(Number);
+
+  if (isNaN(startH) || isNaN(startM) || isNaN(finishH) || isNaN(finishM)) {
+    return isFriday(dateStr) ? 8 : 9.25;
+  }
+
+  const startTotalMins = startH * 60 + startM;
+  const finishTotalMins = finishH * 60 + finishM;
+
+  let diffMins = finishTotalMins - startTotalMins;
+  if (diffMins <= 0) return 0;
+
+  // Deduct 30 mins on Friday, 15 mins on Monday-Thursday for shifts over 4 hours
+  if (diffMins > 240) {
+    diffMins -= isFriday(dateStr) ? 30 : 15;
+  }
+
+  return safeRound(diffMins / 60);
+}
+
 function getWednesday(d) {
   const date = parseLocalDate(d);
   const day = date.getDay();
@@ -150,12 +187,6 @@ function displayDate(dateStr) {
   return dateStr;
 }
 
-function isFriday(dateStr) {
-  if (!dateStr) return false;
-  const d = parseLocalDate(dateStr);
-  return d.getDay() === 5;
-}
-
 function getFormattedStaffName(user, userProfile) {
   const explicitName = userProfile?.name || userProfile?.fullName || userProfile?.userName || user?.displayName;
   if (explicitName && explicitName.trim() !== '' && !explicitName.includes('@')) {
@@ -176,25 +207,31 @@ function getFormattedStaffName(user, userProfile) {
   return 'Staff Member';
 }
 
-const createBlankTask = (dateStr) => ({
+const createBlankTask = (dateStr, initialHours) => ({
   id: generateUniqueId(),
   categoryGroup: "Framing & Envelope",
   taskName: "Wall Framing",
-  hours: isFriday(dateStr) ? '8' : '9.25',
+  hours: initialHours !== undefined ? String(initialHours) : (isFriday(dateStr) ? '8' : '9.25'),
   travelTime: '',
   comments: ''
 });
 
-const createBlankSite = (dateStr, initialProject = '') => ({
-  id: generateUniqueId(),
-  project: initialProject,
-  startTime: '07:00',
-  timeFinished: isFriday(dateStr) ? '15:30' : '16:30',
-  timeLeftSite: '',
-  timeReturned: '',
-  tasks: [createBlankTask(dateStr)],
-  isSubmitted: false
-});
+const createBlankSite = (dateStr, initialProject = '') => {
+  const defaultStartTime = '07:00';
+  const defaultFinishTime = isFriday(dateStr) ? '15:30' : '16:30';
+  const calculatedInitialHours = calculateHoursFromTimes(defaultStartTime, defaultFinishTime, dateStr);
+
+  return {
+    id: generateUniqueId(),
+    project: initialProject,
+    startTime: defaultStartTime,
+    timeFinished: defaultFinishTime,
+    timeLeftSite: '',
+    timeReturned: '',
+    tasks: [createBlankTask(dateStr, calculatedInitialHours)],
+    isSubmitted: false
+  };
+};
 
 function SiteAutoCompleteInput({ value, onChange, existingSites }) {
   const [suggestions, setSuggestions] = useState([]);
@@ -344,7 +381,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       const startDateStr = formatDate(currentWed);
       const endDateStr = formatDate(currentTue);
 
-      // Date-bounded query prevents performance degradation
       const q = query(
         collection(db, 'timesheets'),
         where('userId', '==', userId),
@@ -497,19 +533,61 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     }
   };
 
+  /**
+   * Recalculates first task hours when Start Time or Time Finished changes
+   */
   const updateSiteField = (siteId, field, value) => {
     setSiteEntries((prev) =>
-      prev.map((site) => (site.id === siteId ? { ...site, [field]: value } : site))
+      prev.map((site) => {
+        if (site.id !== siteId) return site;
+        const updatedSite = { ...site, [field]: value };
+
+        if (field === 'startTime' || field === 'timeFinished') {
+          const totalTargetHours = calculateHoursFromTimes(
+            updatedSite.startTime,
+            updatedSite.timeFinished,
+            selectedDate
+          );
+
+          if (updatedSite.tasks.length === 1) {
+            updatedSite.tasks = [{
+              ...updatedSite.tasks[0],
+              hours: String(totalTargetHours)
+            }];
+          } else if (updatedSite.tasks.length > 1) {
+            const currentSubtotalOtherTasks = updatedSite.tasks
+              .slice(1)
+              .reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
+
+            const adjustedFirstTaskHours = Math.max(0, safeRound(totalTargetHours - currentSubtotalOtherTasks));
+            updatedSite.tasks = [
+              { ...updatedSite.tasks[0], hours: String(adjustedFirstTaskHours) },
+              ...updatedSite.tasks.slice(1)
+            ];
+          }
+        }
+        return updatedSite;
+      })
     );
   };
 
+  /**
+   * Adds a new task row and automatically defaults its hours to the remaining target balance
+   */
   const addTaskToSite = (siteId) => {
     setSiteEntries((prev) =>
-      prev.map((site) =>
-        site.id === siteId
-          ? { ...site, tasks: [...site.tasks, createBlankTask(selectedDate)] }
-          : site
-      )
+      prev.map((site) => {
+        if (site.id !== siteId) return site;
+        
+        const targetTotalHours = calculateHoursFromTimes(site.startTime, site.timeFinished, selectedDate);
+        const existingAllocatedHours = site.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
+        const remainingHours = Math.max(0, safeRound(targetTotalHours - existingAllocatedHours));
+
+        return {
+          ...site,
+          tasks: [...site.tasks, createBlankTask(selectedDate, remainingHours)]
+        };
+      })
     );
   };
 
@@ -768,7 +846,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
       const cleanText = (str) => (str || '').replace(/\s+/g, ' ').trim();
 
-      // Format date string for Android filesystem: replace slashes with hyphens to avoid path truncation
       const weekStartStr = weekDays[0].dateStr;
       const [year, month, day] = weekStartStr.split('-');
       const formattedDateStr = `${day}-${month}-${year.slice(-2)}`;
@@ -859,7 +936,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const updatedXmlStr = serializer.serializeToString(xmlDoc);
         zip.file("word/document.xml", updatedXmlStr);
 
-        // Uses hyphens (e.g. Time Cards 16-09-26.docx) to prevent Android path truncation
         const fileSuffix = siteIndexCounter > 0 ? ` (${siteIndexCounter})` : '';
         const fileName = `Time Cards ${formattedDateStr}${fileSuffix}.docx`;
         siteIndexCounter++;
@@ -874,7 +950,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           }
           const base64Data = window.btoa(binary);
 
-          // Write to Cache Directory for external app share sheet
           const writtenFile = await Filesystem.writeFile({
             path: fileName,
             data: base64Data,
@@ -887,7 +962,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             directory: Directory.Cache,
           });
 
-          // Write to Documents Directory so file remains available locally on native device
           await Filesystem.writeFile({
             path: fileName,
             data: base64Data,
