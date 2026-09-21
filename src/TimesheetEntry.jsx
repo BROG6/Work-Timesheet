@@ -272,6 +272,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
   const [selectedDate, setSelectedDate] = useState(() => formatDate(new Date()));
   const [currentWednesday, setCurrentWednesday] = useState(() => getWednesday(new Date()));
   const [weeklyHours, setWeeklyHours] = useState(0);
+  const [weeklyTravelHours, setWeeklyTravelHours] = useState(0);
   const [weekRangeStr, setWeekRangeStr] = useState('');
   const [loadingHours, setLoadingHours] = useState(true);
 
@@ -359,11 +360,19 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       }
       
       let total = 0;
+      let totalTravel = 0;
       querySnapshot.forEach((docSnap) => {
         const data = docSnap.data();
         total += parseFloat(data.totalHours) || 0;
+        
+        if (Array.isArray(data.tasks)) {
+          data.tasks.forEach((t) => {
+            totalTravel += parseFloat(t.travelTime) || 0;
+          });
+        }
       });
       setWeeklyHours(safeRound(total));
+      setWeeklyTravelHours(safeRound(totalTravel));
     } catch (err) {
       console.warn("Could not retrieve weekly hours:", err);
     } finally {
@@ -950,20 +959,34 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       )}
 
       {/* Weekly Hours Banner */}
-      <div className="bg-slate-900 text-white p-5 rounded-xl shadow-sm border border-slate-800 flex justify-between items-center">
-        <div>
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-            This Week's Total Hours
-          </span>
-          <span className="text-xs text-slate-300 font-medium mt-0.5 block">
-            {weekRangeStr || "Current Pay Week"}
-          </span>
+      <div className="bg-slate-900 text-white p-5 rounded-xl shadow-sm border border-slate-800 space-y-3">
+        <div className="flex justify-between items-center">
+          <div>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+              This Week's Total Hours
+            </span>
+            <span className="text-xs text-slate-300 font-medium mt-0.5 block">
+              {weekRangeStr || "Current Pay Week"}
+            </span>
+          </div>
+          <div className="text-right">
+            <span className="text-3xl font-black text-emerald-400">
+              {loadingHours ? "..." : `${weeklyHours} hrs`}
+            </span>
+          </div>
         </div>
-        <div className="text-right">
-          <span className="text-3xl font-black text-emerald-400">
-            {loadingHours ? "..." : `${weeklyHours} hrs`}
-          </span>
-        </div>
+
+        {/* Conditionally rendered travel hours row */}
+        {weeklyTravelHours > 0 && (
+          <div className="pt-2 border-t border-slate-800 flex justify-between items-center text-xs">
+            <span className="font-semibold text-slate-400 uppercase tracking-wider text-[10px]">
+              This Week's Travel Hours
+            </span>
+            <span className="font-extrabold text-amber-400">
+              {loadingHours ? "..." : `${weeklyTravelHours} hrs`}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
