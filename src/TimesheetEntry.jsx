@@ -370,11 +370,14 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     fetchSites();
   }, []);
 
+  /**
+   * Dynamically fetches hours for the currently navigated week (currentWednesday)
+   */
   const fetchStaffWeeklyHours = useCallback(async () => {
-    if (!userId) return;
+    if (!userId || !currentWednesday) return;
     setLoadingHours(true);
     try {
-      const currentWed = getWednesday(new Date());
+      const currentWed = currentWednesday;
       const currentTue = new Date(currentWed.getFullYear(), currentWed.getMonth(), currentWed.getDate() + 6);
       setWeekRangeStr(`${formatDisplayDate(currentWed)} – ${formatDisplayDate(currentTue)}`);
       
@@ -414,7 +417,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     } finally {
       setLoadingHours(false);
     }
-  }, [userId]);
+  }, [userId, currentWednesday]);
 
   useEffect(() => {
     if (userId) {
@@ -533,9 +536,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     }
   };
 
-  /**
-   * Recalculates first task hours when Start Time or Time Finished changes
-   */
   const updateSiteField = (siteId, field, value) => {
     setSiteEntries((prev) =>
       prev.map((site) => {
@@ -571,9 +571,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     );
   };
 
-  /**
-   * Adds a new task row and automatically defaults its hours to the remaining target balance
-   */
   const addTaskToSite = (siteId) => {
     setSiteEntries((prev) =>
       prev.map((site) => {
@@ -1032,15 +1029,15 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         </div>
       )}
 
-      {/* Weekly Hours Banner */}
+      {/* Dynamic Weekly Hours Banner */}
       <div className="bg-slate-900 text-white p-5 rounded-xl shadow-sm border border-slate-800 space-y-3">
         <div className="flex justify-between items-center">
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-              This Week's Total Hours
+              Week's Total Hours
             </span>
             <span className="text-xs text-slate-300 font-medium mt-0.5 block">
-              {weekRangeStr || "Current Pay Week"}
+              {weekRangeStr || "Selected Pay Week"}
             </span>
           </div>
           <div className="text-right">
@@ -1054,7 +1051,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         {weeklyTravelHours > 0 && (
           <div className="pt-2 border-t border-slate-800 flex justify-between items-center text-xs">
             <span className="font-semibold text-slate-400 uppercase tracking-wider text-[10px]">
-              This Week's Travel Hours
+              Week's Travel Hours
             </span>
             <span className="font-extrabold text-amber-400">
               {loadingHours ? "..." : `${weeklyTravelHours} hrs`}
@@ -1099,7 +1096,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                 const p = new Date(currentWednesday.getFullYear(), currentWednesday.getMonth(), currentWednesday.getDate() - 7);
                 setCurrentWednesday(p);
               }}
-              className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
+              className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300 cursor-pointer"
             >
               ← Prev Week
             </button>
@@ -1113,7 +1110,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   setCurrentWednesday(getWednesday(new Date()));
                   setSelectedDate(todayStr);
                 }}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded-md font-bold transition-colors"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded-md font-bold transition-colors cursor-pointer"
               >
                 Today
               </button>
@@ -1123,7 +1120,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   const n = new Date(currentWednesday.getFullYear(), currentWednesday.getMonth(), currentWednesday.getDate() + 7);
                   setCurrentWednesday(n);
                 }}
-                className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300"
+                className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-md font-semibold transition-colors text-slate-300 cursor-pointer"
               >
                 Next Week →
               </button>
@@ -1138,7 +1135,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   key={day.dateStr}
                   type="button"
                   onClick={() => setSelectedDate(day.dateStr)}
-                  className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${
+                  className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all cursor-pointer ${
                     isSelected
                       ? 'bg-emerald-500 text-slate-950 font-bold shadow-md scale-105'
                       : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
