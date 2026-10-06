@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from './firebaseConfig';
 import { 
-  collection, doc, setDoc, deleteDoc, query, where, getDocs, getDocsFromCache, serverTimestamp 
+  collection, doc, setDoc, deleteDoc, query, where, getDocs, getDocsFromCache, serverTimestamp, limit, orderBy 
 } from 'firebase/firestore';
 
 import { Capacitor } from '@capacitor/core';
@@ -11,6 +11,7 @@ import { Share } from '@capacitor/share';
 
 import PZip from 'pizzip';
 import sjrLogo from './assets/logo.jpg';
+import { checkAndSuppressDailyReminder } from './notifications';
 
 const TASK_CATEGORIES = {
   "Site Setup & Earthworks": [
@@ -339,7 +340,12 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
   useEffect(() => {
     async function fetchSites() {
       try {
-        const q = query(collection(db, 'timesheets'));
+        // Limited query to prevent full collection scans
+        const q = query(
+          collection(db, 'timesheets'),
+          orderBy('updatedAt', 'desc'),
+          limit(200)
+        );
         let querySnapshot;
         try {
           querySnapshot = await getDocs(q);
@@ -664,6 +670,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }
       }
 
+      // Suppress/cancel daily reminder notification
+      if (userId) {
+        await checkAndSuppressDailyReminder(userId);
+      }
+
       setSiteEntries((prev) => prev.map((s) => ({ ...s, isSubmitted: true })));
       setExistingSites(updatedSitesList);
       localStorage.setItem('sjr_known_sites', JSON.stringify(updatedSitesList));
@@ -739,8 +750,10 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       const sitesToExport = Object.keys(siteMap);
       const nativeFileUris = [];
 
+      // Namespace-safe cell text setter for OpenXML
       function setCellText(cell, text, xmlDoc) {
-        const tNodes = cell.getElementsByTagName("w:t");
+        const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        const tNodes = cell.getElementsByTagNameNS(ns, "t");
         if (tNodes.length > 0) {
           tNodes[0].textContent = text;
           tNodes[0].setAttribute("xml:space", "preserve");
@@ -748,15 +761,18 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             tNodes[i].textContent = "";
           }
         } else {
-          const pNodes = cell.getElementsByTagName("w:p");
-          if (pNodes.length > 0) {
-            const r = xmlDoc.createElement("w:r");
-            const t = xmlDoc.createElement("w:t");
-            t.textContent = text;
-            t.setAttribute("xml:space", "preserve");
-            r.appendChild(t);
-            pNodes[0].appendChild(r);
+          let pNodes = cell.getElementsByTagNameNS(ns, "p");
+          let p = pNodes[0];
+          if (!p) {
+            p = xmlDoc.createElementNS(ns, "w:p");
+            cell.appendChild(p);
           }
+          const r = xmlDoc.createElementNS(ns, "w:r");
+          const t = xmlDoc.createElementNS(ns, "w:t");
+          t.textContent = text;
+          t.setAttribute("xml:space", "preserve");
+          r.appendChild(t);
+          p.appendChild(r);
         }
       }
 
