@@ -8,22 +8,18 @@ import {
   doc
 } from 'firebase/firestore';
 
-// Templating libraries for loading and filling existing .docx files
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 
 // --- Date Helpers ---
 
-// Returns the Wednesday of the week for a given date (Wed - Tue cycle)
 function getWednesday(d) {
   const date = new Date(d);
   const day = date.getDay();
-  // Calculate offset to Wednesday (Sunday is 0, Wednesday is 3)
   const diff = date.getDate() - day + (day < 3 ? -4 : 3);
   return new Date(date.setDate(diff));
 }
 
-// Formats a JavaScript Date object as DD/MM/YYYY
 function formatDate(dateObj) {
   const day = String(dateObj.getDate()).padStart(2, '0');
   const month = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -31,7 +27,6 @@ function formatDate(dateObj) {
   return `${day}/${month}/${year}`;
 }
 
-// Safely converts Firestore Timestamps or ISO strings into DD/MM/YYYY
 function displayDate(dateStr) {
   if (!dateStr) return '';
   if (typeof dateStr === 'object' && dateStr.toDate) {
@@ -61,7 +56,7 @@ export default function ManagerDashboard({ userProfile }) {
   const [selectedDate, setSelectedDate] = useState('ALL');
   const [isExporting, setIsExporting] = useState(false);
 
-  // Date Navigation State (Default to current week starting Wednesday)
+  // Date Navigation State
   const [currentWednesday, setCurrentWednesday] = useState(() => getWednesday(new Date()));
 
   useEffect(() => {
@@ -96,7 +91,6 @@ export default function ManagerDashboard({ userProfile }) {
     }
   };
 
-  // Generate array of 7 dates for the active Wednesday - Tuesday period
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const day = new Date(currentWednesday);
     day.setDate(currentWednesday.getDate() + i);
@@ -111,7 +105,6 @@ export default function ManagerDashboard({ userProfile }) {
   const weekStartStr = weekDays[0].dateStr;
   const weekEndStr = weekDays[6].dateStr;
 
-  // Week Navigation handlers
   const handlePrevWeek = () => {
     const prev = new Date(currentWednesday);
     prev.setDate(prev.getDate() - 7);
@@ -128,7 +121,6 @@ export default function ManagerDashboard({ userProfile }) {
     setCurrentWednesday(getWednesday(new Date()));
   };
 
-  // Status toggle handler
   const handleToggleStatus = async (id, currentStatus) => {
     const newStatus = currentStatus === 'Approved' ? 'Pending' : 'Approved';
     try {
@@ -141,7 +133,6 @@ export default function ManagerDashboard({ userProfile }) {
     }
   };
 
-  // Delete entry handler
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this entry?")) return;
     try {
@@ -156,14 +147,12 @@ export default function ManagerDashboard({ userProfile }) {
   const handleExportFromTemplate = async () => {
     setIsExporting(true);
     try {
-      // 1. Fetch raw binary of the stored template asset directly from /public
       const response = await fetch('/Blank Time Cards.docx');
       if (!response.ok) {
         throw new Error("Could not find template file at '/Blank Time Cards.docx'");
       }
       const templateArrayBuffer = await response.arrayBuffer();
 
-      // Filter entries matching the current week and user selection
       const activeWeekEntries = timesheets.filter((t) => {
         const matchesUser = filterUser === 'ALL' || t.userId === filterUser || t.userName === filterUser;
         return activeWeekDateStrings.includes(displayDate(t.date)) && matchesUser;
@@ -175,7 +164,6 @@ export default function ManagerDashboard({ userProfile }) {
         return;
       }
 
-      // Determine sites to export
       let sitesToExport = [];
       if (filterProject === 'ALL') {
         sitesToExport = Array.from(new Set(activeWeekEntries.map((t) => t.project || 'General')));
@@ -183,13 +171,11 @@ export default function ManagerDashboard({ userProfile }) {
         sitesToExport = [filterProject];
       }
 
-      // Map User IDs to display names
       const userMap = {};
       users.forEach((u) => {
         userMap[u.uid] = u.name || u.email;
       });
 
-      // 2. Loop through each site and populate the template
       for (const siteName of sitesToExport) {
         const siteEntries = activeWeekEntries.filter(
           (t) => (t.project || 'General') === siteName
@@ -197,7 +183,10 @@ export default function ManagerDashboard({ userProfile }) {
 
         if (siteEntries.length === 0) continue;
 
-        // Structure dataset for staff members on this site
+        let siteTotalHours = 0;
+        let siteTotalTravel = 0;
+        const allFlatTasks = [];
+
         const staffMembersData = Array.from(
           new Set(siteEntries.map((t) => t.userId || t.userName))
         ).map((staffKey) => {
@@ -207,61 +196,86 @@ export default function ManagerDashboard({ userProfile }) {
 
           let staffTotalHours = 0;
           let staffTotalTravel = 0;
-          const allTasks = [];
+          const staffTasks = [];
 
           staffEntries.forEach((entry) => {
-            staffTotalHours += parseFloat(entry.totalHours) || 0;
+            const currentTotalHours = parseFloat(entry.totalHours) || 0;
+            staffTotalHours += currentTotalHours;
+            siteTotalHours += currentTotalHours;
+
             if (entry.tasks && Array.isArray(entry.tasks)) {
               entry.tasks.forEach((tk) => {
                 const travel = parseFloat(tk.travelTime) || 0;
+                const hours = parseFloat(tk.hours) || 0;
                 staffTotalTravel += travel;
-                allTasks.push({
+                siteTotalTravel += travel;
+
+                const taskObj = {
                   date: entry.date,
+                  day: entry.date ? entry.date.split('/')[0] : '',
+                  staffName: userMap[staffKey] || staffKey,
+                  userName: userMap[staffKey] || staffKey,
                   category: tk.taskCategoryGroup || tk.taskName || 'General',
-                  hours: tk.hours || 0,
+                  taskName: tk.taskName || tk.taskCategoryGroup || 'General',
+                  description: tk.taskCategoryGroup || tk.taskName || 'General',
+                  hours: hours,
+                  totalHours: hours,
                   travel: travel,
+                  travelTime: travel,
                   comments: tk.comments || '',
+                  notes: tk.comments || '',
                   timeOnSite: entry.timeCardDetails?.timeOnSite || '',
                   timeLeftSite: entry.timeCardDetails?.timeLeftSite || '',
                   timeReturned: entry.timeCardDetails?.timeReturnedToYard || ''
-                });
+                };
+
+                staffTasks.push(taskObj);
+                allFlatTasks.push(taskObj);
               });
             }
           });
 
           return {
             staffName: userMap[staffKey] || staffKey,
+            userName: userMap[staffKey] || staffKey,
             siteName: siteName,
+            project: siteName,
             weekStart: weekStartStr,
             weekEnd: weekEndStr,
             totalHours: staffTotalHours.toFixed(2),
             totalTravel: staffTotalTravel.toFixed(2),
-            tasks: allTasks
+            tasks: staffTasks,
+            entries: staffTasks
           };
         });
 
-        // Instantiate PizZip and Docxtemplater with loaded file buffer
         const zip = new PizZip(templateArrayBuffer);
         const doc = new Docxtemplater(zip, {
           paragraphLoop: true,
           linebreaks: true
         });
 
-        // Inject data context into the template placeholders
+        // Universal Context Mapping
         doc.render({
           siteName: siteName,
+          project: siteName,
+          projectName: siteName,
           weekStart: weekStartStr,
           weekEnd: weekEndStr,
-          staffMembers: staffMembersData
+          totalHours: siteTotalHours.toFixed(2),
+          totalTravel: siteTotalTravel.toFixed(2),
+          staffMembers: staffMembersData,
+          workers: staffMembersData,
+          tasks: allFlatTasks,
+          entries: allFlatTasks,
+          rows: allFlatTasks
         });
 
-        // Generate output document blob
         const outBlob = doc.getZip().generate({
           type: 'blob',
           mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         });
 
-        // Trigger safe file download
         const safeSiteName = siteName.replace(/[^a-zA-Z0-9_\-]/g, '_');
         const url = URL.createObjectURL(outBlob);
         const link = document.createElement('a');
@@ -271,7 +285,6 @@ export default function ManagerDashboard({ userProfile }) {
         link.click();
         document.body.removeChild(link);
 
-        // Asynchronous delay to prevent browser download popup blocking
         await new Promise((res) => setTimeout(res, 200));
         URL.revokeObjectURL(url);
       }
@@ -283,7 +296,6 @@ export default function ManagerDashboard({ userProfile }) {
     }
   };
 
-  // Filter entries for the interactive dashboard table view (RESTRICTED TO CURRENT ACTIVE WEEK)
   const filteredTimesheets = timesheets.filter((item) => {
     const matchesWeek = activeWeekDateStrings.includes(displayDate(item.date));
     const matchesUser = filterUser === 'ALL' || item.userId === filterUser || item.userName === filterUser;
@@ -296,14 +308,12 @@ export default function ManagerDashboard({ userProfile }) {
 
   return (
     <div className="p-6 bg-slate-900 text-slate-100 min-h-screen">
-      {/* Header Bar */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Manager Dashboard</h1>
           <p className="text-sm text-slate-400">Review worker timecards and export site summaries</p>
         </div>
 
-        {/* Date Selector / Week Controls */}
         <div className="flex items-center gap-2 bg-slate-800 p-2 rounded-xl border border-slate-700">
           <button
             type="button"
@@ -332,7 +342,6 @@ export default function ManagerDashboard({ userProfile }) {
         </div>
       </div>
 
-      {/* Filter and Action Controls */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div>
           <label className="block text-xs font-medium text-slate-400 mb-1">Filter Staff</label>
@@ -398,7 +407,6 @@ export default function ManagerDashboard({ userProfile }) {
         </div>
       </div>
 
-      {/* Main Timesheet Records Table */}
       <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow-lg">
         {loading ? (
           <div className="p-8 text-center text-slate-400">Loading timesheet records...</div>
