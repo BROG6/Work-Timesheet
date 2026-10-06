@@ -1,3 +1,4 @@
+// src/ManagerDashboard.jsx
 import React, { useState, useEffect } from 'react';
 import { db } from './firebaseConfig';
 import {
@@ -11,38 +12,114 @@ import {
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 
-// --- Date Helpers ---
+const ALL_TEMPLATE_TASKS = [
+  "Demolition",
+  "Profile/Set Up",
+  "Excavate/Footings",
+  "Boxing",
+  "Reinforcing",
+  "Polythene/Polystyrene",
+  "Concrete/Blockfill",
+  "Timber Floor Structure & Flooring",
+  "Structural Steel",
+  "Structural Connections",
+  "Wall Framing",
+  "Roof Framing and Purlins",
+  "Fascia and Soffits",
+  "C/Battens, Rab/Ecoply",
+  "Building Paper/Aliband",
+  "Exterior Windows/Doors",
+  "Exterior Cladding",
+  "Insulation",
+  "Ceiling Battens",
+  "Ceiling Linings",
+  "Interior Doors",
+  "Wall Linings",
+  "Scotia/Skirting/Architrave",
+  "Hardware/ Door Hardware",
+  "Shelving/Joinery",
+  "Deck Framing & Decking",
+  "Driveway/Paths/Landscaping",
+  "Other                                  (PTO)",
+  "Sick Leave",
+  "Annual Leave",
+  "Bereavement Leave",
+  "Training",
+  "Other Leave (please specify)",
+  ""
+];
 
-function getWednesday(d) {
-  const date = new Date(d);
-  const day = date.getDay();
-  const diff = date.getDate() - day + (day < 3 ? -4 : 3);
-  return new Date(date.setDate(diff));
+// Helper: Precise floating-point rounding
+const safeRound = (val) => Math.round((parseFloat(val) || 0) * 100) / 100;
+
+function parseLocalDate(dateInput) {
+  if (!dateInput) return new Date();
+  if (typeof dateInput === 'string' && dateInput.includes('-')) {
+    const parts = dateInput.split('T')[0].split('-').map(Number);
+    if (parts.length === 3 && !parts.some(isNaN)) {
+      return new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+  }
+  return new Date(dateInput);
 }
 
-function formatDate(dateObj) {
-  const day = String(dateObj.getDate()).padStart(2, '0');
-  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const year = dateObj.getFullYear();
+function getWednesday(d) {
+  const date = parseLocalDate(d);
+  const day = date.getDay();
+  const diff = date.getDate() - ((day + 4) % 7);
+  return new Date(date.getFullYear(), date.getMonth(), diff);
+}
+
+function formatDateISO(dateObj) {
+  const d = parseLocalDate(dateObj);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function formatDisplayDate(dateObj) {
+  const d = parseLocalDate(dateObj);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
   return `${day}/${month}/${year}`;
 }
 
 function displayDate(dateStr) {
   if (!dateStr) return '';
   if (typeof dateStr === 'object' && dateStr.toDate) {
-    return formatDate(dateStr.toDate());
+    return formatDateISO(dateStr.toDate());
   }
   if (typeof dateStr === 'string' && dateStr.includes('T')) {
-    const d = new Date(dateStr);
-    if (!isNaN(d.getTime())) return formatDate(d);
-  }
-  if (typeof dateStr === 'string' && dateStr.includes('-')) {
-    const parts = dateStr.split('-');
-    if (parts.length === 3 && parts[0].length === 4) {
-      return `${parts[2]}/${parts[1]}/${parts[0]}`;
-    }
+    return dateStr.split('T')[0];
   }
   return dateStr;
+}
+
+function cleanText(str) {
+  return (str || '').replace(/\s+/g, ' ').trim();
+}
+
+function setCellText(cell, text, xmlDoc) {
+  const tNodes = cell.getElementsByTagName("w:t");
+  if (tNodes.length > 0) {
+    tNodes[0].textContent = text;
+    tNodes[0].setAttribute("xml:space", "preserve");
+    for (let i = 1; i < tNodes.length; i++) {
+      tNodes[i].textContent = "";
+    }
+  } else {
+    const pNodes = cell.getElementsByTagName("w:p");
+    if (pNodes.length > 0) {
+      const r = xmlDoc.createElement("w:r");
+      const t = xmlDoc.createElement("w:t");
+      t.textContent = text;
+      t.setAttribute("xml:space", "preserve");
+      r.appendChild(t);
+      pNodes[0].appendChild(r);
+    }
+  }
 }
 
 export default function ManagerDashboard({ userProfile }) {
@@ -92,28 +169,26 @@ export default function ManagerDashboard({ userProfile }) {
   };
 
   const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const day = new Date(currentWednesday);
-    day.setDate(currentWednesday.getDate() + i);
+    const day = new Date(currentWednesday.getFullYear(), currentWednesday.getMonth(), currentWednesday.getDate() + i);
     return {
       dateObj: day,
-      dateStr: formatDate(day),
+      dateIso: formatDateISO(day),
+      dateStr: formatDisplayDate(day),
       dayName: day.toLocaleDateString('en-NZ', { weekday: 'short' })
     };
   });
 
-  const activeWeekDateStrings = weekDays.map((d) => d.dateStr);
+  const activeWeekISODates = weekDays.map((d) => d.dateIso);
   const weekStartStr = weekDays[0].dateStr;
   const weekEndStr = weekDays[6].dateStr;
 
   const handlePrevWeek = () => {
-    const prev = new Date(currentWednesday);
-    prev.setDate(prev.getDate() - 7);
+    const prev = new Date(currentWednesday.getFullYear(), currentWednesday.getMonth(), currentWednesday.getDate() - 7);
     setCurrentWednesday(prev);
   };
 
   const handleNextWeek = () => {
-    const next = new Date(currentWednesday);
-    next.setDate(next.getDate() + 7);
+    const next = new Date(currentWednesday.getFullYear(), currentWednesday.getMonth(), currentWednesday.getDate() + 7);
     setCurrentWednesday(next);
   };
 
@@ -155,7 +230,7 @@ export default function ManagerDashboard({ userProfile }) {
 
       const activeWeekEntries = timesheets.filter((t) => {
         const matchesUser = filterUser === 'ALL' || t.userId === filterUser || t.userName === filterUser;
-        return activeWeekDateStrings.includes(displayDate(t.date)) && matchesUser;
+        return activeWeekISODates.includes(displayDate(t.date)) && matchesUser;
       });
 
       if (activeWeekEntries.length === 0) {
@@ -166,112 +241,193 @@ export default function ManagerDashboard({ userProfile }) {
 
       let sitesToExport = [];
       if (filterProject === 'ALL') {
-        sitesToExport = Array.from(new Set(activeWeekEntries.map((t) => t.project || 'General')));
+        sitesToExport = Array.from(new Set(activeWeekEntries.map((t) => t.project || 'General / Unassigned')));
       } else {
         sitesToExport = [filterProject];
       }
 
       const userMap = {};
       users.forEach((u) => {
-        userMap[u.uid] = u.name || u.email;
+        userMap[u.uid] = u.name || u.userName || u.displayName || u.email;
       });
 
       for (const siteName of sitesToExport) {
         const siteEntries = activeWeekEntries.filter(
-          (t) => (t.project || 'General') === siteName
+          (t) => (t.project || 'General / Unassigned') === siteName
         );
 
         if (siteEntries.length === 0) continue;
 
-        let siteTotalHours = 0;
-        let siteTotalTravel = 0;
-        const allFlatTasks = [];
-
-        const staffMembersData = Array.from(
-          new Set(siteEntries.map((t) => t.userId || t.userName))
-        ).map((staffKey) => {
-          const staffEntries = siteEntries.filter(
-            (t) => t.userId === staffKey || t.userName === staffKey
-          );
-
-          let staffTotalHours = 0;
-          let staffTotalTravel = 0;
-          const staffTasks = [];
-
-          staffEntries.forEach((entry) => {
-            const currentTotalHours = parseFloat(entry.totalHours) || 0;
-            staffTotalHours += currentTotalHours;
-            siteTotalHours += currentTotalHours;
-
-            if (entry.tasks && Array.isArray(entry.tasks)) {
-              entry.tasks.forEach((tk) => {
-                const travel = parseFloat(tk.travelTime) || 0;
-                const hours = parseFloat(tk.hours) || 0;
-                staffTotalTravel += travel;
-                siteTotalTravel += travel;
-
-                const taskObj = {
-                  date: entry.date,
-                  day: entry.date ? entry.date.split('/')[0] : '',
-                  staffName: userMap[staffKey] || staffKey,
-                  userName: userMap[staffKey] || staffKey,
-                  category: tk.taskCategoryGroup || tk.taskName || 'General',
-                  taskName: tk.taskName || tk.taskCategoryGroup || 'General',
-                  description: tk.taskCategoryGroup || tk.taskName || 'General',
-                  hours: hours,
-                  totalHours: hours,
-                  travel: travel,
-                  travelTime: travel,
-                  comments: tk.comments || '',
-                  notes: tk.comments || '',
-                  timeOnSite: entry.timeCardDetails?.timeOnSite || '',
-                  timeLeftSite: entry.timeCardDetails?.timeLeftSite || '',
-                  timeReturned: entry.timeCardDetails?.timeReturnedToYard || ''
-                };
-
-                staffTasks.push(taskObj);
-                allFlatTasks.push(taskObj);
-              });
-            }
-          });
-
-          return {
-            staffName: userMap[staffKey] || staffKey,
-            userName: userMap[staffKey] || staffKey,
-            siteName: siteName,
-            project: siteName,
-            weekStart: weekStartStr,
-            weekEnd: weekEndStr,
-            totalHours: staffTotalHours.toFixed(2),
-            totalTravel: staffTotalTravel.toFixed(2),
-            tasks: staffTasks,
-            entries: staffTasks
-          };
-        });
+        const staffNamesList = Array.from(
+          new Set(siteEntries.map((t) => userMap[t.userId] || t.userName || t.userId))
+        ).join(', ');
 
         const zip = new PizZip(templateArrayBuffer);
-        const doc = new Docxtemplater(zip, {
-          paragraphLoop: true,
-          linebreaks: true
-        });
+        const docXmlStr = zip.file("word/document.xml").asText();
+        
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
+        const rows = xmlDoc.getElementsByTagName("w:tr");
+        const paragraphs = xmlDoc.getElementsByTagName("w:p");
 
-        // Universal Context Mapping
-        doc.render({
-          siteName: siteName,
-          project: siteName,
-          projectName: siteName,
-          weekStart: weekStartStr,
-          weekEnd: weekEndStr,
-          totalHours: siteTotalHours.toFixed(2),
-          totalTravel: siteTotalTravel.toFixed(2),
-          staffMembers: staffMembersData,
-          workers: staffMembersData,
-          tasks: allFlatTasks,
-          entries: allFlatTasks,
-          rows: allFlatTasks
-        });
+        // 1. Populate Header info
+        for (let p of paragraphs) {
+          const tNodes = p.getElementsByTagName("w:t");
+          if (tNodes.length === 0) continue;
 
-        const outBlob = doc.getZip().generate({
+          let fullText = "";
+          for (let i = 0; i < tNodes.length; i++) {
+            fullText += tNodes[i].textContent;
+          }
+
+          if (fullText.includes("Staff Member") || fullText.includes("Project")) {
+            if (fullText.includes("Staff Member") && fullText.includes("Project")) {
+              tNodes[0].textContent = `Staff Member: ${staffNamesList}      Project: ${siteName}`;
+              for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+            } else if (fullText.includes("Staff Member")) {
+              tNodes[0].textContent = fullText.replace(/Staff Member:\s*([^\r\n]*)?/g, `Staff Member: ${staffNamesList}`);
+              for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+            } else if (fullText.includes("Project")) {
+              tNodes[0].textContent = fullText.replace(/Project:\s*([^\r\n]*)?/g, `Project: ${siteName}`);
+              for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+            }
+          }
+        }
+
+        function getCellText(cell) {
+          const tNodes = cell.getElementsByTagName("w:t");
+          let str = "";
+          for (let tn of tNodes) str += tn.textContent;
+          return str;
+        }
+
+        // Helper closures for row filling
+        const fillTimingRow = (cells, timingKey) => {
+          weekDays.forEach((dayObj, idx) => {
+            if (!cells[idx + 1]) return;
+            const entriesForDay = siteEntries.filter((e) => e.date === dayObj.dateIso);
+            const val = entriesForDay
+              .map((e) => e.timeCardDetails?.[timingKey])
+              .filter(Boolean)
+              .join(" / ");
+            setCellText(cells[idx + 1], val, xmlDoc);
+          });
+        };
+
+        const fillTaskRow = (cells, taskLabel) => {
+          let rowTaskTotal = 0;
+          weekDays.forEach((dayObj, idx) => {
+            if (!cells[idx + 1]) return;
+            const entriesForDay = siteEntries.filter((e) => e.date === dayObj.dateIso);
+            let dayTaskHours = 0;
+
+            if (entriesForDay.length > 0 && taskLabel !== "") {
+              entriesForDay.forEach((entryForDay) => {
+                if (entryForDay.tasks) {
+                  entryForDay.tasks.forEach((t) => {
+                    const tName = (t.taskName || '').toLowerCase().trim();
+                    const lName = taskLabel.toLowerCase().trim();
+                    const nameMatches =
+                      tName === lName ||
+                      (lName.includes("pto") && (tName.includes("other work") || tName.includes("pto"))) ||
+                      (lName.includes("specify") && tName.includes("other leave")) ||
+                      (lName.length > 4 && tName.length > 4 && lName.startsWith(tName));
+
+                    if (nameMatches) {
+                      dayTaskHours += parseFloat(t.hours) || 0;
+                    }
+                  });
+                }
+              });
+            }
+            rowTaskTotal += dayTaskHours;
+            setCellText(cells[idx + 1], dayTaskHours > 0 ? String(safeRound(dayTaskHours)) : "", xmlDoc);
+          });
+          if (cells[8]) {
+            setCellText(cells[8], rowTaskTotal > 0 ? String(safeRound(rowTaskTotal)) : "", xmlDoc);
+          }
+        };
+
+        const fillTotalHoursRow = (cells) => {
+          let siteGrandTotalHours = 0;
+          weekDays.forEach((dayObj, idx) => {
+            if (!cells[idx + 1]) return;
+            const entriesForDay = siteEntries.filter((e) => e.date === dayObj.dateIso);
+            let dayTotal = 0;
+            entriesForDay.forEach((entryForDay) => {
+              if (entryForDay.tasks) {
+                dayTotal += entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
+              } else {
+                dayTotal += parseFloat(entryForDay.totalHours) || 0;
+              }
+            });
+            siteGrandTotalHours += dayTotal;
+            setCellText(cells[idx + 1], dayTotal > 0 ? String(safeRound(dayTotal)) : "", xmlDoc);
+          });
+          if (cells[8]) {
+            setCellText(cells[8], siteGrandTotalHours > 0 ? String(safeRound(siteGrandTotalHours)) : "", xmlDoc);
+          }
+        };
+
+        const fillTravelRow = (cells) => {
+          let siteGrandTravelTotal = 0;
+          weekDays.forEach((dayObj, idx) => {
+            if (!cells[idx + 1]) return;
+            const entriesForDay = siteEntries.filter((e) => e.date === dayObj.dateIso);
+            let dayTravel = 0;
+            entriesForDay.forEach((entryForDay) => {
+              if (entryForDay.tasks) {
+                dayTravel += entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.travelTime) || 0), 0);
+              }
+            });
+            siteGrandTravelTotal += dayTravel;
+            setCellText(cells[idx + 1], dayTravel > 0 ? String(safeRound(dayTravel)) : "", xmlDoc);
+          });
+          if (cells[8]) {
+            setCellText(cells[8], siteGrandTravelTotal > 0 ? String(safeRound(siteGrandTravelTotal)) : "", xmlDoc);
+          }
+        };
+
+        // 2. Iterate Rows and fill cells
+        for (let tr of rows) {
+          const cells = tr.getElementsByTagName("w:tc");
+          if (cells.length === 0) continue;
+          
+          const firstCellText = getCellText(cells[0]).trim();
+          
+          if (firstCellText === "Date") {
+            weekDays.forEach((dayObj, idx) => {
+              if (cells[idx + 1]) {
+                const dateParts = dayObj.dateIso.split('-');
+                const displayDDMM = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}` : dayObj.dateIso;
+                setCellText(cells[idx + 1], displayDDMM, xmlDoc);
+              }
+            });
+          } else if (firstCellText === "START TIME") {
+            fillTimingRow(cells, "startTime");
+          } else if (firstCellText === "TIME LEFT SITE") {
+            fillTimingRow(cells, "timeLeftSite");
+          } else if (firstCellText === "TIME RETURNED") {
+            fillTimingRow(cells, "timeReturned");
+          } else if (firstCellText === "TIME FINISHED") {
+            fillTimingRow(cells, "timeFinished");
+          } else if (firstCellText === "TOTAL HOURS") {
+            fillTotalHoursRow(cells);
+          } else if (firstCellText === "Travel Time") {
+            fillTravelRow(cells);
+          } else {
+            const matchedTask = ALL_TEMPLATE_TASKS.find((task) => cleanText(task) === cleanText(firstCellText));
+            if (matchedTask) {
+              fillTaskRow(cells, matchedTask);
+            }
+          }
+        }
+
+        const serializer = new XMLSerializer();
+        const updatedXmlStr = serializer.serializeToString(xmlDoc);
+        zip.file("word/document.xml", updatedXmlStr);
+
+        const outBlob = zip.generate({
           type: 'blob',
           mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         });
@@ -297,10 +453,11 @@ export default function ManagerDashboard({ userProfile }) {
   };
 
   const filteredTimesheets = timesheets.filter((item) => {
-    const matchesWeek = activeWeekDateStrings.includes(displayDate(item.date));
+    const itemIso = displayDate(item.date);
+    const matchesWeek = activeWeekISODates.includes(itemIso);
     const matchesUser = filterUser === 'ALL' || item.userId === filterUser || item.userName === filterUser;
     const matchesProject = filterProject === 'ALL' || item.project === filterProject;
-    const matchesDate = selectedDate === 'ALL' || displayDate(item.date) === selectedDate;
+    const matchesDate = selectedDate === 'ALL' || itemIso === selectedDate;
     return matchesWeek && matchesUser && matchesProject && matchesDate;
   });
 
@@ -353,7 +510,7 @@ export default function ManagerDashboard({ userProfile }) {
             <option value="ALL">All Staff</option>
             {users.map((u) => (
               <option key={u.uid} value={u.uid}>
-                {u.name || u.email}
+                {u.name || u.userName || u.displayName || u.email}
               </option>
             ))}
           </select>
@@ -384,7 +541,7 @@ export default function ManagerDashboard({ userProfile }) {
           >
             <option value="ALL">All Days This Week</option>
             {weekDays.map((d) => (
-              <option key={d.dateStr} value={d.dateStr}>
+              <option key={d.dateIso} value={d.dateIso}>
                 {d.dayName} ({d.dateStr})
               </option>
             ))}
@@ -396,12 +553,12 @@ export default function ManagerDashboard({ userProfile }) {
             type="button"
             onClick={handleExportFromTemplate}
             disabled={isExporting}
-            className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-sm py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+            className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-sm py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer"
           >
             {isExporting ? (
               <span>Exporting Document...</span>
             ) : (
-              <span>Export (Fill Template)</span>
+              <span>Export Time Cards (DOCX)</span>
             )}
           </button>
         </div>
@@ -430,7 +587,7 @@ export default function ManagerDashboard({ userProfile }) {
               <tbody className="divide-y divide-slate-700/50">
                 {filteredTimesheets.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-700/30 transition-colors">
-                    <td className="p-3 font-mono">{item.date}</td>
+                    <td className="p-3 font-mono">{formatDisplayDate(item.date)}</td>
                     <td className="p-3 font-semibold">{item.userName || item.userId}</td>
                     <td className="p-3 text-emerald-400">{item.project || 'General'}</td>
                     <td className="p-3 font-mono">{item.totalHours || 0} hrs</td>
