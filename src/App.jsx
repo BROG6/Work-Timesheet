@@ -8,7 +8,7 @@ import ManagerDashboard from './ManagerDashboard';
 import { useOnlineStatus } from './useOnlineStatus';
 import { Capacitor } from '@capacitor/core';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
-import { initNotifications, checkAndSuppressDailyReminder } from './notificationService';
+import { initNotifications, checkAndSuppressDailyReminder } from './notifications';
 
 export default function App() {
   const [user, setUser] = useState(null);
