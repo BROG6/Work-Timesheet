@@ -4,9 +4,10 @@ import { collection, query, where, getDocs } from 'firebase/firestore';
 
 const DAILY_REMINDER_ID = 1001;
 const WEEKLY_REMINDER_ID = 1002;
+const CHANNEL_ID = 'timesheet_reminders';
 
 /**
- * Request permissions and schedule repeating notifications
+ * Request permissions, setup Android notification channels, and schedule repeating notifications
  */
 export const initNotifications = async () => {
   try {
@@ -21,13 +22,24 @@ export const initNotifications = async () => {
       return;
     }
 
-    // 2. Schedule Daily & Weekly Local Notifications
+    // 2. Create High-Priority Notification Channel for Android
+    await LocalNotifications.createChannel({
+      id: CHANNEL_ID,
+      name: 'Timesheet Reminders',
+      description: 'Daily and weekly reminders to log site hours',
+      importance: 5, // 5 = High Priority (Banner popup + sound)
+      visibility: 1,  // Public on lock screen
+      vibration: true,
+    });
+
+    // 3. Schedule Daily & Weekly Local Notifications
     await LocalNotifications.schedule({
       notifications: [
         {
           id: DAILY_REMINDER_ID,
           title: 'Timesheet Reminder',
           body: "Don't forget to record your site hours for today!",
+          channelId: CHANNEL_ID,
           schedule: {
             on: { hour: 17, minute: 30 }, // 5:30 PM
             repeats: true,
@@ -37,6 +49,7 @@ export const initNotifications = async () => {
           id: WEEKLY_REMINDER_ID,
           title: 'Weekly Timesheet Due',
           body: "Don't forget to send your timesheet!",
+          channelId: CHANNEL_ID,
           schedule: {
             on: { weekday: 3, hour: 18, minute: 0 }, // Tuesday at 6:00 PM (1: Sun, 2: Mon, 3: Tue)
             repeats: true,
@@ -45,7 +58,7 @@ export const initNotifications = async () => {
       ],
     });
 
-    // 3. Attach listener to handle weekend skipping
+    // 4. Attach listener to handle weekend skipping
     setupNotificationFilter();
   } catch (err) {
     console.error('Failed to initialize local notifications:', err);
@@ -94,6 +107,7 @@ const rescheduleDailyReminder = async () => {
           id: DAILY_REMINDER_ID,
           title: 'Timesheet Reminder',
           body: "Don't forget to record your site hours for today!",
+          channelId: CHANNEL_ID,
           schedule: {
             on: { hour: 17, minute: 30 },
             repeats: true,
