@@ -6,7 +6,7 @@ const DAILY_REMINDER_ID = 1001;
 const WEEKLY_REMINDER_ID = 1002;
 
 /**
- * Initialize permissions and schedule repeating local notifications
+ * Request permissions and schedule repeating notifications
  */
 export const initNotifications = async () => {
   try {
@@ -16,10 +16,12 @@ export const initNotifications = async () => {
       perm = await LocalNotifications.requestPermissions();
     }
 
-    if (perm.display !== 'granted') return;
+    if (perm.display !== 'granted') {
+      console.warn('Notification permissions were denied by the user.');
+      return;
+    }
 
-    // 2. Schedule Daily Weekday Reminder (Mon–Fri at 5:30 PM)
-    // Note: Capacitor Local Notifications repeat via matching schedule parameters
+    // 2. Schedule Daily & Weekly Local Notifications
     await LocalNotifications.schedule({
       notifications: [
         {
@@ -34,25 +36,25 @@ export const initNotifications = async () => {
         {
           id: WEEKLY_REMINDER_ID,
           title: 'Weekly Timesheet Due',
-          body: 'It is Tuesday 6:00 PM—please submit your weekly timesheet for manager review.',
+          body: "Don't forget to send your timesheet!",
           schedule: {
-            on: { weekday: 3, hour: 18, minute: 0 }, // 3 = Tuesday in Capacitor (1: Sun, 2: Mon, 3: Tue...)
+            on: { weekday: 3, hour: 18, minute: 0 }, // Tuesday at 6:00 PM (1: Sun, 2: Mon, 3: Tue)
             repeats: true,
           },
         },
       ],
     });
 
-    // 3. Attach a listener to clear/cancel daily notifications if today's entry is completed
-    await setupNotificationFilter();
+    // 3. Attach listener to handle weekend skipping
+    setupNotificationFilter();
   } catch (err) {
     console.error('Failed to initialize local notifications:', err);
   }
 };
 
 /**
- * Checks Firestore to see if the user has logged hours today.
- * If logged, suppress the 5:30 PM notification for today.
+ * Checks Firestore for today's hours. If logged, cancels today's daily reminder.
+ * Call this when the app opens or immediately after a user logs hours.
  */
 export const checkAndSuppressDailyReminder = async (userId) => {
   if (!userId) return;
@@ -60,7 +62,7 @@ export const checkAndSuppressDailyReminder = async (userId) => {
   const todayStr = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
 
   try {
-    // Query your timesheets/entries collection for today's entry
+    // Query Firestore timesheets collection for today's entry
     const q = query(
       collection(db, 'timesheets'),
       where('userId', '==', userId),
@@ -70,11 +72,10 @@ export const checkAndSuppressDailyReminder = async (userId) => {
     const snapshot = await getDocs(q);
 
     if (!snapshot.empty) {
-      // User has already completed today's timesheet!
-      // Cancel pending daily notification for today
+      // Hours already logged today -> cancel today's pending 5:30 PM notification
       await LocalNotifications.cancel({ notifications: [{ id: DAILY_REMINDER_ID }] });
 
-      // Reschedule for tomorrow so future days stay active
+      // Reschedule so the 5:30 PM alarm remains active for upcoming days
       await rescheduleDailyReminder();
     }
   } catch (err) {
@@ -82,28 +83,37 @@ export const checkAndSuppressDailyReminder = async (userId) => {
   }
 };
 
-// Re-arm the daily 5:30 PM trigger for future days
+/**
+ * Re-arms the daily 5:30 PM reminder sequence for future days
+ */
 const rescheduleDailyReminder = async () => {
-  await LocalNotifications.schedule({
-    notifications: [
-      {
-        id: DAILY_REMINDER_ID,
-        title: 'Timesheet Reminder',
-        body: "Don't forget to record your site hours for today!",
-        schedule: {
-          on: { hour: 17, minute: 30 },
-          repeats: true,
+  try {
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          id: DAILY_REMINDER_ID,
+          title: 'Timesheet Reminder',
+          body: "Don't forget to record your site hours for today!",
+          schedule: {
+            on: { hour: 17, minute: 30 },
+            repeats: true,
+          },
         },
-      },
-    ],
-  });
+      ],
+    });
+  } catch (err) {
+    console.error('Failed to reschedule daily reminder:', err);
+  }
 };
 
-const setupNotificationFilter = async () => {
-  // Listen for incoming notifications when app is active
+/**
+ * Listener filter to cancel weekday alerts on weekends (Saturday & Sunday)
+ */
+const setupNotificationFilter = () => {
   LocalNotifications.addListener('localNotificationReceived', async (notification) => {
-    // Weekend check for daily reminder (1 = Sun, 7 = Sat)
-    const dayOfWeek = new Date().getDay(); // 0 = Sun, 6 = Sat
+    const dayOfWeek = new Date().getDay(); // 0 = Sunday, 6 = Saturday
+
+    // Ignore daily weekday reminder on weekends
     if (notification.id === DAILY_REMINDER_ID && (dayOfWeek === 0 || dayOfWeek === 6)) {
       await LocalNotifications.cancel({ notifications: [{ id: DAILY_REMINDER_ID }] });
     }
