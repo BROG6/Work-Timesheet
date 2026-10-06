@@ -11,18 +11,9 @@ const CHANNEL_ID = 'timesheet_reminders';
  */
 export const initNotifications = async () => {
   try {
-    // 1. Request Notification Permissions
-    let perm = await LocalNotifications.checkPermissions();
-    if (perm.display !== 'granted') {
-      perm = await LocalNotifications.requestPermissions();
-    }
+    console.log('[NotificationService] Initializing notifications...');
 
-    if (perm.display !== 'granted') {
-      console.warn('Notification permissions were denied by the user.');
-      return;
-    }
-
-    // 2. Create High-Priority Notification Channel for Android
+    // 1. Create High-Priority Notification Channel for Android First
     await LocalNotifications.createChannel({
       id: CHANNEL_ID,
       name: 'Timesheet Reminders',
@@ -31,6 +22,21 @@ export const initNotifications = async () => {
       visibility: 1,  // Public on lock screen
       vibration: true,
     });
+
+    // 2. Request Notification Permissions
+    let perm = await LocalNotifications.checkPermissions();
+    console.log('[NotificationService] Initial permission state:', perm.display);
+
+    if (perm.display !== 'granted') {
+      console.log('[NotificationService] Requesting permission popup from Android OS...');
+      perm = await LocalNotifications.requestPermissions();
+      console.log('[NotificationService] Post-request permission state:', perm.display);
+    }
+
+    if (perm.display !== 'granted') {
+      console.warn('[NotificationService] Notification permissions were NOT granted by user.');
+      return;
+    }
 
     // 3. Schedule Daily & Weekly Local Notifications
     await LocalNotifications.schedule({
@@ -58,10 +64,12 @@ export const initNotifications = async () => {
       ],
     });
 
+    console.log('[NotificationService] Daily and Weekly notifications successfully scheduled.');
+
     // 4. Attach listener to handle weekend skipping
     setupNotificationFilter();
   } catch (err) {
-    console.error('Failed to initialize local notifications:', err);
+    console.error('[NotificationService] Failed to initialize local notifications:', err);
   }
 };
 
