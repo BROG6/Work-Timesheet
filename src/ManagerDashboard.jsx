@@ -107,6 +107,7 @@ export default function ManagerDashboard({ userProfile }) {
     };
   });
 
+  const activeWeekDateStrings = weekDays.map((d) => d.dateStr);
   const weekStartStr = weekDays[0].dateStr;
   const weekEndStr = weekDays[6].dateStr;
 
@@ -155,18 +156,17 @@ export default function ManagerDashboard({ userProfile }) {
   const handleExportFromTemplate = async () => {
     setIsExporting(true);
     try {
-      // 1. Fetch raw binary of the stored template asset (Blank Time Cards.docx)
-      const response = await fetch('/assets/Blank Time Cards.docx');
+      // 1. Fetch raw binary of the stored template asset directly from /public
+      const response = await fetch('/Blank Time Cards.docx');
       if (!response.ok) {
-        throw new Error("Could not find template file at '/assets/Blank Time Cards.docx'");
+        throw new Error("Could not find template file at '/Blank Time Cards.docx'");
       }
       const templateArrayBuffer = await response.arrayBuffer();
 
       // Filter entries matching the current week and user selection
-      const activeDates = weekDays.map((d) => d.dateStr);
       const activeWeekEntries = timesheets.filter((t) => {
         const matchesUser = filterUser === 'ALL' || t.userId === filterUser || t.userName === filterUser;
-        return activeDates.includes(displayDate(t.date)) && matchesUser;
+        return activeWeekDateStrings.includes(displayDate(t.date)) && matchesUser;
       });
 
       if (activeWeekEntries.length === 0) {
@@ -283,12 +283,13 @@ export default function ManagerDashboard({ userProfile }) {
     }
   };
 
-  // Filter entries for the interactive dashboard table view
+  // Filter entries for the interactive dashboard table view (RESTRICTED TO CURRENT ACTIVE WEEK)
   const filteredTimesheets = timesheets.filter((item) => {
+    const matchesWeek = activeWeekDateStrings.includes(displayDate(item.date));
     const matchesUser = filterUser === 'ALL' || item.userId === filterUser || item.userName === filterUser;
     const matchesProject = filterProject === 'ALL' || item.project === filterProject;
-    const matchesDate = selectedDate === 'ALL' || item.date === selectedDate;
-    return matchesUser && matchesProject && matchesDate;
+    const matchesDate = selectedDate === 'ALL' || displayDate(item.date) === selectedDate;
+    return matchesWeek && matchesUser && matchesProject && matchesDate;
   });
 
   const projectList = Array.from(new Set(timesheets.map((t) => t.project).filter(Boolean)));
@@ -366,13 +367,13 @@ export default function ManagerDashboard({ userProfile }) {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-slate-400 mb-1">Filter Date</label>
+          <label className="block text-xs font-medium text-slate-400 mb-1">Filter Day</label>
           <select
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
             className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-emerald-500"
           >
-            <option value="ALL">All Days</option>
+            <option value="ALL">All Days This Week</option>
             {weekDays.map((d) => (
               <option key={d.dateStr} value={d.dateStr}>
                 {d.dayName} ({d.dateStr})
@@ -403,7 +404,7 @@ export default function ManagerDashboard({ userProfile }) {
           <div className="p-8 text-center text-slate-400">Loading timesheet records...</div>
         ) : filteredTimesheets.length === 0 ? (
           <div className="p-8 text-center text-slate-400">
-            No entries found matching the selected filters.
+            No entries found for {weekStartStr} — {weekEndStr}.
           </div>
         ) : (
           <div className="overflow-x-auto">
