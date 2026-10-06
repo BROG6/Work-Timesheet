@@ -13,17 +13,7 @@ export const initNotifications = async () => {
   try {
     console.log('[NotificationService] Initializing notifications...');
 
-    // 1. Create High-Priority Notification Channel for Android First
-    await LocalNotifications.createChannel({
-      id: CHANNEL_ID,
-      name: 'Timesheet Reminders',
-      description: 'Daily and weekly reminders to log site hours',
-      importance: 5, // 5 = High Priority (Banner popup + sound)
-      visibility: 1,  // Public on lock screen
-      vibration: true,
-    });
-
-    // 2. Request Notification Permissions
+    // 1. Check and Request Notification Permissions FIRST
     let perm = await LocalNotifications.checkPermissions();
     console.log('[NotificationService] Initial permission state:', perm.display);
 
@@ -37,6 +27,16 @@ export const initNotifications = async () => {
       console.warn('[NotificationService] Notification permissions were NOT granted by user.');
       return;
     }
+
+    // 2. Create High-Priority Notification Channel AFTER permission is granted
+    await LocalNotifications.createChannel({
+      id: CHANNEL_ID,
+      name: 'Timesheet Reminders',
+      description: 'Daily and weekly reminders to log site hours',
+      importance: 5, // 5 = High Priority (Banner popup + sound)
+      visibility: 1,  // Public on lock screen
+      vibration: true,
+    });
 
     // 3. Schedule Daily & Weekly Local Notifications
     await LocalNotifications.schedule({
