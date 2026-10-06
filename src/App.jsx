@@ -8,6 +8,7 @@ import ManagerDashboard from './ManagerDashboard';
 import { useOnlineStatus } from './useOnlineStatus';
 import { Capacitor } from '@capacitor/core';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
+import { initNotifications, checkAndSuppressDailyReminder } from './notificationService';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -15,6 +16,20 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   
   const isOnline = useOnlineStatus();
+
+  // Initialize Notifications on Native Startup
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      initNotifications();
+    }
+  }, []);
+
+  // Suppress today's 5:30 PM reminder if user has already submitted hours today
+  useEffect(() => {
+    if (user?.uid) {
+      checkAndSuppressDailyReminder(user.uid);
+    }
+  }, [user]);
 
   // Initialize Native Google Auth with Web Client ID
   useEffect(() => {
