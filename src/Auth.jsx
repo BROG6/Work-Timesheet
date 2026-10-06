@@ -12,7 +12,7 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { Capacitor } from '@capacitor/core';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 
-export default function Auth({ user, setUser, setUserProfile }) {
+export default function Auth({ user, setUser, userProfile, setUserProfile }) {
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -21,21 +21,27 @@ export default function Auth({ user, setUser, setUserProfile }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Helper to handle profile loading/creation after successful login/register
-  const handleAuthSuccess = async (authUser, providedName = '') => {
+  // Helper to handle profile loading/creation/upgrading after auth
+  const handleAuthSuccess = async (authUser, providedName = '', targetRole = role) => {
     const userDocRef = doc(db, 'users', authUser.uid);
     const userDoc = await getDoc(userDocRef);
 
     let profileData;
     if (userDoc.exists()) {
       profileData = userDoc.data();
+
+      // If user logs in with explicit targetRole, sync it if different
+      if (targetRole && profileData.role !== targetRole) {
+        profileData.role = targetRole;
+        await setDoc(userDocRef, { role: targetRole }, { merge: true });
+      }
     } else {
-      // Create a default profile if one does not exist yet (e.g. first-time Google sign-in)
+      // Create profile for first-time sign ins
       profileData = {
         name: providedName || authUser.displayName || authUser.email?.split('@')[0] || 'Staff Member',
         companyCode: 'SJR Builders',
         companyId: 'SJR Builders',
-        role: role, // defaults to 'worker'
+        role: targetRole || 'worker',
         createdAt: new Date().toISOString()
       };
       await setDoc(userDocRef, profileData);
@@ -43,6 +49,27 @@ export default function Auth({ user, setUser, setUserProfile }) {
 
     if (setUserProfile) setUserProfile(profileData);
     if (setUser) setUser(authUser);
+  };
+
+  // Toggle user role dynamically between Manager and Worker
+  const handleToggleRole = async () => {
+    if (!user || !userProfile) return;
+
+    const newRole = userProfile.role === 'manager' ? 'worker' : 'manager';
+    setLoading(true);
+
+    try {
+      const userDocRef = doc(db, 'users', user.uid);
+      await setDoc(userDocRef, { role: newRole }, { merge: true });
+
+      const updatedProfile = { ...userProfile, role: newRole };
+      if (setUserProfile) setUserProfile(updatedProfile);
+    } catch (err) {
+      console.error("Error switching role:", err);
+      setError("Failed to update role. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Handle User Registration
@@ -53,7 +80,7 @@ export default function Auth({ user, setUser, setUserProfile }) {
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      await handleAuthSuccess(userCredential.user, name);
+      await handleAuthSuccess(userCredential.user, name, role);
     } catch (err) {
       console.error("Registration error:", err);
       setError(err.message.replace('Firebase: ', ''));
@@ -70,7 +97,7 @@ export default function Auth({ user, setUser, setUserProfile }) {
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      await handleAuthSuccess(userCredential.user);
+      await handleAuthSuccess(userCredential.user, '', null); // Keep existing role on login
     } catch (err) {
       console.error("Login error:", err);
       setError("Failed to sign in. Please check your credentials.");
@@ -80,7 +107,7 @@ export default function Auth({ user, setUser, setUserProfile }) {
   };
 
   // Handle Hybrid Google Sign-In (Native Android + Web)
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = async (targetRole = 'worker') => {
     setError('');
     setLoading(true);
 
@@ -88,7 +115,6 @@ export default function Auth({ user, setUser, setUserProfile }) {
       let userCredential;
 
       if (Capacitor.isNativePlatform()) {
-        // Native Android Flow
         const googleUser = await GoogleAuth.signIn();
         const idToken = googleUser.authentication?.idToken || googleUser.idToken;
 
@@ -99,21 +125,18 @@ export default function Auth({ user, setUser, setUserProfile }) {
         const credential = GoogleAuthProvider.credential(idToken);
         userCredential = await signInWithCredential(auth, credential);
       } else {
-        // Web Browser Flow
         const provider = new GoogleAuthProvider();
         userCredential = await signInWithPopup(auth, provider);
       }
 
-      await handleAuthSuccess(userCredential.user);
+      await handleAuthSuccess(userCredential.user, '', targetRole);
     } catch (err) {
       console.error("Google sign-in error:", err);
 
-      // --- MOBILE ON-SCREEN ALERT DEBUGGER ---
       if (Capacitor.isNativePlatform()) {
         const fullErrorLog = JSON.stringify(err, Object.getOwnPropertyNames(err), 2);
         alert(`RAW NATIVE AUTH ERROR:\n${fullErrorLog}`);
       }
-      // ---------------------------------------
 
       setError(err.message ? err.message.replace('Firebase: ', '') : 'Google Sign-In failed');
     } finally {
@@ -135,15 +158,34 @@ export default function Auth({ user, setUser, setUserProfile }) {
   };
 
   if (user) {
+    const isManager = userProfile?.role === 'manager';
+
     return (
-      <div className="flex items-center justify-between bg-slate-800 text-white p-3 rounded-lg max-w-xl mx-auto my-2 shadow-sm">
-        <span className="text-xs font-medium">Logged in as: <strong className="text-emerald-400">{user.email}</strong></span>
-        <button
-          onClick={handleLogout}
-          className="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-md font-semibold transition-colors cursor-pointer"
-        >
-          Sign Out
-        </button>
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-2 bg-slate-800 text-white p-3 rounded-lg max-w-2xl mx-auto my-2 shadow-sm border border-slate-700">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium">Logged in as: <strong className="text-emerald-400">{user.email}</strong></span>
+          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${isManager ? 'bg-amber-900/60 text-amber-300 border border-amber-700' : 'bg-slate-700 text-slate-300'}`}>
+            {userProfile?.role || 'worker'}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleToggleRole}
+            disabled={loading}
+            className="text-xs bg-slate-700 hover:bg-slate-600 border border-slate-600 px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer text-slate-200"
+          >
+            {loading ? "Updating..." : isManager ? "Switch to Worker Mode" : "Switch to Manager Mode"}
+          </button>
+
+          <button
+            onClick={handleLogout}
+            className="text-xs bg-rose-900/40 hover:bg-rose-800/60 text-rose-300 border border-rose-800 px-3 py-1 rounded-md font-semibold transition-colors cursor-pointer"
+          >
+            Sign Out
+          </button>
+        </div>
       </div>
     );
   }
@@ -161,11 +203,11 @@ export default function Auth({ user, setUser, setUserProfile }) {
         </div>
       )}
 
-      {/* Google Sign-In Button */}
-      <div className="mb-4">
+      {/* Google Sign-In Buttons */}
+      <div className="space-y-2.5 mb-4">
         <button
           type="button"
-          onClick={handleGoogleSignIn}
+          onClick={() => handleGoogleSignIn('worker')}
           disabled={loading}
           className="w-full flex items-center justify-center gap-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold py-2.5 px-4 rounded-lg shadow-sm transition-colors disabled:opacity-50 cursor-pointer text-sm"
         >
@@ -187,7 +229,19 @@ export default function Auth({ user, setUser, setUserProfile }) {
               d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.27 0 3.21 2.68 1.2 6.6l4.07 3.15c.95-2.85 3.6-4.96 6.73-4.96z"
             />
           </svg>
-          <span>{loading ? "Authenticating..." : "Continue with Google"}</span>
+          <span>{loading ? "Authenticating..." : "Continue with Google (Worker)"}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleGoogleSignIn('manager')}
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-2.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 px-4 rounded-lg shadow-sm transition-colors disabled:opacity-50 cursor-pointer text-sm border border-slate-800"
+        >
+          <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+          <span>{loading ? "Authenticating..." : "Register / Sign in as Manager"}</span>
         </button>
 
         <div className="flex items-center my-4">
