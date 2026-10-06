@@ -17,10 +17,13 @@ export default function App() {
   
   const isOnline = useOnlineStatus();
 
-  // Initialize Notifications on Native Startup
+  // Initialize Notifications on Native Startup with slight delay for bridge readiness
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
-      initNotifications();
+      const timer = setTimeout(() => {
+        initNotifications();
+      }, 300);
+      return () => clearTimeout(timer);
     }
   }, []);
 
