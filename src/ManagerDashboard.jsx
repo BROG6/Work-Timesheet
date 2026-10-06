@@ -10,7 +10,6 @@ import {
 } from 'firebase/firestore';
 
 import PizZip from 'pizzip';
-import Docxtemplater from 'docxtemplater';
 
 const ALL_TEMPLATE_TASKS = [
   "Demolition",
@@ -239,210 +238,221 @@ export default function ManagerDashboard({ userProfile }) {
         return;
       }
 
-      let sitesToExport = [];
-      if (filterProject === 'ALL') {
-        sitesToExport = Array.from(new Set(activeWeekEntries.map((t) => t.project || 'General / Unassigned')));
-      } else {
-        sitesToExport = [filterProject];
-      }
-
       const userMap = {};
       users.forEach((u) => {
         userMap[u.uid] = u.name || u.userName || u.displayName || u.email;
       });
 
-      for (const siteName of sitesToExport) {
-        const siteEntries = activeWeekEntries.filter(
-          (t) => (t.project || 'General / Unassigned') === siteName
+      // 1. Group active week entries by Staff Member first, then by Site
+      const staffKeys = Array.from(
+        new Set(activeWeekEntries.map((t) => t.userId || t.userName))
+      );
+
+      for (const staffKey of staffKeys) {
+        const staffEntries = activeWeekEntries.filter(
+          (t) => (t.userId || t.userName) === staffKey
         );
 
-        if (siteEntries.length === 0) continue;
+        if (staffEntries.length === 0) continue;
 
-        const staffNamesList = Array.from(
-          new Set(siteEntries.map((t) => userMap[t.userId] || t.userName || t.userId))
-        ).join(', ');
+        const staffName = userMap[staffKey] || staffKey;
 
-        const zip = new PizZip(templateArrayBuffer);
-        const docXmlStr = zip.file("word/document.xml").asText();
-        
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
-        const rows = xmlDoc.getElementsByTagName("w:tr");
-        const paragraphs = xmlDoc.getElementsByTagName("w:p");
+        // Find all distinct sites this staff member worked on this week
+        let sitesForStaff = [];
+        if (filterProject === 'ALL') {
+          sitesForStaff = Array.from(new Set(staffEntries.map((t) => t.project || 'General / Unassigned')));
+        } else {
+          sitesForStaff = [filterProject];
+        }
 
-        // 1. Populate Header info
-        for (let p of paragraphs) {
-          const tNodes = p.getElementsByTagName("w:t");
-          if (tNodes.length === 0) continue;
+        for (const siteName of sitesForStaff) {
+          const siteEntries = staffEntries.filter(
+            (t) => (t.project || 'General / Unassigned') === siteName
+          );
 
-          let fullText = "";
-          for (let i = 0; i < tNodes.length; i++) {
-            fullText += tNodes[i].textContent;
-          }
+          if (siteEntries.length === 0) continue;
 
-          if (fullText.includes("Staff Member") || fullText.includes("Project")) {
-            if (fullText.includes("Staff Member") && fullText.includes("Project")) {
-              tNodes[0].textContent = `Staff Member: ${staffNamesList}      Project: ${siteName}`;
-              for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
-            } else if (fullText.includes("Staff Member")) {
-              tNodes[0].textContent = fullText.replace(/Staff Member:\s*([^\r\n]*)?/g, `Staff Member: ${staffNamesList}`);
-              for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
-            } else if (fullText.includes("Project")) {
-              tNodes[0].textContent = fullText.replace(/Project:\s*([^\r\n]*)?/g, `Project: ${siteName}`);
-              for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+          const zip = new PizZip(templateArrayBuffer);
+          const docXmlStr = zip.file("word/document.xml").asText();
+          
+          const parser = new DOMParser();
+          const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
+          const rows = xmlDoc.getElementsByTagName("w:tr");
+          const paragraphs = xmlDoc.getElementsByTagName("w:p");
+
+          // Update Document Header Info (Staff Member + Site)
+          for (let p of paragraphs) {
+            const tNodes = p.getElementsByTagName("w:t");
+            if (tNodes.length === 0) continue;
+
+            let fullText = "";
+            for (let i = 0; i < tNodes.length; i++) {
+              fullText += tNodes[i].textContent;
+            }
+
+            if (fullText.includes("Staff Member") || fullText.includes("Project")) {
+              if (fullText.includes("Staff Member") && fullText.includes("Project")) {
+                tNodes[0].textContent = `Staff Member: ${staffName}      Project: ${siteName}`;
+                for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+              } else if (fullText.includes("Staff Member")) {
+                tNodes[0].textContent = fullText.replace(/Staff Member:\s*([^\r\n]*)?/g, `Staff Member: ${staffName}`);
+                for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+              } else if (fullText.includes("Project")) {
+                tNodes[0].textContent = fullText.replace(/Project:\s*([^\r\n]*)?/g, `Project: ${siteName}`);
+                for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+              }
             }
           }
-        }
 
-        function getCellText(cell) {
-          const tNodes = cell.getElementsByTagName("w:t");
-          let str = "";
-          for (let tn of tNodes) str += tn.textContent;
-          return str;
-        }
+          function getCellText(cell) {
+            const tNodes = cell.getElementsByTagName("w:t");
+            let str = "";
+            for (let tn of tNodes) str += tn.textContent;
+            return str;
+          }
 
-        // Helper closures for row filling
-        const fillTimingRow = (cells, timingKey) => {
-          weekDays.forEach((dayObj, idx) => {
-            if (!cells[idx + 1]) return;
-            const entriesForDay = siteEntries.filter((e) => e.date === dayObj.dateIso);
-            const val = entriesForDay
-              .map((e) => e.timeCardDetails?.[timingKey])
-              .filter(Boolean)
-              .join(" / ");
-            setCellText(cells[idx + 1], val, xmlDoc);
-          });
-        };
+          const fillTimingRow = (cells, timingKey) => {
+            weekDays.forEach((dayObj, idx) => {
+              if (!cells[idx + 1]) return;
+              const entriesForDay = siteEntries.filter((e) => e.date === dayObj.dateIso);
+              const val = entriesForDay
+                .map((e) => e.timeCardDetails?.[timingKey])
+                .filter(Boolean)
+                .join(" / ");
+              setCellText(cells[idx + 1], val, xmlDoc);
+            });
+          };
 
-        const fillTaskRow = (cells, taskLabel) => {
-          let rowTaskTotal = 0;
-          weekDays.forEach((dayObj, idx) => {
-            if (!cells[idx + 1]) return;
-            const entriesForDay = siteEntries.filter((e) => e.date === dayObj.dateIso);
-            let dayTaskHours = 0;
+          const fillTaskRow = (cells, taskLabel) => {
+            let rowTaskTotal = 0;
+            weekDays.forEach((dayObj, idx) => {
+              if (!cells[idx + 1]) return;
+              const entriesForDay = siteEntries.filter((e) => e.date === dayObj.dateIso);
+              let dayTaskHours = 0;
 
-            if (entriesForDay.length > 0 && taskLabel !== "") {
+              if (entriesForDay.length > 0 && taskLabel !== "") {
+                entriesForDay.forEach((entryForDay) => {
+                  if (entryForDay.tasks) {
+                    entryForDay.tasks.forEach((t) => {
+                      const tName = (t.taskName || '').toLowerCase().trim();
+                      const lName = taskLabel.toLowerCase().trim();
+                      const nameMatches =
+                        tName === lName ||
+                        (lName.includes("pto") && (tName.includes("other work") || tName.includes("pto"))) ||
+                        (lName.includes("specify") && tName.includes("other leave")) ||
+                        (lName.length > 4 && tName.length > 4 && lName.startsWith(tName));
+
+                      if (nameMatches) {
+                        dayTaskHours += parseFloat(t.hours) || 0;
+                      }
+                    });
+                  }
+                });
+              }
+              rowTaskTotal += dayTaskHours;
+              setCellText(cells[idx + 1], dayTaskHours > 0 ? String(safeRound(dayTaskHours)) : "", xmlDoc);
+            });
+            if (cells[8]) {
+              setCellText(cells[8], rowTaskTotal > 0 ? String(safeRound(rowTaskTotal)) : "", xmlDoc);
+            }
+          };
+
+          const fillTotalHoursRow = (cells) => {
+            let siteGrandTotalHours = 0;
+            weekDays.forEach((dayObj, idx) => {
+              if (!cells[idx + 1]) return;
+              const entriesForDay = siteEntries.filter((e) => e.date === dayObj.dateIso);
+              let dayTotal = 0;
               entriesForDay.forEach((entryForDay) => {
                 if (entryForDay.tasks) {
-                  entryForDay.tasks.forEach((t) => {
-                    const tName = (t.taskName || '').toLowerCase().trim();
-                    const lName = taskLabel.toLowerCase().trim();
-                    const nameMatches =
-                      tName === lName ||
-                      (lName.includes("pto") && (tName.includes("other work") || tName.includes("pto"))) ||
-                      (lName.includes("specify") && tName.includes("other leave")) ||
-                      (lName.length > 4 && tName.length > 4 && lName.startsWith(tName));
-
-                    if (nameMatches) {
-                      dayTaskHours += parseFloat(t.hours) || 0;
-                    }
-                  });
+                  dayTotal += entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
+                } else {
+                  dayTotal += parseFloat(entryForDay.totalHours) || 0;
                 }
               });
+              siteGrandTotalHours += dayTotal;
+              setCellText(cells[idx + 1], dayTotal > 0 ? String(safeRound(dayTotal)) : "", xmlDoc);
+            });
+            if (cells[8]) {
+              setCellText(cells[8], siteGrandTotalHours > 0 ? String(safeRound(siteGrandTotalHours)) : "", xmlDoc);
             }
-            rowTaskTotal += dayTaskHours;
-            setCellText(cells[idx + 1], dayTaskHours > 0 ? String(safeRound(dayTaskHours)) : "", xmlDoc);
-          });
-          if (cells[8]) {
-            setCellText(cells[8], rowTaskTotal > 0 ? String(safeRound(rowTaskTotal)) : "", xmlDoc);
-          }
-        };
+          };
 
-        const fillTotalHoursRow = (cells) => {
-          let siteGrandTotalHours = 0;
-          weekDays.forEach((dayObj, idx) => {
-            if (!cells[idx + 1]) return;
-            const entriesForDay = siteEntries.filter((e) => e.date === dayObj.dateIso);
-            let dayTotal = 0;
-            entriesForDay.forEach((entryForDay) => {
-              if (entryForDay.tasks) {
-                dayTotal += entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
-              } else {
-                dayTotal += parseFloat(entryForDay.totalHours) || 0;
-              }
-            });
-            siteGrandTotalHours += dayTotal;
-            setCellText(cells[idx + 1], dayTotal > 0 ? String(safeRound(dayTotal)) : "", xmlDoc);
-          });
-          if (cells[8]) {
-            setCellText(cells[8], siteGrandTotalHours > 0 ? String(safeRound(siteGrandTotalHours)) : "", xmlDoc);
-          }
-        };
-
-        const fillTravelRow = (cells) => {
-          let siteGrandTravelTotal = 0;
-          weekDays.forEach((dayObj, idx) => {
-            if (!cells[idx + 1]) return;
-            const entriesForDay = siteEntries.filter((e) => e.date === dayObj.dateIso);
-            let dayTravel = 0;
-            entriesForDay.forEach((entryForDay) => {
-              if (entryForDay.tasks) {
-                dayTravel += entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.travelTime) || 0), 0);
-              }
-            });
-            siteGrandTravelTotal += dayTravel;
-            setCellText(cells[idx + 1], dayTravel > 0 ? String(safeRound(dayTravel)) : "", xmlDoc);
-          });
-          if (cells[8]) {
-            setCellText(cells[8], siteGrandTravelTotal > 0 ? String(safeRound(siteGrandTravelTotal)) : "", xmlDoc);
-          }
-        };
-
-        // 2. Iterate Rows and fill cells
-        for (let tr of rows) {
-          const cells = tr.getElementsByTagName("w:tc");
-          if (cells.length === 0) continue;
-          
-          const firstCellText = getCellText(cells[0]).trim();
-          
-          if (firstCellText === "Date") {
+          const fillTravelRow = (cells) => {
+            let siteGrandTravelTotal = 0;
             weekDays.forEach((dayObj, idx) => {
-              if (cells[idx + 1]) {
-                const dateParts = dayObj.dateIso.split('-');
-                const displayDDMM = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}` : dayObj.dateIso;
-                setCellText(cells[idx + 1], displayDDMM, xmlDoc);
-              }
+              if (!cells[idx + 1]) return;
+              const entriesForDay = siteEntries.filter((e) => e.date === dayObj.dateIso);
+              let dayTravel = 0;
+              entriesForDay.forEach((entryForDay) => {
+                if (entryForDay.tasks) {
+                  dayTravel += entryForDay.tasks.reduce((sum, t) => sum + (parseFloat(t.travelTime) || 0), 0);
+                }
+              });
+              siteGrandTravelTotal += dayTravel;
+              setCellText(cells[idx + 1], dayTravel > 0 ? String(safeRound(dayTravel)) : "", xmlDoc);
             });
-          } else if (firstCellText === "START TIME") {
-            fillTimingRow(cells, "startTime");
-          } else if (firstCellText === "TIME LEFT SITE") {
-            fillTimingRow(cells, "timeLeftSite");
-          } else if (firstCellText === "TIME RETURNED") {
-            fillTimingRow(cells, "timeReturned");
-          } else if (firstCellText === "TIME FINISHED") {
-            fillTimingRow(cells, "timeFinished");
-          } else if (firstCellText === "TOTAL HOURS") {
-            fillTotalHoursRow(cells);
-          } else if (firstCellText === "Travel Time") {
-            fillTravelRow(cells);
-          } else {
-            const matchedTask = ALL_TEMPLATE_TASKS.find((task) => cleanText(task) === cleanText(firstCellText));
-            if (matchedTask) {
-              fillTaskRow(cells, matchedTask);
+            if (cells[8]) {
+              setCellText(cells[8], siteGrandTravelTotal > 0 ? String(safeRound(siteGrandTravelTotal)) : "", xmlDoc);
+            }
+          };
+
+          for (let tr of rows) {
+            const cells = tr.getElementsByTagName("w:tc");
+            if (cells.length === 0) continue;
+            
+            const firstCellText = getCellText(cells[0]).trim();
+            
+            if (firstCellText === "Date") {
+              weekDays.forEach((dayObj, idx) => {
+                if (cells[idx + 1]) {
+                  const dateParts = dayObj.dateIso.split('-');
+                  const displayDDMM = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}` : dayObj.dateIso;
+                  setCellText(cells[idx + 1], displayDDMM, xmlDoc);
+                }
+              });
+            } else if (firstCellText === "START TIME") {
+              fillTimingRow(cells, "startTime");
+            } else if (firstCellText === "TIME LEFT SITE") {
+              fillTimingRow(cells, "timeLeftSite");
+            } else if (firstCellText === "TIME RETURNED") {
+              fillTimingRow(cells, "timeReturned");
+            } else if (firstCellText === "TIME FINISHED") {
+              fillTimingRow(cells, "timeFinished");
+            } else if (firstCellText === "TOTAL HOURS") {
+              fillTotalHoursRow(cells);
+            } else if (firstCellText === "Travel Time") {
+              fillTravelRow(cells);
+            } else {
+              const matchedTask = ALL_TEMPLATE_TASKS.find((task) => cleanText(task) === cleanText(firstCellText));
+              if (matchedTask) {
+                fillTaskRow(cells, matchedTask);
+              }
             }
           }
+
+          const serializer = new XMLSerializer();
+          const updatedXmlStr = serializer.serializeToString(xmlDoc);
+          zip.file("word/document.xml", updatedXmlStr);
+
+          const outBlob = zip.generate({
+            type: 'blob',
+            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          });
+
+          const safeStaffName = staffName.replace(/[^a-zA-Z0-9_\-]/g, '_');
+          const safeSiteName = siteName.replace(/[^a-zA-Z0-9_\-]/g, '_');
+          const url = URL.createObjectURL(outBlob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `TimeCard_${safeStaffName}_${safeSiteName}_${weekStartStr.replaceAll('/', '-')}.docx`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          await new Promise((res) => setTimeout(res, 250));
+          URL.revokeObjectURL(url);
         }
-
-        const serializer = new XMLSerializer();
-        const updatedXmlStr = serializer.serializeToString(xmlDoc);
-        zip.file("word/document.xml", updatedXmlStr);
-
-        const outBlob = zip.generate({
-          type: 'blob',
-          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        });
-
-        const safeSiteName = siteName.replace(/[^a-zA-Z0-9_\-]/g, '_');
-        const url = URL.createObjectURL(outBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `TimeCard_${safeSiteName}_${weekStartStr.replaceAll('/', '-')}.docx`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        await new Promise((res) => setTimeout(res, 200));
-        URL.revokeObjectURL(url);
       }
     } catch (err) {
       console.error("Error filling template DOCX:", err);
@@ -556,7 +566,7 @@ export default function ManagerDashboard({ userProfile }) {
             className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-sm py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer"
           >
             {isExporting ? (
-              <span>Exporting Document...</span>
+              <span>Exporting Documents...</span>
             ) : (
               <span>Export Time Cards (DOCX)</span>
             )}
