@@ -8,7 +8,7 @@ import ManagerDashboard from './ManagerDashboard';
 import { useOnlineStatus } from './useOnlineStatus';
 import { Capacitor } from '@capacitor/core';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
-import { initNotifications, checkAndSuppressDailyReminder, triggerTestNotification } from './notifications';
+import { initNotifications, checkAndSuppressDailyReminder } from './notifications';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -159,14 +159,6 @@ export default function App() {
         </div>
 
         <div className="flex items-center space-x-2">
-          {/* Practice Notification Button */}
-          <button 
-            onClick={triggerTestNotification}
-            className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded hover:bg-indigo-700 transition font-medium"
-          >
-            Test Alert
-          </button>
-
           <button 
             onClick={handleSignOut}
             className="text-xs bg-gray-200 text-gray-700 px-3 py-1.5 rounded hover:bg-gray-300 transition font-medium"
