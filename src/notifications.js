@@ -46,6 +46,8 @@ export const initNotifications = async () => {
           title: 'Timesheet Reminder',
           body: "Don't forget to record your site hours for today!",
           channelId: CHANNEL_ID,
+          smallIcon: 'ic_stat_icon', // <--- Added custom icon
+          iconColor: '#4F46E5',       // <--- Added brand accent color
           schedule: {
             on: { hour: 17, minute: 30 }, // 5:30 PM
             repeats: true,
@@ -56,6 +58,8 @@ export const initNotifications = async () => {
           title: 'Weekly Timesheet Due',
           body: "Don't forget to send your timesheet!",
           channelId: CHANNEL_ID,
+          smallIcon: 'ic_stat_icon', // <--- Added custom icon
+          iconColor: '#4F46E5',       // <--- Added brand accent color
           schedule: {
             on: { weekday: 3, hour: 18, minute: 0 }, // Tuesday at 6:00 PM (1: Sun, 2: Mon, 3: Tue)
             repeats: true,
@@ -116,6 +120,8 @@ const rescheduleDailyReminder = async () => {
           title: 'Timesheet Reminder',
           body: "Don't forget to record your site hours for today!",
           channelId: CHANNEL_ID,
+          smallIcon: 'ic_stat_icon', // <--- Added custom icon
+          iconColor: '#4F46E5',       // <--- Added brand accent color
           schedule: {
             on: { hour: 17, minute: 30 },
             repeats: true,
