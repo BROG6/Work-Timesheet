@@ -9,7 +9,14 @@ export const checkNativeAPKUpdate = async () => {
   try {
     const currentVersion = packageJson.version;
 
-    const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
+    // Fetch latest release with cache-busting timestamp & headers
+    const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest?t=${Date.now()}`, {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      },
+    });
+
     if (!response.ok) return;
 
     const latestRelease = await response.json();
@@ -58,6 +65,12 @@ const showUpdatePrompt = async (newVersion, downloadUrl) => {
       filePath: downloadRes.path,
       contentType: 'application/vnd.android.package-archive',
     });
+
+    // 3. Exit running process so Android performs a clean boot when re-opened
+    setTimeout(() => {
+      App.exitApp();
+    }, 1000);
+
   } catch (err) {
     console.error('[NativeUpdater] Direct install failed, falling back to external browser:', err);
     window.open(downloadUrl, '_system');
