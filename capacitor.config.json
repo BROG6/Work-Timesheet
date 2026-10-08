@@ -14,6 +14,10 @@
     "LocalNotifications": {
       "smallIcon": "ic_stat_icon",
       "iconColor": "#4F46E5"
+    },
+    "CapacitorUpdater": {
+      "autoUpdate": true,
+      "statsUrl": "https://capgo.app/api/stats"
     }
   }
 }
