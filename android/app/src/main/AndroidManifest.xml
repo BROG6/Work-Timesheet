@@ -31,12 +31,12 @@
             android:grantUriPermissions="true">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths"></meta-data>
+                android:resource="@xml/file_paths" />
         </provider>
 
         <!-- Google Auth Plugin Metadata Requirements -->
         <meta-data 
-            android:name="com.google.android.gms.games.APP_ID" 
+            android:name="server_client_id" 
             android:value="@string/server_client_id" />
         <meta-data 
             android:name="custom_url_scheme" 
