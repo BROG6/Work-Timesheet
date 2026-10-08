@@ -129,7 +129,7 @@ export default function App() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center text-gray-600 font-medium text-sm">
-        Loading Timesheet Portal...
+        Loading SJR Timesheet Portal v1.0.2...
       </div>
     );
   }
@@ -171,7 +171,7 @@ export default function App() {
           </div>
 
           <p className="text-xs text-gray-500 mt-0.5">
-            {profile.name} ({profile.role?.toUpperCase() || 'WORKER'}) — Company: {profile.companyId || 'SJR Builders'} • <span className="text-gray-400 font-mono">v1.0.1-check</span>
+            {profile.name} ({profile.role?.toUpperCase() || 'WORKER'}) — Company: {profile.companyId || 'SJR Builders'} • <span className="text-gray-400 font-mono">v1.0.2-auto</span>
           </p>
         </div>
 
