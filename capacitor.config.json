@@ -16,8 +16,7 @@
       "iconColor": "#4F46E5"
     },
     "CapacitorUpdater": {
-      "autoUpdate": true,
-      "statsUrl": "https://capgo.app/api/stats"
+      "autoUpdate": false
     }
   }
 }
