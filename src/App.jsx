@@ -19,15 +19,18 @@ export default function App() {
   
   const isOnline = useOnlineStatus();
 
-  // Safe Notification & Update Initialization
+  // 1. Immediate Capgo Boot Confirmation (Fires on app mount regardless of login state)
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      CapacitorUpdater.notifyAppReady().catch((err) =>
+        console.warn("Capgo notifyAppReady skipped:", err)
+      );
+    }
+  }, []);
+
+  // 2. User & Background Tasks Initialization
   useEffect(() => {
     if (Capacitor.isNativePlatform() && user) {
-      try {
-        CapacitorUpdater.notifyAppReady().catch(err => console.warn("Capgo notifyAppReady skipped:", err));
-      } catch (e) {
-        console.warn("Capgo error:", e);
-      }
-
       const timer = setTimeout(() => {
         try {
           initNotifications();
@@ -47,22 +50,6 @@ export default function App() {
       checkAndSuppressDailyReminder(user.uid);
     }
   }, [user]);
-
-  // Safe Google Auth Initialization
-  useEffect(() => {
-    if (Capacitor.isNativePlatform()) {
-      try {
-        GoogleAuth.initialize({
-          clientId: '986683715840-4rlu9o0a5glc1dquec2ljolbo0iom3iv.apps.googleusercontent.com',
-          serverClientId: '986683715840-4rlu9o0a5glc1dquec2ljolbo0iom3iv.apps.googleusercontent.com',
-          scopes: ['profile', 'email'],
-          grantOfflineAccess: true,
-        });
-      } catch (err) {
-        console.warn("GoogleAuth init error ignored on boot:", err);
-      }
-    }
-  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
