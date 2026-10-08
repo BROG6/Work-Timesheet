@@ -1,21 +1,19 @@
 import { App } from '@capacitor/app';
-import { Browser } from '@capacitor/browser';
-import packageJson from '../package.json'; // Imports version directly
+import { FileOpener } from '@capawesome/capacitor-file-opener';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import packageJson from '../package.json';
 
 const GITHUB_REPO = 'BROG6/Work-Timesheet';
 
 export const checkNativeAPKUpdate = async () => {
   try {
-    // Use package.json version string directly
-    const currentVersion = packageJson.version; 
+    const currentVersion = packageJson.version;
 
     const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
     if (!response.ok) return;
 
     const latestRelease = await response.json();
     const latestVersion = latestRelease.tag_name.replace('v', '');
-
-    console.log(`[NativeUpdater] Local: ${currentVersion} | GitHub: ${latestVersion}`);
 
     if (isNewerVersion(latestVersion, currentVersion)) {
       const apkAsset = latestRelease.assets.find(asset => asset.name.endsWith('.apk'));
@@ -38,11 +36,31 @@ const isNewerVersion = (latest, current) => {
   return false;
 };
 
-const showUpdatePrompt = (newVersion, downloadUrl) => {
+const showUpdatePrompt = async (newVersion, downloadUrl) => {
   const confirmUpdate = window.confirm(
-    `A new required system update (v${newVersion}) is available for SJR Timesheets.\n\nTap OK to download and update now.`
+    `A new required system update (v${newVersion}) is available for SJR Timesheets.\n\nTap OK to download and install now.`
   );
-  if (confirmUpdate) {
-    Browser.open({ url: downloadUrl });
+  
+  if (!confirmUpdate) return;
+
+  try {
+    const fileName = `update-${newVersion}.apk`;
+
+    // 1. Download APK file directly to cache directory
+    const downloadRes = await Filesystem.downloadFile({
+      url: downloadUrl,
+      path: fileName,
+      directory: Directory.Cache,
+    });
+
+    // 2. Pass local APK file path directly to Android Package Installer
+    await FileOpener.openFile({
+      filePath: downloadRes.path,
+      contentType: 'application/vnd.android.package-archive',
+    });
+  } catch (err) {
+    console.error('[NativeUpdater] Direct install failed, falling back to external browser:', err);
+    // Fallback: Open in phone's main browser (Chrome) where downloads trigger package installs
+    window.open(downloadUrl, '_system');
   }
 };
