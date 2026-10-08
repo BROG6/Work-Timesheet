@@ -9,6 +9,8 @@ import { useOnlineStatus } from './useOnlineStatus';
 import { Capacitor } from '@capacitor/core';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { initNotifications, checkAndSuppressDailyReminder } from './notifications';
+import { CapacitorUpdater } from '@capgo/capacitor-updater';
+import { checkNativeAPKUpdate } from './nativeUpdater';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -17,15 +19,21 @@ export default function App() {
   
   const isOnline = useOnlineStatus();
 
-  // Initialize Notifications on Native Startup with slight delay for bridge readiness
+  // Initialize Notifications and Check for APK Updates once user logs in
   useEffect(() => {
-    if (Capacitor.isNativePlatform()) {
+    if (Capacitor.isNativePlatform() && user) {
+      // 1. Notify Capgo web updater that current JS bundle loaded successfully
+      CapacitorUpdater.notifyAppReady();
+
+      // 2. 1-second delay ensures native UI is fully active and focused before triggering permission prompts
       const timer = setTimeout(() => {
         initNotifications();
-      }, 300);
+        checkNativeAPKUpdate();
+      }, 1000);
+
       return () => clearTimeout(timer);
     }
-  }, []);
+  }, [user]);
 
   // Suppress today's 5:30 PM reminder if user has already submitted hours today
   useEffect(() => {
