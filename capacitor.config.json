@@ -16,7 +16,9 @@
       "iconColor": "#4F46E5"
     },
     "CapacitorUpdater": {
-      "autoUpdate": false
+      "autoUpdate": false,
+      "statsUrl": "",
+      "appReadyTimeout": 10000
     }
   }
 }
