@@ -9,7 +9,6 @@ import { useOnlineStatus } from './useOnlineStatus';
 import { Capacitor } from '@capacitor/core';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { initNotifications, checkAndSuppressDailyReminder } from './notifications';
-import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import { checkNativeAPKUpdate } from './nativeUpdater';
 
 export default function App() {
@@ -19,16 +18,7 @@ export default function App() {
   
   const isOnline = useOnlineStatus();
 
-  // 1. Immediate Capgo Boot Confirmation (Fires on app mount regardless of login state)
-  useEffect(() => {
-    if (Capacitor.isNativePlatform()) {
-      CapacitorUpdater.notifyAppReady().catch((err) =>
-        console.warn("Capgo notifyAppReady skipped:", err)
-      );
-    }
-  }, []);
-
-  // 2. User & Background Tasks Initialization
+  // User & Background Tasks Initialization
   useEffect(() => {
     if (Capacitor.isNativePlatform() && user) {
       const timer = setTimeout(() => {
