@@ -19,16 +19,22 @@ export default function App() {
   
   const isOnline = useOnlineStatus();
 
-  // Initialize Notifications and Check for APK Updates once user logs in
+  // Safe Notification & Update Initialization
   useEffect(() => {
     if (Capacitor.isNativePlatform() && user) {
-      // 1. Notify Capgo web updater that current JS bundle loaded successfully
-      CapacitorUpdater.notifyAppReady();
+      try {
+        CapacitorUpdater.notifyAppReady().catch(err => console.warn("Capgo notifyAppReady skipped:", err));
+      } catch (e) {
+        console.warn("Capgo error:", e);
+      }
 
-      // 2. 1-second delay ensures native UI is fully active and focused before triggering permission prompts
       const timer = setTimeout(() => {
-        initNotifications();
-        checkNativeAPKUpdate();
+        try {
+          initNotifications();
+          checkNativeAPKUpdate();
+        } catch (err) {
+          console.warn("Startup task error:", err);
+        }
       }, 1000);
 
       return () => clearTimeout(timer);
@@ -42,15 +48,19 @@ export default function App() {
     }
   }, [user]);
 
-  // Initialize Native Google Auth with Web Client ID
+  // Safe Google Auth Initialization
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
-      GoogleAuth.initialize({
-        clientId: '986683715840-4rlu9o0a5glc1dquec2ljolbo0iom3iv.apps.googleusercontent.com',
-        serverClientId: '986683715840-4rlu9o0a5glc1dquec2ljolbo0iom3iv.apps.googleusercontent.com',
-        scopes: ['profile', 'email'],
-        grantOfflineAccess: true,
-      });
+      try {
+        GoogleAuth.initialize({
+          clientId: '986683715840-4rlu9o0a5glc1dquec2ljolbo0iom3iv.apps.googleusercontent.com',
+          serverClientId: '986683715840-4rlu9o0a5glc1dquec2ljolbo0iom3iv.apps.googleusercontent.com',
+          scopes: ['profile', 'email'],
+          grantOfflineAccess: true,
+        });
+      } catch (err) {
+        console.warn("GoogleAuth init error ignored on boot:", err);
+      }
     }
   }, []);
 
