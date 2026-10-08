@@ -19,26 +19,34 @@ export default function App() {
   
   const isOnline = useOnlineStatus();
 
-  // 1. Safe Capgo Boot Confirmation (Fires immediately on app mount)
+  // 1. Safe Capgo Boot Confirmation & Native APK Check (Runs on App Launch)
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
-      const timer = setTimeout(() => {
+      // Confirm boot to Capgo
+      const capgoTimer = setTimeout(() => {
         CapacitorUpdater.notifyAppReady().catch((err) => {
           console.warn("Capgo notifyAppReady skipped:", err);
         });
       }, 500);
 
-      return () => clearTimeout(timer);
+      // Check GitHub for new native APK update on every app launch
+      const updateTimer = setTimeout(() => {
+        checkNativeAPKUpdate();
+      }, 1500);
+
+      return () => {
+        clearTimeout(capgoTimer);
+        clearTimeout(updateTimer);
+      };
     }
   }, []);
 
-  // 2. User & Background Tasks Initialization
+  // 2. User Background Tasks Initialization
   useEffect(() => {
     if (Capacitor.isNativePlatform() && user) {
       const timer = setTimeout(() => {
         try {
           initNotifications();
-          checkNativeAPKUpdate();
         } catch (err) {
           console.warn("Startup task error:", err);
         }
@@ -163,7 +171,7 @@ export default function App() {
           </div>
 
           <p className="text-xs text-gray-500 mt-0.5">
-            {profile.name} ({profile.role?.toUpperCase() || 'WORKER'}) — Company: {profile.companyId || 'SJR Builders'}
+            {profile.name} ({profile.role?.toUpperCase() || 'WORKER'}) — Company: {profile.companyId || 'SJR Builders'} • <span className="text-gray-400 font-mono">v1.0.1-check</span>
           </p>
         </div>
 
