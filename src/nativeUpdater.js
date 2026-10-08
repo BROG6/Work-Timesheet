@@ -1,5 +1,5 @@
 import { App } from '@capacitor/app';
-import { FileOpener } from '@capawesome/capacitor-file-opener';
+import { FileOpener } from '@capacitor-community/file-opener';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import packageJson from '../package.json';
 
@@ -53,14 +53,13 @@ const showUpdatePrompt = async (newVersion, downloadUrl) => {
       directory: Directory.Cache,
     });
 
-    // 2. Pass local APK file path directly to Android Package Installer
-    await FileOpener.openFile({
+    // 2. Open file with Android Package Installer
+    await FileOpener.open({
       filePath: downloadRes.path,
       contentType: 'application/vnd.android.package-archive',
     });
   } catch (err) {
     console.error('[NativeUpdater] Direct install failed, falling back to external browser:', err);
-    // Fallback: Open in phone's main browser (Chrome) where downloads trigger package installs
     window.open(downloadUrl, '_system');
   }
 };
