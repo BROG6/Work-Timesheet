@@ -19,7 +19,7 @@ export default function App() {
   
   const isOnline = useOnlineStatus();
 
-  // 1. Safe Capgo Boot Confirmation & Native APK Check (Runs on App Launch)
+  // 1. App Launch Initialization (Native APK, Capgo, and Notification Permissions)
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
       // Confirm boot to Capgo
@@ -29,34 +29,25 @@ export default function App() {
         });
       }, 500);
 
-      // Check GitHub for new native APK update on every app launch
+      // Initialize notifications with a 1s delay so bridge is ready
+      const notifyTimer = setTimeout(() => {
+        initNotifications();
+      }, 1000);
+
+      // Check GitHub for new native APK update on launch
       const updateTimer = setTimeout(() => {
         checkNativeAPKUpdate();
       }, 1500);
 
       return () => {
         clearTimeout(capgoTimer);
+        clearTimeout(notifyTimer);
         clearTimeout(updateTimer);
       };
     }
   }, []);
 
-  // 2. User Background Tasks Initialization
-  useEffect(() => {
-    if (Capacitor.isNativePlatform() && user) {
-      const timer = setTimeout(() => {
-        try {
-          initNotifications();
-        } catch (err) {
-          console.warn("Startup task error:", err);
-        }
-      }, 1000);
-
-      return () => clearTimeout(timer);
-    }
-  }, [user]);
-
-  // Suppress today's 5:30 PM reminder if user has already submitted hours today
+  // 2. User-specific tasks (Runs when user logs in/changes)
   useEffect(() => {
     if (user?.uid) {
       checkAndSuppressDailyReminder(user.uid);
