@@ -13,11 +13,12 @@ export const initNotifications = async () => {
   try {
     console.log('[NotificationService] Initializing notifications...');
 
-    // 1. Check and Request Notification Permissions FIRST
+    // 1. Check current permission state
     let perm = await LocalNotifications.checkPermissions();
     console.log('[NotificationService] Initial permission state:', perm.display);
 
-    if (perm.display !== 'granted') {
+    // Explicitly prompt if state is 'prompt' or 'prompt-with-rationale'
+    if (perm.display === 'prompt' || perm.display === 'prompt-with-rationale') {
       console.log('[NotificationService] Requesting permission popup from Android OS...');
       perm = await LocalNotifications.requestPermissions();
       console.log('[NotificationService] Post-request permission state:', perm.display);
