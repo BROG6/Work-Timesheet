@@ -2,6 +2,7 @@
   "appId": "com.sjr.timesheet",
   "appName": "SJR Builders Timesheet",
   "webDir": "dist",
+  "bundledWebRuntime": false,
   "plugins": {
     "GoogleAuth": {
       "scopes": [
@@ -17,7 +18,8 @@
     },
     "CapacitorUpdater": {
       "autoUpdate": false,
-      "statsUrl": "",
+      "resetWhenUpdate": false,
+      "statsUrl": null,
       "appReadyTimeout": 10000
     }
   }
