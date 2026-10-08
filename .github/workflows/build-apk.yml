@@ -1,42 +1,62 @@
-name: Build Android APK
+name: Build and Release APK
 
 on:
-
   push:
-    branches: [ main, master ]
-  workflow_dispatch:
+    branches:
+      - main
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
-      - name: Set up Node.js
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 18
+          cache: 'npm'
 
-      - name: Install dependencies
-        run: npm install
+      # 1. Automatically increment patch version in package.json (e.g., 1.0.0 -> 1.0.1)
+      - name: Auto-Bump Version
+        id: bump_version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Bump patch version without creating a git tag immediately
+          NEW_VERSION=$(npm version patch --no-git-tag-version)
+          echo "VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
+          
+          # Commit and push updated package.json back to main
+          git add package.json package-lock.json
+          git commit -m "chore(release): bump version to $NEW_VERSION [skip ci]"
+          git push origin main
 
-      - name: Build web assets
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Web Assets
         run: npm run build
 
-      - name: Set up Java JDK
+      - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      - name: Sync Capacitor
+      - name: Sync Capacitor Android
         run: npx cap sync android
 
-      - name: Build APK
+      - name: Build Android Debug APK
         run: |
           cd android
           chmod +x gradlew
@@ -47,3 +67,13 @@ jobs:
         with:
           name: app-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      # 2. Create GitHub Release with the auto-bumped version tag
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "android/app/build/outputs/apk/debug/app-debug.apk"
+          tag: ${{ steps.bump_version.outputs.VERSION }}
+          name: "Release ${{ steps.bump_version.outputs.VERSION }}"
+          body: "Automated build release for ${{ steps.bump_version.outputs.VERSION }}"
+          token: ${{ secrets.GITHUB_TOKEN }}
