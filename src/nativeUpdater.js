@@ -1,15 +1,13 @@
 import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
+import packageJson from '../package.json'; // Imports version directly
 
-const GITHUB_REPO = 'BROG6/Work-Timesheet'; // Your GitHub Repository
+const GITHUB_REPO = 'BROG6/Work-Timesheet';
 
-/**
- * Checks GitHub Releases for new native APK releases
- */
 export const checkNativeAPKUpdate = async () => {
   try {
-    const currentAppInfo = await App.getInfo();
-    const currentVersion = currentAppInfo.version; // Reads version from android/app/build.gradle
+    // Use package.json version string directly
+    const currentVersion = packageJson.version; 
 
     const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
     if (!response.ok) return;
@@ -17,7 +15,8 @@ export const checkNativeAPKUpdate = async () => {
     const latestRelease = await response.json();
     const latestVersion = latestRelease.tag_name.replace('v', '');
 
-    // Compare versions (e.g. 1.0.1 vs 1.0.0)
+    console.log(`[NativeUpdater] Local: ${currentVersion} | GitHub: ${latestVersion}`);
+
     if (isNewerVersion(latestVersion, currentVersion)) {
       const apkAsset = latestRelease.assets.find(asset => asset.name.endsWith('.apk'));
       if (apkAsset) {
@@ -29,9 +28,6 @@ export const checkNativeAPKUpdate = async () => {
   }
 };
 
-/**
- * Simple semantic version comparator
- */
 const isNewerVersion = (latest, current) => {
   const l = latest.split('.').map(Number);
   const c = current.split('.').map(Number);
@@ -42,9 +38,6 @@ const isNewerVersion = (latest, current) => {
   return false;
 };
 
-/**
- * Prompts user and directs to APK installer stream
- */
 const showUpdatePrompt = (newVersion, downloadUrl) => {
   const confirmUpdate = window.confirm(
     `A new required system update (v${newVersion}) is available for SJR Timesheets.\n\nTap OK to download and update now.`
