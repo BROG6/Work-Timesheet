@@ -22,22 +22,26 @@ export default function App() {
   // 1. App Launch Initialization (Native APK, Capgo, and Notification Permissions)
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
-      // Confirm boot to Capgo
+      // Confirm boot to Capgo (500ms)
       const capgoTimer = setTimeout(() => {
         CapacitorUpdater.notifyAppReady().catch((err) => {
           console.warn("Capgo notifyAppReady skipped:", err);
         });
       }, 500);
 
-      // Initialize notifications with a 1s delay so bridge is ready
+      // Initialize notifications with isolated error catching (1000ms)
       const notifyTimer = setTimeout(() => {
-        initNotifications();
+        Promise.resolve(initNotifications()).catch((err) => {
+          console.warn("Notification init skipped/failed:", err);
+        });
       }, 1000);
 
-      // Check GitHub for new native APK update on launch
+      // Check GitHub for new native APK update after notification prompt clears (2500ms)
       const updateTimer = setTimeout(() => {
-        checkNativeAPKUpdate();
-      }, 1500);
+        Promise.resolve(checkNativeAPKUpdate()).catch((err) => {
+          console.warn("Native APK update check failed:", err);
+        });
+      }, 2500);
 
       return () => {
         clearTimeout(capgoTimer);
