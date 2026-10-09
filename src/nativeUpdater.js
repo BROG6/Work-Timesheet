@@ -10,6 +10,8 @@ export const checkNativeAPKUpdate = async () => {
     const info = await App.getInfo();
     const currentVersion = info.version; // Returns "1.0" or "1.0.0" from build.gradle
 
+    alert(`[1] Native Version detected: "${currentVersion}"`);
+
     // 2. Fetch latest release from GitHub API with cache-busting
     const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest?t=${Date.now()}`, {
       headers: {
@@ -19,19 +21,29 @@ export const checkNativeAPKUpdate = async () => {
       },
     });
 
-    if (!response.ok) return;
+    if (!response.ok) {
+      alert(`[2] GitHub API Error: HTTP Status ${response.status}`);
+      return;
+    }
 
     const latestRelease = await response.json();
     const latestVersion = latestRelease.tag_name.replace(/^v/, '').trim();
 
+    const newer = isNewerVersion(latestVersion, currentVersion);
+    alert(`[3] GitHub Version: "${latestVersion}"\nIs Newer? ${newer}`);
+
     // 3. Compare dynamic native version against latest release tag
-    if (isNewerVersion(latestVersion, currentVersion)) {
+    if (newer) {
       const apkAsset = latestRelease.assets.find(asset => asset.name.endsWith('.apk'));
       if (apkAsset) {
+        alert(`[4] Found APK asset: ${apkAsset.name}\nPrompting update now...`);
         showUpdatePrompt(latestVersion, apkAsset.browser_download_url);
+      } else {
+        alert(`[4] ERROR: Release found (${latestVersion}), but NO .apk file attached!`);
       }
     }
   } catch (err) {
+    alert(`[CATCH ERROR] ${err.message}`);
     console.warn('[NativeUpdater] Check failed:', err);
   }
 };
@@ -81,6 +93,7 @@ const showUpdatePrompt = async (newVersion, downloadUrl) => {
     }, 1000);
 
   } catch (err) {
+    alert(`[INSTALL FAIL] ${err.message}`);
     console.error('[NativeUpdater] Direct install failed, falling back to external browser:', err);
     window.open(downloadUrl, '_system');
   }
