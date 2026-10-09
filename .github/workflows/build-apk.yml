@@ -41,6 +41,23 @@ jobs:
           git commit -m "chore(release): bump version to $NEW_VERSION [skip ci]"
           git push origin main
 
+      # 2. Sync Android Gradle versionName & versionCode with the bumped npm version
+      - name: Update Android Gradle Version
+        run: |
+          # Strip 'v' if present (e.g., v1.0.4 -> 1.0.4)
+          CLEAN_VERSION=$(echo "${{ steps.bump_version.outputs.VERSION }}" | sed 's/^v//')
+          
+          # Calculate a unique integer versionCode using GitHub run number
+          VERSION_CODE=${{ github.run_number }}
+          
+          # Update versionName in android/app/build.gradle
+          sed -i "s/versionName \".*\"/versionName \"$CLEAN_VERSION\"/" android/app/build.gradle
+          
+          # Update versionCode in android/app/build.gradle
+          sed -i "s/versionCode [0-9]*/versionCode $VERSION_CODE/" android/app/build.gradle
+          
+          echo "Updated android/app/build.gradle to versionName: $CLEAN_VERSION (versionCode: $VERSION_CODE)"
+
       - name: Install Dependencies
         run: npm ci
 
@@ -68,7 +85,7 @@ jobs:
           name: app-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
 
-      # 2. Create GitHub Release with the auto-bumped version tag
+      # 3. Create GitHub Release with the auto-bumped version tag
       - name: Create GitHub Release
         uses: ncipollo/release-action@v1
         with:
