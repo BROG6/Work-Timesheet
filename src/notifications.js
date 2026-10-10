@@ -2,12 +2,12 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { db } from './firebaseConfig';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 
-const DAILY_REMINDER_ID = 1001;
+const DAILY_REMINDER_ID_BASE = 1010; // Base ID for daily slots (e.g., 1011 to 1015 for Mon-Fri)
 const WEEKLY_REMINDER_ID = 1002;
 const CHANNEL_ID = 'timesheet_reminders';
 
 /**
- * Request permissions, setup Android notification channels, and schedule repeating notifications
+ * Request permissions, setup Android notification channels, and schedule upcoming weekday reminders
  */
 export const initNotifications = async () => {
   try {
@@ -15,63 +15,83 @@ export const initNotifications = async () => {
 
     // 1. Check and Request Notification Permissions FIRST
     let perm = await LocalNotifications.checkPermissions();
-    console.log('[NotificationService] Initial permission state:', perm.display);
-
     if (perm.display !== 'granted') {
-      console.log('[NotificationService] Requesting permission popup from Android OS...');
       perm = await LocalNotifications.requestPermissions();
-      console.log('[NotificationService] Post-request permission state:', perm.display);
     }
 
     if (perm.display !== 'granted') {
-      console.warn('[NotificationService] Notification permissions were NOT granted by user.');
+      console.warn('[NotificationService] Notification permissions were NOT granted.');
       return;
     }
 
-    // 2. Create High-Priority Notification Channel AFTER permission is granted
+    // 2. Create High-Priority Notification Channel
     await LocalNotifications.createChannel({
       id: CHANNEL_ID,
       name: 'Timesheet Reminders',
       description: 'Daily and weekly reminders to log site hours',
-      importance: 5, // 5 = High Priority (Banner popup + sound)
-      visibility: 1,  // Public on lock screen
+      importance: 5,
+      visibility: 1,
       vibration: true,
     });
 
-    // 3. Schedule Daily & Weekly Local Notifications
-    await LocalNotifications.schedule({
+    // 3. Clear existing daily slots (1011-1015) and weekly reminder to prevent duplicates
+    await LocalNotifications.cancel({
       notifications: [
-        {
-          id: DAILY_REMINDER_ID,
+        { id: DAILY_REMINDER_ID_BASE + 1 },
+        { id: DAILY_REMINDER_ID_BASE + 2 },
+        { id: DAILY_REMINDER_ID_BASE + 3 },
+        { id: DAILY_REMINDER_ID_BASE + 4 },
+        { id: DAILY_REMINDER_ID_BASE + 5 },
+        { id: WEEKLY_REMINDER_ID }
+      ]
+    });
+
+    const notificationsToSchedule = [
+      {
+        id: WEEKLY_REMINDER_ID,
+        title: 'Weekly Timesheet Due',
+        body: "Don't forget to send your timesheet!",
+        channelId: CHANNEL_ID,
+        smallIcon: 'ic_stat_icon',
+        iconColor: '#4F46E5',
+        schedule: {
+          on: { weekday: 3, hour: 18, minute: 0 }, // Tuesday at 6:00 PM
+          repeats: true,
+        },
+      }
+    ];
+
+    // 4. Generate upcoming weekday 5:30 PM triggers (looks ahead through the current/next 7 days)
+    const now = new Date();
+    for (let i = 0; i < 7; i++) {
+      const targetDate = new Date();
+      targetDate.setDate(now.getDate() + i);
+      targetDate.setHours(17, 30, 0, 0); // 5:30 PM
+
+      const dayOfWeek = targetDate.getDay(); // 0 = Sun, 6 = Sat
+
+      // Only schedule if it's a weekday (Mon-Fri) and the time hasn't already passed today
+      if (dayOfWeek >= 1 && dayOfWeek <= 5 && targetDate > now) {
+        notificationsToSchedule.push({
+          id: DAILY_REMINDER_ID_BASE + dayOfWeek, // Unique ID per weekday (1 to 5)
           title: 'Timesheet Reminder',
           body: "Don't forget to record your site hours for today!",
           channelId: CHANNEL_ID,
           smallIcon: 'ic_stat_icon',
           iconColor: '#4F46E5',
           schedule: {
-            on: { hour: 17, minute: 30 }, // 5:30 PM
-            repeats: true,
+            at: targetDate, // Exact target timestamp
           },
-        },
-        {
-          id: WEEKLY_REMINDER_ID,
-          title: 'Weekly Timesheet Due',
-          body: "Don't forget to send your timesheet!",
-          channelId: CHANNEL_ID,
-          smallIcon: 'ic_stat_icon',
-          iconColor: '#4F46E5',
-          schedule: {
-            on: { weekday: 3, hour: 18, minute: 0 }, // Tuesday at 6:00 PM (1: Sun, 2: Mon, 3: Tue)
-            repeats: true,
-          },
-        },
-      ],
+        });
+      }
+    }
+
+    // 5. Schedule all notifications
+    await LocalNotifications.schedule({
+      notifications: notificationsToSchedule,
     });
 
-    console.log('[NotificationService] Daily and Weekly notifications successfully scheduled.');
-
-    // 4. Attach listener to handle weekend skipping
-    setupNotificationFilter();
+    console.log('[NotificationService] Weekday and weekly notifications successfully scheduled.');
   } catch (err) {
     console.error('[NotificationService] Failed to initialize local notifications:', err);
   }
@@ -79,15 +99,16 @@ export const initNotifications = async () => {
 
 /**
  * Checks Firestore for today's hours. If logged, cancels today's daily reminder.
- * Call this when the app opens or immediately after a user logs hours.
  */
 export const checkAndSuppressDailyReminder = async (userId) => {
   if (!userId) return;
 
-  const todayStr = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
+  const today = new Date().getDay();
+  if (today === 0 || today === 6) return; // Skip on weekends
+
+  const todayStr = new Date().toISOString().split('T')[0];
 
   try {
-    // Query Firestore timesheets collection for today's entry
     const q = query(
       collection(db, 'timesheets'),
       where('userId', '==', userId),
@@ -97,55 +118,12 @@ export const checkAndSuppressDailyReminder = async (userId) => {
     const snapshot = await getDocs(q);
 
     if (!snapshot.empty) {
-      // Hours already logged today -> cancel today's pending 5:30 PM notification
-      await LocalNotifications.cancel({ notifications: [{ id: DAILY_REMINDER_ID }] });
-
-      // Reschedule so the 5:30 PM alarm remains active for upcoming days
-      await rescheduleDailyReminder();
+      // Cancel today's specific weekday slot ID (e.g., DAILY_REMINDER_ID_BASE + 1 for Monday)
+      await LocalNotifications.cancel({ notifications: [{ id: DAILY_REMINDER_ID_BASE + today }] });
     }
   } catch (err) {
     console.error('Error checking timesheet status for notifications:', err);
   }
-};
-
-/**
- * Re-arms the daily 5:30 PM reminder sequence for future days
- */
-const rescheduleDailyReminder = async () => {
-  try {
-    await LocalNotifications.schedule({
-      notifications: [
-        {
-          id: DAILY_REMINDER_ID,
-          title: 'Timesheet Reminder',
-          body: "Don't forget to record your site hours for today!",
-          channelId: CHANNEL_ID,
-          smallIcon: 'ic_stat_icon',
-          iconColor: '#4F46E5',
-          schedule: {
-            on: { hour: 17, minute: 30 },
-            repeats: true,
-          },
-        },
-      ],
-    });
-  } catch (err) {
-    console.error('Failed to reschedule daily reminder:', err);
-  }
-};
-
-/**
- * Listener filter to cancel weekday alerts on weekends (Saturday & Sunday)
- */
-const setupNotificationFilter = () => {
-  LocalNotifications.addListener('localNotificationReceived', async (notification) => {
-    const dayOfWeek = new Date().getDay(); // 0 = Sunday, 6 = Saturday
-
-    // Ignore daily weekday reminder on weekends
-    if (notification.id === DAILY_REMINDER_ID && (dayOfWeek === 0 || dayOfWeek === 6)) {
-      await LocalNotifications.cancel({ notifications: [{ id: DAILY_REMINDER_ID }] });
-    }
-  });
 };
 
 /**
@@ -156,14 +134,14 @@ export const triggerTestNotification = async () => {
     await LocalNotifications.schedule({
       notifications: [
         {
-          id: 9999, // Unique test ID
+          id: 9999,
           title: 'SJR Timesheet Test',
           body: 'This is a practice notification to test your custom icon!',
           channelId: CHANNEL_ID,
           smallIcon: 'ic_stat_icon',
           iconColor: '#4F46E5',
           schedule: {
-            at: new Date(Date.now() + 3000), // Fires in 3 seconds
+            at: new Date(Date.now() + 3000),
           },
         },
       ],
