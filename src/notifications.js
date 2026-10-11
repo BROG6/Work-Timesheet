@@ -34,9 +34,10 @@ export const initNotifications = async () => {
       vibration: true,
     });
 
-    // 3. Clear existing daily slots (1011-1015) and weekly reminder to prevent duplicates
+    // 3. Clear existing daily slots (legacy 1001, new 1011-1015) and weekly reminder to prevent duplicates
     await LocalNotifications.cancel({
       notifications: [
+        { id: 1001 }, // Clears legacy rolling daily reminder ID
         { id: DAILY_REMINDER_ID_BASE + 1 },
         { id: DAILY_REMINDER_ID_BASE + 2 },
         { id: DAILY_REMINDER_ID_BASE + 3 },
