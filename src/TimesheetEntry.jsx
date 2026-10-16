@@ -63,6 +63,15 @@ const TASK_CATEGORIES = {
   ]
 };
 
+const LEAVE_TASKS = [
+  "Sick Leave",
+  "Annual Leave",
+  "Bereavement Leave",
+  "Other Leave"
+];
+
+const isLeaveTask = (taskName) => LEAVE_TASKS.includes(taskName);
+
 const ALL_TEMPLATE_TASKS = [
   "Demolition",
   "Profile/Set Up",
@@ -340,7 +349,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
   useEffect(() => {
     async function fetchSites() {
       try {
-        // Limited query to prevent full collection scans
         const q = query(
           collection(db, 'timesheets'),
           orderBy('updatedAt', 'desc'),
@@ -376,9 +384,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     fetchSites();
   }, []);
 
-  /**
-   * Dynamically fetches hours for the currently navigated week (currentWednesday)
-   */
   const fetchStaffWeeklyHours = useCallback(async () => {
     if (!userId || !currentWednesday) return;
     setLoadingHours(true);
@@ -608,13 +613,55 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     setSiteEntries((prev) =>
       prev.map((site) => {
         if (site.id !== siteId) return site;
+
+        let shouldClearTimes = false;
+
         const updatedTasks = site.tasks.map((t) => {
           if (t.id !== taskId) return t;
+
           if (field === 'categoryGroup') {
-            return { ...t, categoryGroup: value, taskName: TASK_CATEGORIES[value][0] };
+            const firstTaskInGroup = TASK_CATEGORIES[value]?.[0] || '';
+            const isNowLeave = isLeaveTask(firstTaskInGroup);
+            
+            if (isNowLeave) {
+              shouldClearTimes = true;
+            }
+
+            return {
+              ...t,
+              categoryGroup: value,
+              taskName: firstTaskInGroup,
+              hours: isNowLeave ? '8' : t.hours
+            };
           }
+
+          if (field === 'taskName') {
+            const isNowLeave = isLeaveTask(value);
+            if (isNowLeave) {
+              shouldClearTimes = true;
+            }
+
+            return {
+              ...t,
+              taskName: value,
+              hours: isNowLeave ? '8' : t.hours
+            };
+          }
+
           return { ...t, [field]: value };
         });
+
+        if (shouldClearTimes) {
+          return {
+            ...site,
+            startTime: '',
+            timeFinished: '',
+            timeLeftSite: '',
+            timeReturned: '',
+            tasks: updatedTasks
+          };
+        }
+
         return { ...site, tasks: updatedTasks };
       })
     );
@@ -670,7 +717,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }
       }
 
-      // Suppress/cancel daily reminder notification
       if (userId) {
         await checkAndSuppressDailyReminder(userId);
       }
@@ -750,7 +796,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       const sitesToExport = Object.keys(siteMap);
       const nativeFileUris = [];
 
-      // Namespace-safe cell text setter for OpenXML
       function setCellText(cell, text, xmlDoc) {
         const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
         const tNodes = cell.getElementsByTagNameNS(ns, "t");
@@ -1063,7 +1108,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           </div>
         </div>
 
-        {/* Conditionally rendered travel hours row */}
         {weeklyTravelHours > 0 && (
           <div className="pt-2 border-t border-slate-800 flex justify-between items-center text-xs">
             <span className="font-semibold text-slate-400 uppercase tracking-wider text-[10px]">
@@ -1204,7 +1248,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             />
           </div>
 
-          {/* Site Entries List */}
           {siteEntries.map((siteItem, siteIndex) => {
             const siteHours = safeRound(
               siteItem.tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0)
@@ -1390,7 +1433,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             );
           })}
 
-          {/* Add Another Site Button */}
           <button
             type="button"
             onClick={addSiteBlock}
