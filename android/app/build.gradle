@@ -3,7 +3,7 @@ import groovy.json.JsonSlurper
 // Automatically read version from project's package.json
 def getPackageVersionName() {
     try {
-        def inputFile = file("../../../package.json")
+        def inputFile = file("../../package.json")
         def parsedJson = new JsonSlurper().parseText(inputFile.text)
         return parsedJson.version ?: "1.0"
     } catch (Exception e) {
