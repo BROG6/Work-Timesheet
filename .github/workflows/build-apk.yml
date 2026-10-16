@@ -1,4 +1,4 @@
-name: Build and Release APK
+Name: Build and Release APK
 
 on:
   push:
@@ -82,14 +82,14 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: sjr-builders-timesheet-apk
+          path: android/app/build/outputs/apk/debug/*.apk
 
       # 3. Create GitHub Release with the auto-bumped version tag
       - name: Create GitHub Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "android/app/build/outputs/apk/debug/app-debug.apk"
+          artifacts: "android/app/build/outputs/apk/debug/*.apk"
           tag: ${{ steps.bump_version.outputs.VERSION }}
           name: "Release ${{ steps.bump_version.outputs.VERSION }}"
           body: "Automated build release for ${{ steps.bump_version.outputs.VERSION }}"
