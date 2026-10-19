@@ -631,7 +631,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               ...t,
               categoryGroup: value,
               taskName: firstTaskInGroup,
-              hours: isNowLeave ? '8' : t.hours
+              hours: isNowLeave ? '9' : t.hours
             };
           }
 
@@ -644,7 +644,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             return {
               ...t,
               taskName: value,
-              hours: isNowLeave ? '8' : t.hours
+              hours: isNowLeave ? '9' : t.hours
             };
           }
 
