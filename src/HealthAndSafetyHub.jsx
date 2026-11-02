@@ -6,31 +6,8 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import PZip from 'pizzip';
-import Docxtemplater from 'docxtemplater';
-import ImageModule from 'docxtemplater-image-module-free';
 import SignaturePadModal from './components/SignaturePadModal';
 import sjrLogo from './assets/logo.jpg';
-
-function dataURLtoArrayBuffer(dataURL) {
-  if (!dataURL || !dataURL.includes(',')) return null;
-  const base64 = dataURL.split(',')[1];
-  const binaryString = window.atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
-
-const imageOptions = {
-  getImage(tagValue) {
-    return dataURLtoArrayBuffer(tagValue);
-  },
-  getSize() {
-    return [150, 45];
-  }
-};
 
 function SiteAutoCompleteInput({ value, onChange, existingSites }) {
   const [suggestions, setSuggestions] = useState([]);
@@ -157,7 +134,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     dateSigned: new Date().toISOString().split('T')[0],
     sections: {
       siteControl: [
-        { item: "Site Control and Site Facilities", complies: "Yes", action: "", contractor: "" },
         { item: "Accommodation and lunchroom clean and hygienic", complies: "Yes", action: "", contractor: "" },
         { item: "Toilet facilities clean and hygienic", complies: "Yes", action: "", contractor: "" },
         { item: "General housekeeping up to date", complies: "Yes", action: "", contractor: "" },
@@ -167,31 +143,26 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         { item: "Hazardous materials stored safely", complies: "Yes", action: "", contractor: "" },
       ],
       firstAid: [
-        { item: "First Aid/Fire Protection", complies: "Yes", action: "", contractor: "" },
         { item: "First Aid boxes are available and stocked", complies: "Yes", action: "", contractor: "" },
         { item: "Accident Register is available", complies: "Yes", action: "", contractor: "" },
         { item: "Fire Extinguisher is available and current", complies: "Yes", action: "", contractor: "" },
         { item: "Evacuation Procedure current – emergencies included", complies: "Yes", action: "", contractor: "" },
       ],
       personalSafety: [
-        { item: "Personal Safety Equipment", complies: "Yes", action: "", contractor: "" },
         { item: "Signage displayed and legible", complies: "Yes", action: "", contractor: "" },
         { item: "Hardhats being worn", complies: "Yes", action: "", contractor: "" },
         { item: "Correct footwear being worn", complies: "Yes", action: "", contractor: "" },
         { item: "Glasses/earmuffs/vests/masks used", complies: "Yes", action: "", contractor: "" },
       ],
       tidiness: [
-        { item: "General Site Tidiness & Access/Egress", complies: "Yes", action: "", contractor: "" },
         { item: "Routes in/out clear", complies: "Yes", action: "", contractor: "" },
         { item: "Site office clearly defined for visitors", complies: "Yes", action: "", contractor: "" },
         { item: "Loose materials secure from wind", complies: "Yes", action: "", contractor: "" },
       ],
       excavations: [
-        { item: "Excavations", complies: "Yes", action: "", contractor: "" },
         { item: "Correctly shored and secured – isolated if possible", complies: "Yes", action: "", contractor: "" },
       ],
       electrical: [
-        { item: "Electrical", complies: "Yes", action: "", contractor: "" },
         { item: "Main board locked and waterproof", complies: "Yes", action: "", contractor: "" },
         { item: "Condition and position of cables and leads", complies: "Yes", action: "", contractor: "" },
         { item: "3 monthly tags on all tools and leads", complies: "Yes", action: "", contractor: "" },
@@ -204,7 +175,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         { item: "Adequate temporary lighting", complies: "Yes", action: "", contractor: "" },
       ],
       scaffolding: [
-        { item: "Fall Protection and Scaffolding", complies: "Yes", action: "", contractor: "" },
         { item: "Penetrations/holes identified and guarded", complies: "Yes", action: "", contractor: "" },
         { item: "Safety harnesses and lines maintained and approved for use", complies: "Yes", action: "", contractor: "" },
         { item: "Notifiable weekly Scaff tag current", complies: "Yes", action: "", contractor: "" },
@@ -221,14 +191,12 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         { item: "Lift shafts/stairs", complies: "Yes", action: "", contractor: "" },
       ],
       ladders: [
-        { item: "Ladders", complies: "Yes", action: "", contractor: "" },
         { item: "Good condition", complies: "Yes", action: "", contractor: "" },
         { item: "Secured top and bottom", complies: "Yes", action: "", contractor: "" },
         { item: "Stays to step ladders", complies: "Yes", action: "", contractor: "" },
         { item: "Working 2 steps down", complies: "Yes", action: "", contractor: "" },
       ],
       powderTools: [
-        { item: "Powder Actuated Tools", complies: "Yes", action: "", contractor: "" },
         { item: "Tools certificated", complies: "Yes", action: "", contractor: "" },
         { item: "Operators certificated", complies: "Yes", action: "", contractor: "" },
         { item: "PPE worn", complies: "Yes", action: "", contractor: "" },
@@ -236,7 +204,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         { item: "Notice displayed", complies: "Yes", action: "", contractor: "" },
       ],
       welding: [
-        { item: "Gas cutting/welding", complies: "Yes", action: "", contractor: "" },
         { item: "Hot Works permits being used", complies: "Yes", action: "", contractor: "" },
         { item: "Bottles secure or in stand", complies: "Yes", action: "", contractor: "" },
         { item: "Gauges/plugs/leads/hoses maintained", complies: "Yes", action: "", contractor: "" },
@@ -246,7 +213,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         { item: "Operators using PPE", complies: "Yes", action: "", contractor: "" },
       ],
       plant: [
-        { item: "Mechanical Plant", complies: "Yes", action: "", contractor: "" },
         { item: "Service Certificate maintained", complies: "Yes", action: "", contractor: "" },
         { item: "Warning devices (horn/reverse beeper)", complies: "Yes", action: "", contractor: "" },
         { item: "Mirrors fitted", complies: "Yes", action: "", contractor: "" },
@@ -254,7 +220,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         { item: "Roll over structures (ROPS) fitted", complies: "Yes", action: "", contractor: "" },
       ],
       cranes: [
-        { item: "Cranes", complies: "Yes", action: "", contractor: "" },
         { item: "Proper lift assessment plan completed", complies: "Yes", action: "", contractor: "" },
         { item: "Current test certificate", complies: "Yes", action: "", contractor: "" },
         { item: "Current test certificate for slings/chains/hooks", complies: "Yes", action: "", contractor: "" },
@@ -263,25 +228,16 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         { item: "Emergency Plan in place", complies: "Yes", action: "", contractor: "" },
       ],
       ewp: [
-        { item: "Power Operated Elevated Work Platforms", complies: "Yes", action: "", contractor: "" },
         { item: "Log book filled in before use", complies: "Yes", action: "", contractor: "" },
         { item: "Tyres inflated", complies: "Yes", action: "", contractor: "" },
         { item: "Harnesses available for cherry pickers", complies: "Yes", action: "", contractor: "" },
         { item: "Current test certificate", complies: "Yes", action: "", contractor: "" },
       ],
       hazardousGoods: [
-        { item: "Hazardous/flammable goods", complies: "Yes", action: "", contractor: "" },
         { item: "Materials clearly labelled", complies: "Yes", action: "", contractor: "" },
         { item: "Material safety data sheets available", complies: "Yes", action: "", contractor: "" },
         { item: "Materials safely stored", complies: "Yes", action: "", contractor: "" },
         { item: "No smoking sign displayed", complies: "Yes", action: "", contractor: "" },
-      ],
-      other: [
-        { item: "Other", complies: "Yes", action: "", contractor: "" },
-        { item: "General Notes 1", complies: "Yes", action: "", contractor: "" },
-        { item: "General Notes 2", complies: "Yes", action: "", contractor: "" },
-        { item: "General Notes 3", complies: "Yes", action: "", contractor: "" },
-        { item: "General Notes 4", complies: "Yes", action: "", contractor: "" },
       ]
     }
   });
@@ -352,9 +308,44 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }));
   };
 
-  const fillAndExportDocx = async (templateFileName, outputFileName, templatePayload) => {
+  // --- DOM PARSER HELPER FUNCTIONS (MATCHING TIMESHEET LOGIC) ---
+  function setCellText(cell, text, xmlDoc) {
+    const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    const tNodes = cell.getElementsByTagNameNS(ns, "t");
+    if (tNodes.length > 0) {
+      tNodes[0].textContent = text;
+      tNodes[0].setAttribute("xml:space", "preserve");
+      for (let i = 1; i < tNodes.length; i++) {
+        tNodes[i].textContent = "";
+      }
+    } else {
+      let pNodes = cell.getElementsByTagNameNS(ns, "p");
+      let p = pNodes[0];
+      if (!p) {
+        p = xmlDoc.createElementNS(ns, "w:p");
+        cell.appendChild(p);
+      }
+      const r = xmlDoc.createElementNS(ns, "w:r");
+      const t = xmlDoc.createElementNS(ns, "w:t");
+      t.textContent = text;
+      t.setAttribute("xml:space", "preserve");
+      r.appendChild(t);
+      p.appendChild(r);
+    }
+  }
+
+  function getCellText(cell) {
+    const tNodes = cell.getElementsByTagName("w:t");
+    let str = "";
+    for (let tn of tNodes) str += tn.textContent;
+    return str.replace(/\s+/g, ' ').trim();
+  }
+
+  // DOM Parser Export for Site Safety Inspection Report
+  const handleExportInspectionDocx = async () => {
     setExportingDocx(true);
     try {
+      const templateFileName = 'Site Safety Inspection Report.docx';
       const response = await fetch(`/${templateFileName}`);
       if (!response.ok) {
         throw new Error(`Template file '${templateFileName}' not found in public folder.`);
@@ -362,187 +353,186 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const templateArrayBuffer = await response.arrayBuffer();
       const zip = new PZip(templateArrayBuffer);
 
-      // --- SAFE IN-MEMORY XML CLEANING FOR WORD TAG FRAGMENTATION ---
-      const docXmlFile = zip.file('word/document.xml');
-      if (docXmlFile) {
-        let docXml = docXmlFile.asText();
-        // Safely clean up fragmented tags broken across XML runs without breaking markup structure
-        docXml = docXml.replace(/\{\{([^}]+?)\}\}/g, (match, tagContent) => {
-          const cleanTag = tagContent.replace(/<[^>]+>/g, '').trim();
-          return `{{${cleanTag}}}`;
-        });
-        zip.file('word/document.xml', docXml);
-      }
-      // -------------------------------------------------------------
+      const docXmlStr = zip.file("word/document.xml").asText();
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
 
-      const imageModule = new ImageModule(imageOptions);
-      const docx = new Docxtemplater(zip, {
-        modules: [imageModule],
-        paragraphLoop: true,
-        linebreaks: true,
-        nullGetter() { return ""; }
+      const paragraphs = xmlDoc.getElementsByTagName("w:p");
+      const rows = xmlDoc.getElementsByTagName("w:tr");
+
+      // 1. Fill Header Paragraphs (Site, Week Ending, Time, Inspected By)
+      for (let p of paragraphs) {
+        const text = getCellText(p);
+        if (text.includes("Site:") || text.includes("Week Ending:") || text.includes("Inspected By:") || text.includes("Signed:")) {
+          const tNodes = p.getElementsByTagName("w:t");
+          if (tNodes.length > 0) {
+            let pStr = "";
+            for (let tn of tNodes) pStr += tn.textContent;
+            
+            if (pStr.includes("Site:")) {
+              pStr = `Site: ${inspectionData.site || ''}`;
+            }
+            if (pStr.includes("Week Ending:")) {
+              pStr = `Week Ending: ${inspectionData.weekEnding || ''}      Time: ${inspectionData.time || ''}`;
+            }
+            if (pStr.includes("Inspected By:")) {
+              pStr = `Inspected By: ${inspectionData.inspectedBy || ''}`;
+            }
+            if (pStr.includes("Signed:")) {
+              pStr = `Signed: ${inspectionData.inspectedBy || ''}      Dated: ${inspectionData.dateSigned || inspectionData.weekEnding || ''}`;
+            }
+
+            tNodes[0].textContent = pStr;
+            for (let i = 1; i < tNodes.length; i++) {
+              tNodes[i].textContent = "";
+            }
+          }
+        }
+      }
+
+      // Flatten item data dictionary for quick lookup
+      const itemLookup = {};
+      Object.values(inspectionData.sections).forEach(sectionItems => {
+        sectionItems.forEach(row => {
+          if (row.item) {
+            itemLookup[row.item.toLowerCase().trim()] = row;
+          }
+        });
       });
 
-      docx.render(templatePayload);
-      const generatedZip = docx.getZip();
+      // 2. Fill Table Rows Matching Item Names directly
+      for (let tr of rows) {
+        const cells = tr.getElementsByTagName("w:tc");
+        if (cells.length < 2) continue;
 
-      if (Capacitor.isNativePlatform()) {
-        const content = generatedZip.generate({ type: 'uint8array' });
-        let binary = '';
-        const bytes = new Uint8Array(content);
-        for (let i = 0; i < bytes.byteLength; i++) {
-          binary += String.fromCharCode(bytes[i]);
+        const labelText = getCellText(cells[0]).toLowerCase().trim();
+        const matchedItem = itemLookup[labelText];
+
+        if (matchedItem) {
+          if (cells[1]) setCellText(cells[1], matchedItem.complies || 'Yes', xmlDoc);
+          if (cells[2]) setCellText(cells[2], matchedItem.action || '', xmlDoc);
+          if (cells[3]) setCellText(cells[3], matchedItem.contractor || '', xmlDoc);
         }
-        const base64Data = window.btoa(binary);
-
-        const writtenFile = await Filesystem.writeFile({
-          path: outputFileName,
-          data: base64Data,
-          directory: Directory.Cache,
-          recursive: true
-        });
-
-        const uriResult = await Filesystem.getUri({
-          path: outputFileName,
-          directory: Directory.Cache,
-        });
-
-        await Share.share({
-          files: [uriResult.uri || writtenFile.uri],
-          dialogTitle: `Export ${outputFileName}`,
-        });
-      } else {
-        const blob = generatedZip.generate({
-          type: 'blob',
-          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = outputFileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
       }
 
+      const serializer = new XMLSerializer();
+      const updatedXmlStr = serializer.serializeToString(xmlDoc);
+      zip.file("word/document.xml", updatedXmlStr);
+
+      const siteNameClean = (inspectionData.site || 'Site').replace(/[^a-zA-Z0-9_\-]/g, '_');
+      const outputFileName = `Site Safety Inspection - ${siteNameClean} (${inspectionData.weekEnding}).docx`;
+
+      await saveAndShareFile(zip, outputFileName);
       setStatusMessage({ type: 'success', text: `Successfully generated ${outputFileName}!` });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
       console.error("Export error details:", err);
-      let errorDesc = err.message;
-      if (err.properties && err.properties.errors) {
-        errorDesc = err.properties.errors.map(e => e.properties?.explanation || e.message).join(' | ');
-      }
-      alert(`Template Error: ${errorDesc}`);
-      if (!err?.message?.includes('canceled') && !err?.message?.includes('cancelled')) {
-        setStatusMessage({ type: 'error', text: `Export failed: ${errorDesc}` });
-      }
+      alert(`Export Failed: ${err.message}`);
+      setStatusMessage({ type: 'error', text: `Export failed: ${err.message}` });
     } finally {
       setExportingDocx(false);
     }
   };
 
-  const handleExportInspectionDocx = () => {
-    const siteNameClean = (inspectionData.site || 'Site').replace(/[^a-zA-Z0-9_\-]/g, '_');
-    const fileName = `Site Safety Inspection - ${siteNameClean} (${inspectionData.weekEnding}).docx`;
+  // DOM Parser Export for H&S and Toolbox Meeting Worksheet
+  const handleExportToolboxDocx = async () => {
+    setExportingDocx(true);
+    try {
+      const templateFileName = 'H&S and Toolbox Meeting Worksheet.docx';
+      const response = await fetch(`/${templateFileName}`);
+      if (!response.ok) {
+        throw new Error(`Template file '${templateFileName}' not found in public folder.`);
+      }
+      const templateArrayBuffer = await response.arrayBuffer();
+      const zip = new PZip(templateArrayBuffer);
 
-    const templatePayload = {
-      site: inspectionData.site || '',
-      weekEnding: inspectionData.weekEnding || '',
-      time: inspectionData.time || '',
-      inspectedBy: inspectionData.inspectedBy || '',
-      signature: inspectionData.signature || '',
-      dateSigned: inspectionData.dateSigned || inspectionData.weekEnding || ''
-    };
+      const docXmlStr = zip.file("word/document.xml").asText();
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
 
-    let idx = 0;
-    Object.values(inspectionData.sections).forEach((sectionItems) => {
-      sectionItems.forEach((row) => {
-        templatePayload[`items_${idx}_complies`] = row.complies || 'Yes';
-        templatePayload[`items_${idx}_action`] = row.action || '';
-        templatePayload[`items_${idx}_contractor`] = row.contractor || '';
-        idx++;
-      });
-    });
+      const paragraphs = xmlDoc.getElementsByTagName("w:p");
 
-    while (idx <= 90) {
-      templatePayload[`items_${idx}_complies`] = 'Yes';
-      templatePayload[`items_${idx}_action`] = '';
-      templatePayload[`items_${idx}_contractor`] = '';
-      idx++;
+      for (let p of paragraphs) {
+        const text = getCellText(p);
+        const tNodes = p.getElementsByTagName("w:t");
+        if (tNodes.length > 0) {
+          let pStr = "";
+          for (let tn of tNodes) pStr += tn.textContent;
+
+          if (pStr.includes("Date and Time:")) {
+            pStr = `Date and Time: ${toolboxData.date || ''} ${toolboxData.time || ''}    Location: ${toolboxData.location || ''}`;
+          } else if (pStr.includes("Meeting Closed:")) {
+            pStr = `Meeting Closed: ${toolboxData.time || ''}    Next Meeting: Next week`;
+          } else if (pStr.includes("Signed – Management:")) {
+            pStr = `Signed – Management: ${userName || ''}    Dated: ${toolboxData.managementDate || toolboxData.date || ''}`;
+          }
+
+          tNodes[0].textContent = pStr;
+          for (let i = 1; i < tNodes.length; i++) {
+            tNodes[i].textContent = "";
+          }
+        }
+      }
+
+      const serializer = new XMLSerializer();
+      const updatedXmlStr = serializer.serializeToString(xmlDoc);
+      zip.file("word/document.xml", updatedXmlStr);
+
+      const locClean = (toolboxData.location || 'Site').replace(/[^a-zA-Z0-9_\-]/g, '_');
+      const outputFileName = `Toolbox Meeting - ${locClean} (${toolboxData.date}).docx`;
+
+      await saveAndShareFile(zip, outputFileName);
+      setStatusMessage({ type: 'success', text: `Successfully generated ${outputFileName}!` });
+      setTimeout(() => setStatusMessage(null), 4000);
+    } catch (err) {
+      console.error("Export error details:", err);
+      alert(`Export Failed: ${err.message}`);
+      setStatusMessage({ type: 'error', text: `Export failed: ${err.message}` });
+    } finally {
+      setExportingDocx(false);
     }
-
-    fillAndExportDocx('Site Safety Inspection Report.docx', fileName, templatePayload);
   };
 
-  const handleExportToolboxDocx = () => {
-    const locClean = (toolboxData.location || 'Site').replace(/[^a-zA-Z0-9_\-]/g, '_');
-    const fileName = `Toolbox Meeting - ${locClean} (${toolboxData.date}).docx`;
+  const saveAndShareFile = async (zip, outputFileName) => {
+    if (Capacitor.isNativePlatform()) {
+      const content = zip.generate({ type: 'uint8array' });
+      let binary = '';
+      const bytes = new Uint8Array(content);
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64Data = window.btoa(binary);
 
-    const templatePayload = {
-      date: toolboxData.date || '',
-      time: toolboxData.time || '',
-      location: toolboxData.location || '',
-      
-      previousActions: toolboxData.agendaNotes.previousActions || 'N/A',
-      previousActions_action: 'Reviewed',
-      previousActions_byWho: userName || '',
+      const writtenFile = await Filesystem.writeFile({
+        path: outputFileName,
+        data: base64Data,
+        directory: Directory.Cache,
+        recursive: true
+      });
 
-      safetyInspectionReview_action: toolboxData.agendaNotes.safetyInspectionReview || 'Reviewed',
-      safetyInspectionReview_followup: 'Ongoing',
+      const uriResult = await Filesystem.getUri({
+        path: outputFileName,
+        directory: Directory.Cache,
+      });
 
-      incidents: toolboxData.agendaNotes.incidents || 'None reported',
-      incidents_action: 'Reviewed',
-      incidents_followup: 'N/A',
-      incidents_actionTaken: 'N/A',
-      incidents_byWho: userName || '',
-
-      hazards: toolboxData.agendaNotes.hazards || 'Standard hazards',
-      hazards_action: 'Controlled',
-      hazards_followup: 'Ongoing',
-      hazards_actionTaken: 'PPE active',
-      hazards_byWho: userName || '',
-
-      hazardBoard: toolboxData.location || 'Main Site',
-      hazardBoard_updates: 'Current',
-      hazardBoard_byWho: userName || '',
-
-      plantAndEquipment: toolboxData.agendaNotes.plantAndEquipment || 'Checked',
-      plantAndEquipment_action: 'Checked',
-      plantAndEquipment_followup: 'N/A',
-      plantAndEquipment_byWho: userName || '',
-
-      weeklyTask: toolboxData.agendaNotes.taskPlanning || 'General construction',
-      weeklyTask_ppe: 'Standard PPE',
-      weeklyTask_timeframe: 'This week',
-      weeklyTask_byWho: userName || '',
-
-      taskPlanning_action: 'Planned',
-      taskPlanning_followup: 'Ongoing',
-      taskPlanningDiscussion: toolboxData.agendaNotes.taskPlanning || '',
-
-      operationalIssues_action: 'Reviewed',
-      operationalIssues_followup: 'N/A',
-      operationalIssuesNotes: toolboxData.agendaNotes.operationalIssues || '',
-
-      other_action: 'N/A',
-      other_followup: 'N/A',
-
-      meetingClosedTime: toolboxData.time || '16:00',
-      nextMeetingDate: 'Next week',
-
-      attendees: toolboxData.attendees.map(att => ({
-        name: att.name || '',
-        company: att.company || '',
-        signature: att.signature || ''
-      })),
-
-      managementSignature: toolboxData.managementSignature || '',
-      managementDate: toolboxData.managementDate || toolboxData.date || ''
-    };
-
-    fillAndExportDocx('H&S and Toolbox Meeting Worksheet.docx', fileName, templatePayload);
+      await Share.share({
+        files: [uriResult.uri || writtenFile.uri],
+        dialogTitle: `Export ${outputFileName}`,
+      });
+    } else {
+      const blob = zip.generate({
+        type: 'blob',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = outputFileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
   };
 
   const handleInspectionSubmit = async (e) => {
