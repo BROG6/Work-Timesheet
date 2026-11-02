@@ -1,3 +1,4 @@
+// src/App.jsx
 import React, { useState, useEffect } from 'react';
 import { auth, db } from './firebaseConfig';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -5,6 +6,8 @@ import { doc, getDoc, getDocFromCache } from 'firebase/firestore';
 import Auth from './Auth';
 import TimesheetEntry from './TimesheetEntry';
 import ManagerDashboard from './ManagerDashboard';
+import HealthAndSafetyHub from './HealthAndSafetyHub';
+import ManagerHealthAndSafetyDashboard from './ManagerHealthAndSafetyDashboard';
 import { useOnlineStatus } from './useOnlineStatus';
 import { Capacitor } from '@capacitor/core';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
@@ -16,6 +19,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [activeView, setActiveView] = useState('main'); // 'main' or 'hs'
   
   const isOnline = useOnlineStatus();
 
@@ -133,6 +137,8 @@ export default function App() {
     return <Auth />;
   }
 
+  const isManager = profile.role === 'manager';
+
   return (
     <div className="min-h-screen bg-gray-100 p-2 sm:p-4">
       {/* Offline Alert Banner */}
@@ -173,14 +179,47 @@ export default function App() {
         <div className="flex items-center space-x-2">
           <button 
             onClick={handleSignOut}
-            className="text-xs bg-gray-200 text-gray-700 px-3 py-1.5 rounded hover:bg-gray-300 transition font-medium"
+            className="text-xs bg-gray-200 text-gray-700 px-3 py-1.5 rounded hover:bg-gray-300 transition font-medium cursor-pointer"
           >
             Sign Out
           </button>
         </div>
       </header>
 
-      {profile.role === 'manager' ? (
+      {/* View Switcher Toggle (Available to all roles) */}
+      <div className="max-w-4xl mx-auto flex bg-slate-900 p-1.5 rounded-xl mb-4 shadow gap-1">
+        <button
+          type="button"
+          onClick={() => setActiveView('main')}
+          className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+            activeView === 'main'
+              ? 'bg-emerald-500 text-slate-950 shadow-md'
+              : 'text-slate-300 hover:text-white'
+          }`}
+        >
+          {isManager ? '📊 Manager Dashboard' : '⏱️ Timesheet Entry'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveView('hs')}
+          className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+            activeView === 'hs'
+              ? 'bg-emerald-500 text-slate-950 shadow-md'
+              : 'text-slate-300 hover:text-white'
+          }`}
+        >
+          {isManager ? '🛡️ H&S Site Register' : '🛡️ Health & Safety Hub'}
+        </button>
+      </div>
+
+      {/* Main Body View Rendering */}
+      {activeView === 'hs' ? (
+        isManager ? (
+          <ManagerHealthAndSafetyDashboard />
+        ) : (
+          <HealthAndSafetyHub userId={user.uid} userName={profile.name} />
+        )
+      ) : isManager ? (
         <ManagerDashboard companyId={profile.companyId} />
       ) : (
         <TimesheetEntry user={user} userProfile={profile} />
