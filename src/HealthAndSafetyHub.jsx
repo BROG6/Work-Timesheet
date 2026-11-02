@@ -243,7 +243,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   });
 
-  // STATE: Toolbox Meeting Worksheet (Fully broken down matching physical form tables)
+  // STATE: Toolbox Meeting Worksheet
   const [toolboxData, setToolboxData] = useState({
     date: new Date().toISOString().split('T')[0],
     time: '07:00',
@@ -457,7 +457,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   };
 
-  // DOM Parser Export for H&S and Toolbox Meeting Worksheet
+  // DOM Parser Export for H&S and Toolbox Meeting Worksheet (Fixed Header Row Skipping)
   const handleExportToolboxDocx = async () => {
     setExportingDocx(true);
     try {
@@ -474,7 +474,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
 
       const paragraphs = xmlDoc.getElementsByTagName("w:p");
-      const rows = xmlDoc.getElementsByTagName("w:tr");
+      const tables = xmlDoc.getElementsByTagName("w:tbl");
 
       // 1. Header & Footer Paragraph replacements
       for (let p of paragraphs) {
@@ -498,41 +498,60 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         }
       }
 
-      // 2. Build complete item lookup table from state arrays
-      const toolboxLookup = {};
-      
-      toolboxData.previousActions.forEach(row => {
-        if (row.item) toolboxLookup[row.item.toLowerCase().trim()] = { action: row.action, followUp: row.followUp };
-      });
-      toolboxData.siteSafetyReview.forEach(row => {
-        if (row.item) toolboxLookup[row.item.toLowerCase().trim()] = { action: row.action, followUp: row.byWhoAndWhen };
-      });
-      toolboxData.eventInvestigations.forEach(row => {
-        if (row.item) toolboxLookup[row.item.toLowerCase().trim()] = { action: row.action, followUp: row.byWhoAndWhen };
-      });
-      toolboxData.hazards.forEach(row => {
-        if (row.item) toolboxLookup[row.item.toLowerCase().trim()] = { action: row.action, followUp: row.byWhoAndWhen };
-      });
-      toolboxData.plantEquipment.forEach(row => {
-        if (row.item) toolboxLookup[row.item.toLowerCase().trim()] = { action: row.action, followUp: row.byWhoAndWhen };
-      });
+      // 2. Iterate through tables safely, skipping header row 0 to prevent overwriting column labels
+      for (let table of tables) {
+        const rows = table.getElementsByTagName("w:tr");
+        if (rows.length < 2) continue;
 
-      // 3. Fill Table Rows Matching Labels directly
-      for (let tr of rows) {
-        const cells = tr.getElementsByTagName("w:tc");
-        if (cells.length < 2) continue;
+        const headerCells = rows[0].getElementsByTagName("w:tc");
+        if (headerCells.length === 0) continue;
+        const tableLabel = getCellText(headerCells[0]).toLowerCase();
 
-        const labelText = getCellText(cells[0]).toLowerCase().trim();
+        if (tableLabel.includes("hazard:") || tableLabel.includes("hazard board")) {
+          toolboxData.hazards.forEach((haz, idx) => {
+            const rowIndex = idx + 1; // Skip header row 0
+            if (rows[rowIndex]) {
+              const cells = rows[rowIndex].getElementsByTagName("w:tc");
+              if (cells[0]) setCellText(cells[0], haz.item || 'Hazard', xmlDoc);
+              if (cells[1]) setCellText(cells[1], haz.action || '', xmlDoc);
+              if (cells[2]) setCellText(cells[2], haz.byWhoAndWhen || '', xmlDoc);
+            }
+          });
+        } else if (tableLabel.includes("plant and equipment")) {
+          toolboxData.plantEquipment.forEach((plant, idx) => {
+            const rowIndex = idx + 1;
+            if (rows[rowIndex]) {
+              const cells = rows[rowIndex].getElementsByTagName("w:tc");
+              if (cells[0]) setCellText(cells[0], plant.item || 'Plant Requirement', xmlDoc);
+              if (cells[1]) setCellText(cells[1], plant.action || '', xmlDoc);
+              if (cells[2]) setCellText(cells[2], plant.byWhoAndWhen || '', xmlDoc);
+            }
+          });
+        } else {
+          // Generic table row matcher for previous actions, site safety reviews, etc.
+          for (let i = 1; i < rows.length; i++) {
+            const cells = rows[i].getElementsByTagName("w:tc");
+            if (cells.length < 2) continue;
+            const rowLabel = getCellText(cells[0]).toLowerCase();
 
-        let matchedData = toolboxLookup[labelText];
-        if (!matchedData) {
-          const matchedKey = Object.keys(toolboxLookup).find(k => labelText.includes(k) || k.includes(labelText));
-          if (matchedKey) matchedData = toolboxLookup[matchedKey];
-        }
+            const matchedPrevious = toolboxData.previousActions.find(p => rowLabel.includes(p.item.toLowerCase()));
+            if (matchedPrevious) {
+              if (cells[1]) setCellText(cells[1], matchedPrevious.action || '', xmlDoc);
+              if (cells[2]) setCellText(cells[2], matchedPrevious.followUp || '', xmlDoc);
+            }
 
-        if (matchedData) {
-          if (cells[1]) setCellText(cells[1], matchedData.action || '', xmlDoc);
-          if (cells[2]) setCellText(cells[2], matchedData.followUp || '', xmlDoc);
+            const matchedReview = toolboxData.siteSafetyReview.find(r => rowLabel.includes(r.item.toLowerCase()));
+            if (matchedReview) {
+              if (cells[1]) setCellText(cells[1], matchedReview.action || '', xmlDoc);
+              if (cells[2]) setCellText(cells[2], matchedReview.byWhoAndWhen || '', xmlDoc);
+            }
+
+            const matchedIncidents = toolboxData.eventInvestigations.find(inc => rowLabel.includes(inc.item.toLowerCase()));
+            if (matchedIncidents) {
+              if (cells[1]) setCellText(cells[1], matchedIncidents.action || '', xmlDoc);
+              if (cells[2]) setCellText(cells[2], matchedIncidents.byWhoAndWhen || '', xmlDoc);
+            }
+          }
         }
       }
 
