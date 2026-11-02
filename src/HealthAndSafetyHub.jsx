@@ -1,7 +1,7 @@
 // src/HealthAndSafetyHub.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from './firebaseConfig';
-import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, setDoc, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
@@ -11,7 +11,6 @@ import ImageModule from 'docxtemplater-image-module-free';
 import SignaturePadModal from './components/SignaturePadModal';
 import sjrLogo from './assets/logo.jpg';
 
-// Helper to convert base64 signatures for DOCX embedding
 function dataURLtoArrayBuffer(dataURL) {
   if (!dataURL || !dataURL.includes(',')) return null;
   const base64 = dataURL.split(',')[1];
@@ -38,14 +37,58 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   const [loading, setLoading] = useState(false);
   const [exportingDocx, setExportingDocx] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
+  const [savedSites, setSavedSites] = useState([]);
 
   // Signature Modal State
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [activeSignatureTarget, setActiveSignatureTarget] = useState(null);
 
+  // Load existing sites synchronized with TimesheetEntry storage keys (`sjr_known_sites`)
+  useEffect(() => {
+    const fetchSites = async () => {
+      try {
+        const sitesSet = new Set();
+
+        // 1. Load instantly from the exact timesheet storage key
+        const knownSitesRaw = localStorage.getItem('sjr_known_sites');
+        if (knownSitesRaw) {
+          const parsed = JSON.parse(knownSitesRaw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(site => site && sitesSet.add(site.trim()));
+          }
+        }
+
+        // 2. Check last selected project/site from timesheet cache
+        const lastProject = localStorage.getItem(`sjr_last_project_${userId}`) || localStorage.getItem('last_site_name');
+        if (lastProject) {
+          sitesSet.add(lastProject.trim());
+        }
+
+        // 3. Sync with Firestore timesheets collection if online
+        if (userId) {
+          const q = query(collection(db, 'timesheets'), where('userId', '==', userId));
+          const snapshot = await getDocs(q);
+          snapshot.forEach(docSnap => {
+            const d = docSnap.data();
+            if (d.project && d.project.trim() !== '') {
+              sitesSet.add(d.project.trim());
+            }
+          });
+        }
+
+        setSavedSites(Array.from(sitesSet));
+      } catch (err) {
+        console.warn("Could not load past sites for H&S:", err);
+        const saved = localStorage.getItem('sjr_known_sites');
+        if (saved) setSavedSites(JSON.parse(saved));
+      }
+    };
+    fetchSites();
+  }, [userId]);
+
   // 1. Site Safety Inspection Form State
   const [inspectionData, setInspectionData] = useState({
-    site: '',
+    site: localStorage.getItem(`sjr_last_project_${userId}`) || localStorage.getItem('last_site_name') || '',
     weekEnding: new Date().toISOString().split('T')[0],
     time: '07:30',
     inspectedBy: userName || '',
@@ -87,7 +130,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   const [toolboxData, setToolboxData] = useState({
     date: new Date().toISOString().split('T')[0],
     time: '07:00',
-    location: '',
+    location: localStorage.getItem(`sjr_last_project_${userId}`) || localStorage.getItem('last_site_name') || '',
     agendaNotes: {
       previousActions: '',
       safetyInspectionReview: '',
@@ -150,7 +193,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }));
   };
 
-  // Generic Template Filling and Export Writer
+  // Generic Template Filling with nullGetter safeguard against MultiError
   const fillAndExportDocx = async (templateFileName, outputFileName, templatePayload) => {
     setExportingDocx(true);
     try {
@@ -166,6 +209,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         modules: [imageModule],
         paragraphLoop: true,
         linebreaks: true,
+        nullGetter() { return ""; } // Prevents MultiError crashes if a template tag is missing in Word docs
       });
 
       docx.render(templatePayload);
@@ -214,9 +258,9 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       setStatusMessage({ type: 'success', text: `Successfully generated ${outputFileName}!` });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
-      console.error("Export error:", err);
+      console.error("Export error details:", err);
       if (!err?.message?.includes('canceled') && !err?.message?.includes('cancelled')) {
-        alert(`Export Failed: ${err?.message || "Could not generate file"}`);
+        alert(`Export Failed: ${err?.message || "Check template placeholders"}`);
         setStatusMessage({ type: 'error', text: `Export failed: ${err?.message || "Error generating document"}` });
       }
     } finally {
@@ -355,6 +399,13 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
   return (
     <div className="max-w-xl mx-auto space-y-4 my-4 pb-12">
+      {/* Shared Site Datalist matching Timesheet suggestions */}
+      <datalist id="saved-sites-list">
+        {savedSites.map((site, i) => (
+          <option key={i} value={site} />
+        ))}
+      </datalist>
+
       {/* H&S Sub-Navigation Switcher */}
       <div className="flex bg-slate-200 p-1 rounded-xl shadow-inner gap-1">
         <button
@@ -419,9 +470,10 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Site / Project</label>
                 <input
                   type="text"
+                  list="saved-sites-list"
                   value={inspectionData.site}
                   onChange={(e) => setInspectionData({ ...inspectionData, site: e.target.value })}
-                  placeholder="e.g. Hamilton New Build"
+                  placeholder="Select or enter site name"
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800"
                   required
                 />
@@ -595,9 +647,10 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Location / Site</label>
                 <input
                   type="text"
+                  list="saved-sites-list"
                   value={toolboxData.location}
                   onChange={(e) => setToolboxData({ ...toolboxData, location: e.target.value })}
-                  placeholder="e.g. Hamilton Site Shed"
+                  placeholder="Select or enter site location"
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800"
                   required
                 />
