@@ -243,7 +243,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   });
 
-  // STATE: Toolbox Meeting Worksheet (Expanded to multi-entry rows per physical form)
+  // STATE: Toolbox Meeting Worksheet (Fully broken down matching physical form tables)
   const [toolboxData, setToolboxData] = useState({
     date: new Date().toISOString().split('T')[0],
     time: '07:00',
@@ -269,13 +269,11 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       { item: "Hazard Board - Updating", action: "", byWhoAndWhen: "" },
     ],
     plantEquipment: [
-      { item: "Plant and Equipment Requirements", byWhoAndWhen: "" },
+      { item: "Plant and Equipment Requirements", action: "", byWhoAndWhen: "" },
     ],
     taskPlanning: [
       { item: "Task", equipmentRequired: "", timeFrame: "", byWhoAndWhen: "" },
     ],
-    taskDiscussion: "",
-    operationalDiscussion: "",
     attendees: [
       { name: userName || '', company: 'SJR Builders', signature: '', date: new Date().toISOString().split('T')[0] }
     ],
@@ -516,7 +514,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         if (row.item) toolboxLookup[row.item.toLowerCase().trim()] = { action: row.action, followUp: row.byWhoAndWhen };
       });
       toolboxData.plantEquipment.forEach(row => {
-        if (row.item) toolboxLookup[row.item.toLowerCase().trim()] = { action: "", followUp: row.byWhoAndWhen };
+        if (row.item) toolboxLookup[row.item.toLowerCase().trim()] = { action: row.action, followUp: row.byWhoAndWhen };
       });
 
       // 3. Fill Table Rows Matching Labels directly
@@ -526,7 +524,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
         const labelText = getCellText(cells[0]).toLowerCase().trim();
 
-        // Exact or flexible row matching
         let matchedData = toolboxLookup[labelText];
         if (!matchedData) {
           const matchedKey = Object.keys(toolboxLookup).find(k => labelText.includes(k) || k.includes(labelText));
@@ -1028,15 +1025,27 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               {toolboxData.plantEquipment.map((row, idx) => (
                 <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
                   <span className="font-bold text-slate-800 block">{row.item}</span>
-                  <div>
-                    <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
-                    <input
-                      type="text"
-                      value={row.byWhoAndWhen}
-                      onChange={(e) => handleToolboxRowChange('plantEquipment', idx, 'byWhoAndWhen', e.target.value)}
-                      placeholder="Requirements, name, and date"
-                      className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">Requirements</label>
+                      <input
+                        type="text"
+                        value={row.action}
+                        onChange={(e) => handleToolboxRowChange('plantEquipment', idx, 'action', e.target.value)}
+                        placeholder="Requirements..."
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
+                      <input
+                        type="text"
+                        value={row.byWhoAndWhen}
+                        onChange={(e) => handleToolboxRowChange('plantEquipment', idx, 'byWhoAndWhen', e.target.value)}
+                        placeholder="Name / Date"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
                   </div>
                 </div>
               ))}
