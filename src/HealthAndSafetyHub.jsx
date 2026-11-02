@@ -494,7 +494,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const paragraphs = xmlDoc.getElementsByTagName("w:p");
       const tables = xmlDoc.getElementsByTagName("w:tbl");
 
-      // 1. Header & Footer Paragraph replacements
+      // 1. Header & Footer Paragraph replacements & Dotted-line stacking
       for (let p of paragraphs) {
         const tNodes = p.getElementsByTagName("w:t");
         if (tNodes.length > 0) {
@@ -503,24 +503,28 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
           if (pStr.includes("Date and Time:")) {
             pStr = `Date and Time: ${toolboxData.date || ''} ${toolboxData.time || ''}    Location: ${toolboxData.location || ''}`;
+            tNodes[0].textContent = pStr;
+            for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
           } else if (pStr.includes("Meeting Closed:")) {
             pStr = `Meeting Closed: ${toolboxData.time || ''}    Next Meeting: Next week`;
+            tNodes[0].textContent = pStr;
+            for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
           } else if (pStr.includes("Signed – Management:")) {
             pStr = `Signed – Management: ${userName || ''}    Dated: ${toolboxData.managementDate || toolboxData.date || ''}`;
-          } else if (pStr.toLowerCase().includes("discussion about task")) {
-            pStr = `Discussion About Task Planning and Weekly Goals: ${toolboxData.taskPlanningDiscussion || ''}`;
-          } else if (pStr.toLowerCase().includes("operational issues")) {
-            pStr = `Operational Issues/other Business: ${toolboxData.operationalIssues || ''}`;
-          }
-
-          tNodes[0].textContent = pStr;
-          for (let i = 1; i < tNodes.length; i++) {
-            tNodes[i].textContent = "";
+            tNodes[0].textContent = pStr;
+            for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+          } else if (pStr.toLowerCase().includes("discussion about task planning and weekly goals")) {
+            // Put heading on first text node, clear others, and append text below
+            tNodes[0].textContent = `Discussion About Task Planning and Weekly Goals:\n${toolboxData.taskPlanningDiscussion || ''}`;
+            for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+          } else if (pStr.toLowerCase().includes("operational issues/other business")) {
+            tNodes[0].textContent = `Operational Issues/other Business:\n${toolboxData.operationalIssues || ''}`;
+            for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
           }
         }
       }
 
-      // 2. Iterate through tables safely, skipping header row 0
+      // 2. Iterate through tables safely
       for (let table of tables) {
         const rows = table.getElementsByTagName("w:tr");
         if (rows.length < 2) continue;
@@ -529,17 +533,17 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         if (headerCells.length === 0) continue;
         const tableLabel = getCellText(headerCells[0]).toLowerCase();
 
-        if (tableLabel.includes("present") || tableLabel.includes("employer/company") || tableLabel.includes("signed/dated")) {
+        if (tableLabel.includes("present") || tableLabel.includes("employer") || tableLabel.includes("signed")) {
           toolboxData.attendees.forEach((att, idx) => {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
               if (cells[0]) setCellText(cells[0], att.name || '', xmlDoc);
               if (cells[1]) setCellText(cells[1], att.company || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], att.signature ? `Signed by ${att.name}` : '', xmlDoc);
+              if (cells[2]) setCellText(cells[2], att.signature ? `Signed by ${att.name}` : (att.date || ''), xmlDoc);
             }
           });
-        } else if (tableLabel.includes("issues raised") || tableLabel.includes("worker training needs") || tableLabel.includes("health and safety – review")) {
+        } else if (tableLabel.includes("issues raised from site safety inspection")) {
           toolboxData.siteSafetyReview.forEach((row, idx) => {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
@@ -559,7 +563,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               if (cells[2]) setCellText(cells[2], row.col3 || '', xmlDoc);
             }
           });
-        } else if (tableLabel.includes("hazard:")) {
+        } else if (tableLabel.includes("hazard:") && !tableLabel.includes("board")) {
           toolboxData.hazards.forEach((haz, idx) => {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
@@ -579,7 +583,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               if (cells[2]) setCellText(cells[2], hb.col3 || '', xmlDoc);
             }
           });
-        } else if (tableLabel.includes("plant and equipment")) {
+        } else if (tableLabel.includes("plant and equipment requirements") || tableLabel.includes("plant and equipment (including")) {
           toolboxData.plantEquipment.forEach((plant, idx) => {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
@@ -589,7 +593,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               if (cells[2]) setCellText(cells[2], plant.col3 || '', xmlDoc);
             }
           });
-        } else if (tableLabel.includes("task")) {
+        } else if (tableLabel.includes("task:")) {
           toolboxData.taskPlanning.forEach((tp, idx) => {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
@@ -600,8 +604,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               if (cells[3]) setCellText(cells[3], tp.col4 || '', xmlDoc);
             }
           });
-        } else {
-          // Generic table row matcher for previous actions
+        } else if (tableLabel.includes("agenda item")) {
           for (let i = 1; i < rows.length; i++) {
             const cells = rows[i].getElementsByTagName("w:tc");
             if (cells.length < 2) continue;
