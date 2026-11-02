@@ -995,15 +995,14 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* SECTION: Health and Safety – Review Site Safety Inspection Report & Training Needs (Static Headers) */}
+            {/* SECTION: Health and Safety – Review Site Safety Inspection Report & Training Needs */}
             <div className="space-y-3 pt-2">
               <h3 className="text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">
                 Health and Safety – Review Site Safety Inspection Report & Training Needs
               </h3>
               {toolboxData.siteSafetyReview.map((row, idx) => (
                 <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
-                  {/* Static Header Label instead of input box */}
-                  <span className="font-extrabold text-slate-900 block bg-white px-2.5 py-1.5 rounded border border-slate-200">
+                  <span className="font-extrabold text-slate-800 uppercase block tracking-wider pt-1">
                     {row.label}
                   </span>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -1061,7 +1060,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       </button>
                     )}
                   </div>
-                  <span className="font-extrabold text-slate-900 block bg-white px-2.5 py-1.5 rounded border border-slate-200">
+                  <span className="font-extrabold text-slate-800 uppercase block tracking-wider pt-1">
                     {row.label}
                   </span>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
