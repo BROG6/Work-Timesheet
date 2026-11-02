@@ -258,23 +258,23 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       { item: "Other", action: "", followUp: "" },
     ],
     siteSafetyReview: [
-      { col1: "Issues Raised from Site Safety Inspection", col2: "", col3: "" },
-      { col1: "Worker Training Needs", col2: "", col3: "" },
+      { label: "Issues Raised from Site Safety Inspection", action: "", whoWhen: "" },
+      { label: "Worker Training Needs", action: "", whoWhen: "" },
     ],
     eventInvestigations: [
-      { col1: "Has any Event/Accident/Incident occurred", col2: "", col3: "" },
+      { label: "Has any Event/Accident/Incident occurred", action: "", whoWhen: "" },
     ],
     hazards: [
-      { col1: "", col2: "", col3: "" },
+      { hazard: "", action: "", whoWhen: "" },
     ],
     hazardBoard: [
-      { col1: "", col2: "", col3: "" },
+      { item: "", update: "", whoWhen: "" },
     ],
     plantEquipment: [
-      { col1: "", col2: "", col3: "" },
+      { requirement: "", action: "", whoWhen: "" },
     ],
     taskPlanning: [
-      { col1: "", col2: "", col3: "", col4: "" },
+      { task: "", ppe: "", timeframe: "", whoWhen: "" },
     ],
     taskPlanningDiscussion: "",
     operationalIssues: "",
@@ -514,7 +514,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             tNodes[0].textContent = pStr;
             for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
           } else if (pStr.toLowerCase().includes("discussion about task planning and weekly goals")) {
-            // Put heading on first text node, clear others, and append text below
             tNodes[0].textContent = `Discussion About Task Planning and Weekly Goals:\n${toolboxData.taskPlanningDiscussion || ''}`;
             for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
           } else if (pStr.toLowerCase().includes("operational issues/other business")) {
@@ -533,14 +532,14 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         if (headerCells.length === 0) continue;
         const tableLabel = getCellText(headerCells[0]).toLowerCase();
 
-        if (tableLabel.includes("present") || tableLabel.includes("employer") || tableLabel.includes("signed")) {
+        if (tableLabel.includes("present") && tableLabel.includes("employer")) {
           toolboxData.attendees.forEach((att, idx) => {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
               if (cells[0]) setCellText(cells[0], att.name || '', xmlDoc);
               if (cells[1]) setCellText(cells[1], att.company || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], att.signature ? `Signed by ${att.name}` : (att.date || ''), xmlDoc);
+              if (cells[2]) setCellText(cells[2], att.signature ? `[Signature: ${att.name}]` : (att.date || ''), xmlDoc);
             }
           });
         } else if (tableLabel.includes("issues raised from site safety inspection")) {
@@ -548,9 +547,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], row.col1 || '', xmlDoc);
-              if (cells[1]) setCellText(cells[1], row.col2 || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], row.col3 || '', xmlDoc);
+              if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
+              if (cells[2]) setCellText(cells[2], row.whoWhen || '', xmlDoc);
             }
           });
         } else if (tableLabel.includes("has any event") || tableLabel.includes("event investigations")) {
@@ -558,9 +556,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], row.col1 || '', xmlDoc);
-              if (cells[1]) setCellText(cells[1], row.col2 || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], row.col3 || '', xmlDoc);
+              if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
+              if (cells[2]) setCellText(cells[2], row.whoWhen || '', xmlDoc);
             }
           });
         } else if (tableLabel.includes("hazard:") && !tableLabel.includes("board")) {
@@ -568,9 +565,9 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], haz.col1 || '', xmlDoc);
-              if (cells[1]) setCellText(cells[1], haz.col2 || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], haz.col3 || '', xmlDoc);
+              if (cells[0]) setCellText(cells[0], haz.hazard || '', xmlDoc);
+              if (cells[1]) setCellText(cells[1], haz.action || '', xmlDoc);
+              if (cells[2]) setCellText(cells[2], haz.whoWhen || '', xmlDoc);
             }
           });
         } else if (tableLabel.includes("hazard board")) {
@@ -578,9 +575,9 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], hb.col1 || '', xmlDoc);
-              if (cells[1]) setCellText(cells[1], hb.col2 || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], hb.col3 || '', xmlDoc);
+              if (cells[0]) setCellText(cells[0], hb.item || '', xmlDoc);
+              if (cells[1]) setCellText(cells[1], hb.update || '', xmlDoc);
+              if (cells[2]) setCellText(cells[2], hb.whoWhen || '', xmlDoc);
             }
           });
         } else if (tableLabel.includes("plant and equipment requirements") || tableLabel.includes("plant and equipment (including")) {
@@ -588,9 +585,9 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], plant.col1 || '', xmlDoc);
-              if (cells[1]) setCellText(cells[1], plant.col2 || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], plant.col3 || '', xmlDoc);
+              if (cells[0]) setCellText(cells[0], plant.requirement || '', xmlDoc);
+              if (cells[1]) setCellText(cells[1], plant.action || '', xmlDoc);
+              if (cells[2]) setCellText(cells[2], plant.whoWhen || '', xmlDoc);
             }
           });
         } else if (tableLabel.includes("task:")) {
@@ -598,10 +595,10 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], tp.col1 || '', xmlDoc);
-              if (cells[1]) setCellText(cells[1], tp.col2 || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], tp.col3 || '', xmlDoc);
-              if (cells[3]) setCellText(cells[3], tp.col4 || '', xmlDoc);
+              if (cells[0]) setCellText(cells[0], tp.task || '', xmlDoc);
+              if (cells[1]) setCellText(cells[1], tp.ppe || '', xmlDoc);
+              if (cells[2]) setCellText(cells[2], tp.timeframe || '', xmlDoc);
+              if (cells[3]) setCellText(cells[3], tp.whoWhen || '', xmlDoc);
             }
           });
         } else if (tableLabel.includes("agenda item")) {
@@ -998,26 +995,24 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* SECTION: Health and Safety – Review Site Safety Inspection Report & Training Needs (3-Column) */}
+            {/* SECTION: Health and Safety – Review Site Safety Inspection Report & Training Needs (Static Headers) */}
             <div className="space-y-3 pt-2">
               <h3 className="text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">
                 Health and Safety – Review Site Safety Inspection Report & Training Needs
               </h3>
               {toolboxData.siteSafetyReview.map((row, idx) => (
                 <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
-                  <input
-                    type="text"
-                    value={row.col1}
-                    onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'col1', e.target.value)}
-                    className="font-bold text-slate-800 w-full bg-white border border-slate-300 rounded p-1.5"
-                  />
+                  {/* Static Header Label instead of input box */}
+                  <span className="font-extrabold text-slate-900 block bg-white px-2.5 py-1.5 rounded border border-slate-200">
+                    {row.label}
+                  </span>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Action</label>
                       <input
                         type="text"
-                        value={row.col2}
-                        onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'col2', e.target.value)}
+                        value={row.action}
+                        onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'action', e.target.value)}
                         placeholder="Action..."
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1026,8 +1021,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
                       <input
                         type="text"
-                        value={row.col3}
-                        onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'col3', e.target.value)}
+                        value={row.whoWhen}
+                        onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'whoWhen', e.target.value)}
                         placeholder="Name / Date"
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1037,7 +1032,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* SECTION: Event Investigations (3-Column) */}
+            {/* SECTION: Event Investigations */}
             <div className="space-y-3 pt-2">
               <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase">
@@ -1045,7 +1040,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 </h3>
                 <button
                   type="button"
-                  onClick={() => addToolboxRow('eventInvestigations', { col1: '', col2: '', col3: '' })}
+                  onClick={() => addToolboxRow('eventInvestigations', { label: 'Has any Event/Accident/Incident occurred', action: '', whoWhen: '' })}
                   className="text-xs font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
                 >
                   + Add Event Row
@@ -1066,23 +1061,16 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       </button>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                    <div>
-                      <label className="text-slate-500 font-medium text-[10px] block">Event / Incident</label>
-                      <input
-                        type="text"
-                        value={row.col1}
-                        onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'col1', e.target.value)}
-                        placeholder="Has any event occurred..."
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
-                      />
-                    </div>
+                  <span className="font-extrabold text-slate-900 block bg-white px-2.5 py-1.5 rounded border border-slate-200">
+                    {row.label}
+                  </span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Action Taken</label>
                       <input
                         type="text"
-                        value={row.col2}
-                        onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'col2', e.target.value)}
+                        value={row.action}
+                        onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'action', e.target.value)}
                         placeholder="Action..."
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1091,8 +1079,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
                       <input
                         type="text"
-                        value={row.col3}
-                        onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'col3', e.target.value)}
+                        value={row.whoWhen}
+                        onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'whoWhen', e.target.value)}
                         placeholder="Name / Date"
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1108,7 +1096,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase">Hazards</h3>
                 <button
                   type="button"
-                  onClick={() => addToolboxRow('hazards', { col1: '', col2: '', col3: '' })}
+                  onClick={() => addToolboxRow('hazards', { hazard: '', action: '', whoWhen: '' })}
                   className="text-xs font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
                 >
                   + Add Hazard Row
@@ -1134,9 +1122,9 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       <label className="text-slate-500 font-medium text-[10px] block">Hazard</label>
                       <input
                         type="text"
-                        value={row.col1}
-                        onChange={(e) => handleToolboxRowChange('hazards', idx, 'col1', e.target.value)}
-                        placeholder="Hazard..."
+                        value={row.hazard}
+                        onChange={(e) => handleToolboxRowChange('hazards', idx, 'hazard', e.target.value)}
+                        placeholder="Hazard description..."
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
                     </div>
@@ -1144,8 +1132,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       <label className="text-slate-500 font-medium text-[10px] block">Action</label>
                       <input
                         type="text"
-                        value={row.col2}
-                        onChange={(e) => handleToolboxRowChange('hazards', idx, 'col2', e.target.value)}
+                        value={row.action}
+                        onChange={(e) => handleToolboxRowChange('hazards', idx, 'action', e.target.value)}
                         placeholder="Action..."
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1154,8 +1142,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
                       <input
                         type="text"
-                        value={row.col3}
-                        onChange={(e) => handleToolboxRowChange('hazards', idx, 'col3', e.target.value)}
+                        value={row.whoWhen}
+                        onChange={(e) => handleToolboxRowChange('hazards', idx, 'whoWhen', e.target.value)}
                         placeholder="Name / Date"
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1171,7 +1159,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase">Hazard Board - Updating</h3>
                 <button
                   type="button"
-                  onClick={() => addToolboxRow('hazardBoard', { col1: '', col2: '', col3: '' })}
+                  onClick={() => addToolboxRow('hazardBoard', { item: '', update: '', whoWhen: '' })}
                   className="text-xs font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
                 >
                   + Add Board Row
@@ -1194,11 +1182,11 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <div>
-                      <label className="text-slate-500 font-medium text-[10px] block">Hazard Board - Updating</label>
+                      <label className="text-slate-500 font-medium text-[10px] block">Hazard Board Item</label>
                       <input
                         type="text"
-                        value={row.col1}
-                        onChange={(e) => handleToolboxRowChange('hazardBoard', idx, 'col1', e.target.value)}
+                        value={row.item}
+                        onChange={(e) => handleToolboxRowChange('hazardBoard', idx, 'item', e.target.value)}
                         placeholder="Item..."
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1207,8 +1195,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       <label className="text-slate-500 font-medium text-[10px] block">What needs to be updated</label>
                       <input
                         type="text"
-                        value={row.col2}
-                        onChange={(e) => handleToolboxRowChange('hazardBoard', idx, 'col2', e.target.value)}
+                        value={row.update}
+                        onChange={(e) => handleToolboxRowChange('hazardBoard', idx, 'update', e.target.value)}
                         placeholder="Update details..."
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1217,8 +1205,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
                       <input
                         type="text"
-                        value={row.col3}
-                        onChange={(e) => handleToolboxRowChange('hazardBoard', idx, 'col3', e.target.value)}
+                        value={row.whoWhen}
+                        onChange={(e) => handleToolboxRowChange('hazardBoard', idx, 'whoWhen', e.target.value)}
                         placeholder="Name / Date"
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1234,7 +1222,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase">Plant and Equipment (including Test & Tag)</h3>
                 <button
                   type="button"
-                  onClick={() => addToolboxRow('plantEquipment', { col1: '', col2: '', col3: '' })}
+                  onClick={() => addToolboxRow('plantEquipment', { requirement: '', action: '', whoWhen: '' })}
                   className="text-xs font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
                 >
                   + Add Plant Row
@@ -1260,8 +1248,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       <label className="text-slate-500 font-medium text-[10px] block">Requirements</label>
                       <input
                         type="text"
-                        value={row.col1}
-                        onChange={(e) => handleToolboxRowChange('plantEquipment', idx, 'col1', e.target.value)}
+                        value={row.requirement}
+                        onChange={(e) => handleToolboxRowChange('plantEquipment', idx, 'requirement', e.target.value)}
                         placeholder="Requirements..."
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1270,8 +1258,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       <label className="text-slate-500 font-medium text-[10px] block">Action</label>
                       <input
                         type="text"
-                        value={row.col2}
-                        onChange={(e) => handleToolboxRowChange('plantEquipment', idx, 'col2', e.target.value)}
+                        value={row.action}
+                        onChange={(e) => handleToolboxRowChange('plantEquipment', idx, 'action', e.target.value)}
                         placeholder="Action..."
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1280,8 +1268,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
                       <input
                         type="text"
-                        value={row.col3}
-                        onChange={(e) => handleToolboxRowChange('plantEquipment', idx, 'col3', e.target.value)}
+                        value={row.whoWhen}
+                        onChange={(e) => handleToolboxRowChange('plantEquipment', idx, 'whoWhen', e.target.value)}
                         placeholder="Name / Date"
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1297,7 +1285,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase">Task Planning and Weekly Goals</h3>
                 <button
                   type="button"
-                  onClick={() => addToolboxRow('taskPlanning', { col1: '', col2: '', col3: '', col4: '' })}
+                  onClick={() => addToolboxRow('taskPlanning', { task: '', ppe: '', timeframe: '', whoWhen: '' })}
                   className="text-xs font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
                 >
                   + Add Task Row
@@ -1323,8 +1311,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       <label className="text-slate-500 font-medium text-[10px] block">Task</label>
                       <input
                         type="text"
-                        value={row.col1}
-                        onChange={(e) => handleToolboxRowChange('taskPlanning', idx, 'col1', e.target.value)}
+                        value={row.task}
+                        onChange={(e) => handleToolboxRowChange('taskPlanning', idx, 'task', e.target.value)}
                         placeholder="Task..."
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1333,8 +1321,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       <label className="text-slate-500 font-medium text-[10px] block">Equipment/PPE Required</label>
                       <input
                         type="text"
-                        value={row.col2}
-                        onChange={(e) => handleToolboxRowChange('taskPlanning', idx, 'col2', e.target.value)}
+                        value={row.ppe}
+                        onChange={(e) => handleToolboxRowChange('taskPlanning', idx, 'ppe', e.target.value)}
                         placeholder="Equipment / PPE..."
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1343,8 +1331,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       <label className="text-slate-500 font-medium text-[10px] block">Time Frame</label>
                       <input
                         type="text"
-                        value={row.col3}
-                        onChange={(e) => handleToolboxRowChange('taskPlanning', idx, 'col3', e.target.value)}
+                        value={row.timeframe}
+                        onChange={(e) => handleToolboxRowChange('taskPlanning', idx, 'timeframe', e.target.value)}
                         placeholder="Time frame..."
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1353,8 +1341,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
                       <input
                         type="text"
-                        value={row.col4}
-                        onChange={(e) => handleToolboxRowChange('taskPlanning', idx, 'col4', e.target.value)}
+                        value={row.whoWhen}
+                        onChange={(e) => handleToolboxRowChange('taskPlanning', idx, 'whoWhen', e.target.value)}
                         placeholder="Name / Date"
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1447,7 +1435,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
                   {attendee.signature ? (
                     <div className="flex items-center justify-between bg-white p-2 border border-slate-200 rounded">
-                      <img src={attendee.signature} alt="Attendee Signature" className="h-10 object-contain" />
+                      <span className="text-xs font-semibold text-emerald-700">✓ Signed by {attendee.name}</span>
                       <button
                         type="button"
                         onClick={() => {
@@ -1480,7 +1468,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               <label className="block text-xs font-bold text-slate-700 uppercase">Management Sign-off</label>
               {toolboxData.managementSignature ? (
                 <div className="p-3 bg-slate-50 border border-slate-300 rounded-xl flex items-center justify-between">
-                  <img src={toolboxData.managementSignature} alt="Management Signature" className="h-12 object-contain bg-white px-2 rounded" />
+                  <span className="text-xs font-semibold text-emerald-700">✓ Signed as Management</span>
                   <button
                     type="button"
                     onClick={() => setToolboxData({ ...toolboxData, managementSignature: '' })}
