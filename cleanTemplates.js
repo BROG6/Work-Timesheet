@@ -23,7 +23,6 @@ async function cleanDocx(fileName) {
   let docXml = await zip.file('word/document.xml').async('string');
 
   // Strip XML tags that break up {{ tag }} placeholders inside Word
-  // Merges fragmented <w:t> tags into a clean single string tag
   const cleanedXml = docXml.replace(/\{\{[^}]*\}\}/g, (match) => {
     const plainTextTag = match.replace(/<[^>]+>/g, '');
     return `<w:t>${plainTextTag}</w:t>`;
