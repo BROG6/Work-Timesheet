@@ -243,7 +243,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   });
 
-  // STATE: Toolbox Meeting Worksheet
+  // STATE: Toolbox Meeting Worksheet (Fully broken down with 3/4 column support)
   const [toolboxData, setToolboxData] = useState({
     date: new Date().toISOString().split('T')[0],
     time: '07:00',
@@ -265,14 +265,16 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       { item: "Has any Event/Accident/Incident occurred", action: "", byWhoAndWhen: "" },
     ],
     hazards: [
-      { item: "Hazard", action: "", byWhoAndWhen: "" },
-      { item: "Hazard Board - Updating", action: "", byWhoAndWhen: "" },
+      { col1: "", col2: "", col3: "" },
+    ],
+    hazardBoard: [
+      { col1: "", col2: "", col3: "" },
     ],
     plantEquipment: [
-      { item: "Plant and Equipment Requirements", action: "", byWhoAndWhen: "" },
+      { col1: "", col2: "", col3: "" },
     ],
     taskPlanning: [
-      { item: "Task", equipmentRequired: "", timeFrame: "", byWhoAndWhen: "" },
+      { col1: "", col2: "", col3: "", col4: "" },
     ],
     attendees: [
       { name: userName || '', company: 'SJR Builders', signature: '', date: new Date().toISOString().split('T')[0] }
@@ -298,6 +300,20 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       updatedCategory[index][field] = value;
       return { ...prev, [category]: updatedCategory };
     });
+  };
+
+  const addToolboxRow = (category, defaultRow) => {
+    setToolboxData(prev => ({
+      ...prev,
+      [category]: [...prev[category], defaultRow]
+    }));
+  };
+
+  const removeToolboxRow = (category, index) => {
+    setToolboxData(prev => ({
+      ...prev,
+      [category]: prev[category].filter((_, i) => i !== index)
+    }));
   };
 
   const handleSaveSignature = (dataUrl) => {
@@ -457,7 +473,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   };
 
-  // DOM Parser Export for H&S and Toolbox Meeting Worksheet (Fixed Header Row Skipping)
+  // DOM Parser Export for H&S and Toolbox Meeting Worksheet
   const handleExportToolboxDocx = async () => {
     setExportingDocx(true);
     try {
@@ -498,7 +514,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         }
       }
 
-      // 2. Iterate through tables safely, skipping header row 0 to prevent overwriting column labels
+      // 2. Iterate through tables safely, skipping header row 0
       for (let table of tables) {
         const rows = table.getElementsByTagName("w:tr");
         if (rows.length < 2) continue;
@@ -507,14 +523,24 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         if (headerCells.length === 0) continue;
         const tableLabel = getCellText(headerCells[0]).toLowerCase();
 
-        if (tableLabel.includes("hazard:") || tableLabel.includes("hazard board")) {
+        if (tableLabel.includes("hazard:")) {
           toolboxData.hazards.forEach((haz, idx) => {
             const rowIndex = idx + 1; // Skip header row 0
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], haz.item || 'Hazard', xmlDoc);
-              if (cells[1]) setCellText(cells[1], haz.action || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], haz.byWhoAndWhen || '', xmlDoc);
+              if (cells[0]) setCellText(cells[0], haz.col1 || '', xmlDoc);
+              if (cells[1]) setCellText(cells[1], haz.col2 || '', xmlDoc);
+              if (cells[2]) setCellText(cells[2], haz.col3 || '', xmlDoc);
+            }
+          });
+        } else if (tableLabel.includes("hazard board")) {
+          toolboxData.hazardBoard.forEach((hb, idx) => {
+            const rowIndex = idx + 1;
+            if (rows[rowIndex]) {
+              const cells = rows[rowIndex].getElementsByTagName("w:tc");
+              if (cells[0]) setCellText(cells[0], hb.col1 || '', xmlDoc);
+              if (cells[1]) setCellText(cells[1], hb.col2 || '', xmlDoc);
+              if (cells[2]) setCellText(cells[2], hb.col3 || '', xmlDoc);
             }
           });
         } else if (tableLabel.includes("plant and equipment")) {
@@ -522,9 +548,20 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], plant.item || 'Plant Requirement', xmlDoc);
-              if (cells[1]) setCellText(cells[1], plant.action || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], plant.byWhoAndWhen || '', xmlDoc);
+              if (cells[0]) setCellText(cells[0], plant.col1 || '', xmlDoc);
+              if (cells[1]) setCellText(cells[1], plant.col2 || '', xmlDoc);
+              if (cells[2]) setCellText(cells[2], plant.col3 || '', xmlDoc);
+            }
+          });
+        } else if (tableLabel.includes("task")) {
+          toolboxData.taskPlanning.forEach((tp, idx) => {
+            const rowIndex = idx + 1;
+            if (rows[rowIndex]) {
+              const cells = rows[rowIndex].getElementsByTagName("w:tc");
+              if (cells[0]) setCellText(cells[0], tp.col1 || '', xmlDoc);
+              if (cells[1]) setCellText(cells[1], tp.col2 || '', xmlDoc);
+              if (cells[2]) setCellText(cells[2], tp.col3 || '', xmlDoc);
+              if (cells[3]) setCellText(cells[3], tp.col4 || '', xmlDoc);
             }
           });
         } else {
@@ -1002,21 +1039,50 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* SECTION: Hazards */}
+            {/* SECTION: Hazards (3-Column Table Input) */}
             <div className="space-y-3 pt-2">
-              <h3 className="text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">
-                Hazards & Control Measures (PPE Requirements, Hazard Board)
-              </h3>
+              <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
+                <h3 className="text-xs font-extrabold text-slate-800 uppercase">Hazards</h3>
+                <button
+                  type="button"
+                  onClick={() => addToolboxRow('hazards', { col1: '', col2: '', col3: '' })}
+                  className="text-xs font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                >
+                  + Add Hazard Row
+                </button>
+              </div>
+
               {toolboxData.hazards.map((row, idx) => (
                 <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
-                  <span className="font-bold text-slate-800 block">{row.item}</span>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-slate-700 uppercase">Hazard Row #{idx + 1}</span>
+                    {toolboxData.hazards.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeToolboxRow('hazards', idx)}
+                        className="text-rose-600 font-semibold cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <div>
-                      <label className="text-slate-500 font-medium text-[10px] block">Action / Update</label>
+                      <label className="text-slate-500 font-medium text-[10px] block">Hazard</label>
                       <input
                         type="text"
-                        value={row.action}
-                        onChange={(e) => handleToolboxRowChange('hazards', idx, 'action', e.target.value)}
+                        value={row.col1}
+                        onChange={(e) => handleToolboxRowChange('hazards', idx, 'col1', e.target.value)}
+                        placeholder="Hazard..."
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">Action</label>
+                      <input
+                        type="text"
+                        value={row.col2}
+                        onChange={(e) => handleToolboxRowChange('hazards', idx, 'col2', e.target.value)}
                         placeholder="Action..."
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1025,8 +1091,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
                       <input
                         type="text"
-                        value={row.byWhoAndWhen}
-                        onChange={(e) => handleToolboxRowChange('hazards', idx, 'byWhoAndWhen', e.target.value)}
+                        value={row.col3}
+                        onChange={(e) => handleToolboxRowChange('hazards', idx, 'col3', e.target.value)}
                         placeholder="Name / Date"
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1036,22 +1102,51 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* SECTION: Plant and Equipment */}
+            {/* SECTION: Hazard Board - Updating (3-Column Table Input) */}
             <div className="space-y-3 pt-2">
-              <h3 className="text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">
-                Plant and Equipment (including Test & Tag)
-              </h3>
-              {toolboxData.plantEquipment.map((row, idx) => (
+              <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
+                <h3 className="text-xs font-extrabold text-slate-800 uppercase">Hazard Board - Updating</h3>
+                <button
+                  type="button"
+                  onClick={() => addToolboxRow('hazardBoard', { col1: '', col2: '', col3: '' })}
+                  className="text-xs font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                >
+                  + Add Board Row
+                </button>
+              </div>
+
+              {toolboxData.hazardBoard.map((row, idx) => (
                 <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
-                  <span className="font-bold text-slate-800 block">{row.item}</span>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-slate-700 uppercase">Board Row #{idx + 1}</span>
+                    {toolboxData.hazardBoard.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeToolboxRow('hazardBoard', idx)}
+                        className="text-rose-600 font-semibold cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <div>
-                      <label className="text-slate-500 font-medium text-[10px] block">Requirements</label>
+                      <label className="text-slate-500 font-medium text-[10px] block">Hazard Board - Updating</label>
                       <input
                         type="text"
-                        value={row.action}
-                        onChange={(e) => handleToolboxRowChange('plantEquipment', idx, 'action', e.target.value)}
-                        placeholder="Requirements..."
+                        value={row.col1}
+                        onChange={(e) => handleToolboxRowChange('hazardBoard', idx, 'col1', e.target.value)}
+                        placeholder="Item..."
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">What needs to be updated</label>
+                      <input
+                        type="text"
+                        value={row.col2}
+                        onChange={(e) => handleToolboxRowChange('hazardBoard', idx, 'col2', e.target.value)}
+                        placeholder="Update details..."
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
                     </div>
@@ -1059,8 +1154,144 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
                       <input
                         type="text"
-                        value={row.byWhoAndWhen}
-                        onChange={(e) => handleToolboxRowChange('plantEquipment', idx, 'byWhoAndWhen', e.target.value)}
+                        value={row.col3}
+                        onChange={(e) => handleToolboxRowChange('hazardBoard', idx, 'col3', e.target.value)}
+                        placeholder="Name / Date"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* SECTION: Plant and Equipment (3-Column Table Input) */}
+            <div className="space-y-3 pt-2">
+              <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
+                <h3 className="text-xs font-extrabold text-slate-800 uppercase">Plant and Equipment (including Test & Tag)</h3>
+                <button
+                  type="button"
+                  onClick={() => addToolboxRow('plantEquipment', { col1: '', col2: '', col3: '' })}
+                  className="text-xs font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                >
+                  + Add Plant Row
+                </button>
+              </div>
+
+              {toolboxData.plantEquipment.map((row, idx) => (
+                <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-slate-700 uppercase">Plant Row #{idx + 1}</span>
+                    {toolboxData.plantEquipment.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeToolboxRow('plantEquipment', idx)}
+                        className="text-rose-600 font-semibold cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">Plant and Equipment Requirements</label>
+                      <input
+                        type="text"
+                        value={row.col1}
+                        onChange={(e) => handleToolboxRowChange('plantEquipment', idx, 'col1', e.target.value)}
+                        placeholder="Requirements..."
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">Action</label>
+                      <input
+                        type="text"
+                        value={row.col2}
+                        onChange={(e) => handleToolboxRowChange('plantEquipment', idx, 'col2', e.target.value)}
+                        placeholder="Action..."
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
+                      <input
+                        type="text"
+                        value={row.col3}
+                        onChange={(e) => handleToolboxRowChange('plantEquipment', idx, 'col3', e.target.value)}
+                        placeholder="Name / Date"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* SECTION: Task Planning and Weekly Goals (4-Column Table Input) */}
+            <div className="space-y-3 pt-2">
+              <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
+                <h3 className="text-xs font-extrabold text-slate-800 uppercase">Task Planning and Weekly Goals</h3>
+                <button
+                  type="button"
+                  onClick={() => addToolboxRow('taskPlanning', { col1: '', col2: '', col3: '', col4: '' })}
+                  className="text-xs font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                >
+                  + Add Task Row
+                </button>
+              </div>
+
+              {toolboxData.taskPlanning.map((row, idx) => (
+                <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-slate-700 uppercase">Task Row #{idx + 1}</span>
+                    {toolboxData.taskPlanning.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeToolboxRow('taskPlanning', idx)}
+                        className="text-rose-600 font-semibold cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">Task</label>
+                      <input
+                        type="text"
+                        value={row.col1}
+                        onChange={(e) => handleToolboxRowChange('taskPlanning', idx, 'col1', e.target.value)}
+                        placeholder="Task..."
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">Equipment/PPE Required</label>
+                      <input
+                        type="text"
+                        value={row.col2}
+                        onChange={(e) => handleToolboxRowChange('taskPlanning', idx, 'col2', e.target.value)}
+                        placeholder="Equipment / PPE..."
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">Time Frame</label>
+                      <input
+                        type="text"
+                        value={row.col3}
+                        onChange={(e) => handleToolboxRowChange('taskPlanning', idx, 'col3', e.target.value)}
+                        placeholder="Time frame..."
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
+                      <input
+                        type="text"
+                        value={row.col4}
+                        onChange={(e) => handleToolboxRowChange('taskPlanning', idx, 'col4', e.target.value)}
                         placeholder="Name / Date"
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
