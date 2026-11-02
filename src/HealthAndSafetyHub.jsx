@@ -247,14 +247,14 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     time: '07:00',
     location: localStorage.getItem(`sjr_last_project_${userId}`) || localStorage.getItem('last_site_name') || '',
     agendaNotes: {
-      previousActions: '',
-      safetyInspectionReview: '',
-      incidents: '',
-      hazards: '',
-      plantAndEquipment: '',
-      taskPlanning: '',
-      operationalIssues: '',
-      otherBusiness: ''
+      previousActions: { action: '', followUp: '' },
+      safetyInspectionReview: { action: '', followUp: '' },
+      incidents: { action: '', followUp: '' },
+      hazards: { action: '', followUp: '' },
+      plantAndEquipment: { action: '', followUp: '' },
+      taskPlanning: { action: '', followUp: '' },
+      operationalIssues: { action: '', followUp: '' },
+      otherBusiness: { action: '', followUp: '' }
     },
     attendees: [
       { name: userName || '', company: 'SJR Builders', signature: '', date: new Date().toISOString().split('T')[0] }
@@ -308,7 +308,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }));
   };
 
-  // --- DOM PARSER HELPER FUNCTIONS (MATCHING TIMESHEET LOGIC) ---
+  // --- DOM PARSER HELPER FUNCTIONS ---
   function setCellText(cell, text, xmlDoc) {
     const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     const tNodes = cell.getElementsByTagNameNS(ns, "t");
@@ -360,7 +360,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const paragraphs = xmlDoc.getElementsByTagName("w:p");
       const rows = xmlDoc.getElementsByTagName("w:tr");
 
-      // 1. Fill Header Paragraphs (Site, Week Ending, Time, Inspected By)
       for (let p of paragraphs) {
         const text = getCellText(p);
         if (text.includes("Site:") || text.includes("Week Ending:") || text.includes("Inspected By:") || text.includes("Signed:")) {
@@ -390,7 +389,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         }
       }
 
-      // Flatten item data dictionary for quick lookup
       const itemLookup = {};
       Object.values(inspectionData.sections).forEach(sectionItems => {
         sectionItems.forEach(row => {
@@ -400,7 +398,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         });
       });
 
-      // 2. Fill Table Rows Matching Item Names directly
       for (let tr of rows) {
         const cells = tr.getElementsByTagName("w:tc");
         if (cells.length < 2) continue;
@@ -451,9 +448,9 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
 
       const paragraphs = xmlDoc.getElementsByTagName("w:p");
+      const rows = xmlDoc.getElementsByTagName("w:tr");
 
       for (let p of paragraphs) {
-        const text = getCellText(p);
         const tNodes = p.getElementsByTagName("w:t");
         if (tNodes.length > 0) {
           let pStr = "";
@@ -471,6 +468,29 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           for (let i = 1; i < tNodes.length; i++) {
             tNodes[i].textContent = "";
           }
+        }
+      }
+
+      const agendaLookup = {
+        "health and safety": toolboxData.agendaNotes.safetyInspectionReview,
+        "event investigations": toolboxData.agendaNotes.incidents,
+        "hazards": toolboxData.agendaNotes.hazards,
+        "plant and equipment": toolboxData.agendaNotes.plantAndEquipment,
+        "task planning and weekly goals": toolboxData.agendaNotes.taskPlanning,
+        "operational issues/other business": toolboxData.agendaNotes.operationalIssues,
+        "other": toolboxData.agendaNotes.otherBusiness
+      };
+
+      for (let tr of rows) {
+        const cells = tr.getElementsByTagName("w:tc");
+        if (cells.length < 2) continue;
+
+        const labelText = getCellText(cells[0]).toLowerCase().trim();
+        const matchedNote = agendaLookup[labelText];
+
+        if (matchedNote) {
+          if (cells[1]) setCellText(cells[1], matchedNote.action || '', xmlDoc);
+          if (cells[2]) setCellText(cells[2], matchedNote.followUp || '', xmlDoc);
         }
       }
 
@@ -819,7 +839,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
               <h3 className="text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">Agenda Items & Discussions</h3>
               {[
                 { key: 'previousActions', label: 'Action Follow ups from Previous Meeting' },
@@ -830,18 +850,48 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 { key: 'taskPlanning', label: 'Weekly Task Planning and Goals' },
                 { key: 'operationalIssues', label: 'Operational Issues / Other Business' },
               ].map((agenda) => (
-                <div key={agenda.key} className="space-y-1">
-                  <label className="block text-xs font-semibold text-slate-700">{agenda.label}</label>
-                  <textarea
-                    rows="2"
-                    value={toolboxData.agendaNotes[agenda.key]}
-                    onChange={(e) => setToolboxData({
-                      ...toolboxData,
-                      agendaNotes: { ...toolboxData.agendaNotes, [agenda.key]: e.target.value }
-                    })}
-                    placeholder="Enter discussion notes..."
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm text-slate-800"
-                  />
+                <div key={agenda.key} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
+                  <span className="font-bold text-slate-800 block">{agenda.label}</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block mb-1">Action Taken</label>
+                      <input
+                        type="text"
+                        value={toolboxData.agendaNotes[agenda.key].action}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setToolboxData(prev => ({
+                            ...prev,
+                            agendaNotes: {
+                              ...prev.agendaNotes,
+                              [agenda.key]: { ...prev.agendaNotes[agenda.key], action: val }
+                            }
+                          }));
+                        }}
+                        placeholder="Enter action taken..."
+                        className="w-full bg-white border border-slate-300 rounded p-2 text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block mb-1">Further Follow up / Responsible</label>
+                      <input
+                        type="text"
+                        value={toolboxData.agendaNotes[agenda.key].followUp}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setToolboxData(prev => ({
+                            ...prev,
+                            agendaNotes: {
+                              ...prev.agendaNotes,
+                              [agenda.key]: { ...prev.agendaNotes[agenda.key], followUp: val }
+                            }
+                          }));
+                        }}
+                        placeholder="Enter follow up details..."
+                        className="w-full bg-white border border-slate-300 rounded p-2 text-slate-800"
+                      />
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
