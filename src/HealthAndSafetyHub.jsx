@@ -507,9 +507,9 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             pStr = `Meeting Closed: ${toolboxData.time || ''}    Next Meeting: Next week`;
           } else if (pStr.includes("Signed – Management:")) {
             pStr = `Signed – Management: ${userName || ''}    Dated: ${toolboxData.managementDate || toolboxData.date || ''}`;
-          } else if (pStr.includes("Discussion About Task Planning and Weekly Goals:")) {
+          } else if (pStr.toLowerCase().includes("discussion about task")) {
             pStr = `Discussion About Task Planning and Weekly Goals: ${toolboxData.taskPlanningDiscussion || ''}`;
-          } else if (pStr.includes("Operational Issues/other Business:")) {
+          } else if (pStr.toLowerCase().includes("operational issues")) {
             pStr = `Operational Issues/other Business: ${toolboxData.operationalIssues || ''}`;
           }
 
@@ -529,7 +529,17 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         if (headerCells.length === 0) continue;
         const tableLabel = getCellText(headerCells[0]).toLowerCase();
 
-        if (tableLabel.includes("issues raised from site safety inspection") || tableLabel.includes("worker training needs")) {
+        if (tableLabel.includes("present") || tableLabel.includes("employer/company") || tableLabel.includes("signed/dated")) {
+          toolboxData.attendees.forEach((att, idx) => {
+            const rowIndex = idx + 1;
+            if (rows[rowIndex]) {
+              const cells = rows[rowIndex].getElementsByTagName("w:tc");
+              if (cells[0]) setCellText(cells[0], att.name || '', xmlDoc);
+              if (cells[1]) setCellText(cells[1], att.company || '', xmlDoc);
+              if (cells[2]) setCellText(cells[2], att.signature ? `Signed by ${att.name}` : '', xmlDoc);
+            }
+          });
+        } else if (tableLabel.includes("issues raised") || tableLabel.includes("worker training needs") || tableLabel.includes("health and safety – review")) {
           toolboxData.siteSafetyReview.forEach((row, idx) => {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
