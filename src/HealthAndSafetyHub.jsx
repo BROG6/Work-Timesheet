@@ -1,5 +1,5 @@
 // src/HealthAndSafetyHub.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebaseConfig';
 import { collection, doc, setDoc, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
 import { Capacitor } from '@capacitor/core';
@@ -32,6 +32,75 @@ const imageOptions = {
   }
 };
 
+// Reusable custom site dropdown component matching TimesheetEntry style
+function SiteAutoCompleteInput({ value, onChange, existingSites }) {
+  const [suggestions, setSuggestions] = useState([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    if (!value || value.trim() === '') {
+      setSuggestions(existingSites); // Show all saved sites on focus/empty if desired, or empty array
+      setIsOpen(false);
+      return;
+    }
+    const queryText = value.toLowerCase().trim();
+    const matches = existingSites.filter((site) => site.toLowerCase().includes(queryText));
+    setSuggestions(matches);
+    setIsOpen(matches.length > 0);
+  }, [value, existingSites]);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelect = (siteName) => {
+    onChange(siteName);
+    setIsOpen(false);
+  };
+
+  return (
+    <div ref={wrapperRef} className="relative w-full">
+      <input
+        type="text"
+        placeholder="Select or enter site name"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => {
+          if (existingSites.length > 0) {
+            setSuggestions(existingSites);
+            setIsOpen(true);
+          }
+        }}
+        className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+        required
+      />
+      {isOpen && (
+        <ul className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-lg text-sm">
+          {suggestions.map((site, index) => (
+            <li
+              key={index}
+              onClick={() => handleSelect(site)}
+              className="px-3 py-2.5 hover:bg-emerald-50 cursor-pointer text-slate-800 border-b border-slate-100 last:border-none flex justify-between items-center transition-colors"
+            >
+              <span className="font-semibold">{site}</span>
+              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded">
+                Existing Site
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function HealthAndSafetyHub({ userId, userName }) {
   const [hsSubView, setHsSubView] = useState('inspection'); // 'inspection' or 'toolbox'
   const [loading, setLoading] = useState(false);
@@ -49,7 +118,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       try {
         const sitesSet = new Set();
 
-        // 1. Load instantly from the exact timesheet storage key
         const knownSitesRaw = localStorage.getItem('sjr_known_sites');
         if (knownSitesRaw) {
           const parsed = JSON.parse(knownSitesRaw);
@@ -58,13 +126,11 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           }
         }
 
-        // 2. Check last selected project/site from timesheet cache
         const lastProject = localStorage.getItem(`sjr_last_project_${userId}`) || localStorage.getItem('last_site_name');
         if (lastProject) {
           sitesSet.add(lastProject.trim());
         }
 
-        // 3. Sync with Firestore timesheets collection if online
         if (userId) {
           const q = query(collection(db, 'timesheets'), where('userId', '==', userId));
           const snapshot = await getDocs(q);
@@ -193,7 +259,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }));
   };
 
-  // Generic Template Filling with nullGetter safeguard against MultiError
   const fillAndExportDocx = async (templateFileName, outputFileName, templatePayload) => {
     setExportingDocx(true);
     try {
@@ -209,7 +274,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         modules: [imageModule],
         paragraphLoop: true,
         linebreaks: true,
-        nullGetter() { return ""; } // Prevents MultiError crashes if a template tag is missing in Word docs
+        nullGetter() { return ""; }
       });
 
       docx.render(templatePayload);
@@ -399,13 +464,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
   return (
     <div className="max-w-xl mx-auto space-y-4 my-4 pb-12">
-      {/* Shared Site Datalist matching Timesheet suggestions */}
-      <datalist id="saved-sites-list">
-        {savedSites.map((site, i) => (
-          <option key={i} value={site} />
-        ))}
-      </datalist>
-
       {/* H&S Sub-Navigation Switcher */}
       <div className="flex bg-slate-200 p-1 rounded-xl shadow-inner gap-1">
         <button
@@ -468,14 +526,10 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Site / Project</label>
-                <input
-                  type="text"
-                  list="saved-sites-list"
+                <SiteAutoCompleteInput
                   value={inspectionData.site}
-                  onChange={(e) => setInspectionData({ ...inspectionData, site: e.target.value })}
-                  placeholder="Select or enter site name"
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800"
-                  required
+                  onChange={(val) => setInspectionData({ ...inspectionData, site: val })}
+                  existingSites={savedSites}
                 />
               </div>
               <div>
@@ -645,14 +699,10 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Location / Site</label>
-                <input
-                  type="text"
-                  list="saved-sites-list"
+                <SiteAutoCompleteInput
                   value={toolboxData.location}
-                  onChange={(e) => setToolboxData({ ...toolboxData, location: e.target.value })}
-                  placeholder="Select or enter site location"
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800"
-                  required
+                  onChange={(val) => setToolboxData({ ...toolboxData, location: val })}
+                  existingSites={savedSites}
                 />
               </div>
             </div>
