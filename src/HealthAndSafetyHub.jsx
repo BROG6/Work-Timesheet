@@ -362,17 +362,18 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const templateArrayBuffer = await response.arrayBuffer();
       const zip = new PZip(templateArrayBuffer);
 
-      // --- IN-MEMORY XML CLEANING FOR WORD TAG FRAGMENTATION ---
+      // --- SAFE IN-MEMORY XML CLEANING FOR WORD TAG FRAGMENTATION ---
       const docXmlFile = zip.file('word/document.xml');
       if (docXmlFile) {
         let docXml = docXmlFile.asText();
-        docXml = docXml.replace(/\{\{[^}]*\}\}/g, (match) => {
-          const plainTextTag = match.replace(/<[^>]+>/g, '');
-          return `<w:t>${plainTextTag}</w:t>`;
+        // Safely clean up fragmented tags broken across XML runs without breaking markup structure
+        docXml = docXml.replace(/\{\{([^}]+?)\}\}/g, (match, tagContent) => {
+          const cleanTag = tagContent.replace(/<[^>]+>/g, '').trim();
+          return `{{${cleanTag}}}`;
         });
         zip.file('word/document.xml', docXml);
       }
-      // -------------------------------------------------------
+      // -------------------------------------------------------------
 
       const imageModule = new ImageModule(imageOptions);
       const docx = new Docxtemplater(zip, {
