@@ -125,6 +125,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     fetchSites();
   }, [userId]);
 
+  // STATE: Site Safety Inspection Report
   const [inspectionData, setInspectionData] = useState({
     site: localStorage.getItem(`sjr_last_project_${userId}`) || localStorage.getItem('last_site_name') || '',
     weekEnding: new Date().toISOString().split('T')[0],
@@ -242,20 +243,39 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   });
 
+  // STATE: Toolbox Meeting Worksheet (Expanded to multi-entry rows per physical form)
   const [toolboxData, setToolboxData] = useState({
     date: new Date().toISOString().split('T')[0],
     time: '07:00',
     location: localStorage.getItem(`sjr_last_project_${userId}`) || localStorage.getItem('last_site_name') || '',
-    agendaNotes: {
-      previousActions: { action: '', followUp: '' },
-      safetyInspectionReview: { action: '', followUp: '' },
-      incidents: { action: '', followUp: '' },
-      hazards: { action: '', followUp: '' },
-      plantAndEquipment: { action: '', followUp: '' },
-      taskPlanning: { action: '', followUp: '' },
-      operationalIssues: { action: '', followUp: '' },
-      otherBusiness: { action: '', followUp: '' }
-    },
+    previousActions: [
+      { item: "Health and Safety", action: "", followUp: "" },
+      { item: "Event Investigations", action: "", followUp: "" },
+      { item: "Hazards", action: "", followUp: "" },
+      { item: "Plant and Equipment", action: "", followUp: "" },
+      { item: "Task Planning and Weekly Goals", action: "", followUp: "" },
+      { item: "Operational Issues/other Business", action: "", followUp: "" },
+      { item: "Other", action: "", followUp: "" },
+    ],
+    siteSafetyReview: [
+      { item: "Issues Raised from Site Safety Inspection", action: "", byWhoAndWhen: "" },
+      { item: "Worker Training Needs", action: "", byWhoAndWhen: "" },
+    ],
+    eventInvestigations: [
+      { item: "Has any Event/Accident/Incident occurred", action: "", byWhoAndWhen: "" },
+    ],
+    hazards: [
+      { item: "Hazard", action: "", byWhoAndWhen: "" },
+      { item: "Hazard Board - Updating", action: "", byWhoAndWhen: "" },
+    ],
+    plantEquipment: [
+      { item: "Plant and Equipment Requirements", byWhoAndWhen: "" },
+    ],
+    taskPlanning: [
+      { item: "Task", equipmentRequired: "", timeFrame: "", byWhoAndWhen: "" },
+    ],
+    taskDiscussion: "",
+    operationalDiscussion: "",
     attendees: [
       { name: userName || '', company: 'SJR Builders', signature: '', date: new Date().toISOString().split('T')[0] }
     ],
@@ -271,6 +291,14 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         ...prev,
         sections: { ...prev.sections, [sectionKey]: updatedSection }
       };
+    });
+  };
+
+  const handleToolboxRowChange = (category, index, field, value) => {
+    setToolboxData(prev => {
+      const updatedCategory = [...prev[category]];
+      updatedCategory[index][field] = value;
+      return { ...prev, [category]: updatedCategory };
     });
   };
 
@@ -450,6 +478,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const paragraphs = xmlDoc.getElementsByTagName("w:p");
       const rows = xmlDoc.getElementsByTagName("w:tr");
 
+      // 1. Header & Footer Paragraph replacements
       for (let p of paragraphs) {
         const tNodes = p.getElementsByTagName("w:t");
         if (tNodes.length > 0) {
@@ -471,26 +500,42 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         }
       }
 
-      const agendaLookup = {
-        "health and safety": toolboxData.agendaNotes.safetyInspectionReview,
-        "event investigations": toolboxData.agendaNotes.incidents,
-        "hazards": toolboxData.agendaNotes.hazards,
-        "plant and equipment": toolboxData.agendaNotes.plantAndEquipment,
-        "task planning and weekly goals": toolboxData.agendaNotes.taskPlanning,
-        "operational issues/other business": toolboxData.agendaNotes.operationalIssues,
-        "other": toolboxData.agendaNotes.otherBusiness
-      };
+      // 2. Build complete item lookup table from state arrays
+      const toolboxLookup = {};
+      
+      toolboxData.previousActions.forEach(row => {
+        if (row.item) toolboxLookup[row.item.toLowerCase().trim()] = { action: row.action, followUp: row.followUp };
+      });
+      toolboxData.siteSafetyReview.forEach(row => {
+        if (row.item) toolboxLookup[row.item.toLowerCase().trim()] = { action: row.action, followUp: row.byWhoAndWhen };
+      });
+      toolboxData.eventInvestigations.forEach(row => {
+        if (row.item) toolboxLookup[row.item.toLowerCase().trim()] = { action: row.action, followUp: row.byWhoAndWhen };
+      });
+      toolboxData.hazards.forEach(row => {
+        if (row.item) toolboxLookup[row.item.toLowerCase().trim()] = { action: row.action, followUp: row.byWhoAndWhen };
+      });
+      toolboxData.plantEquipment.forEach(row => {
+        if (row.item) toolboxLookup[row.item.toLowerCase().trim()] = { action: "", followUp: row.byWhoAndWhen };
+      });
 
+      // 3. Fill Table Rows Matching Labels directly
       for (let tr of rows) {
         const cells = tr.getElementsByTagName("w:tc");
         if (cells.length < 2) continue;
 
         const labelText = getCellText(cells[0]).toLowerCase().trim();
-        const matchedNote = agendaLookup[labelText];
 
-        if (matchedNote) {
-          if (cells[1]) setCellText(cells[1], matchedNote.action || '', xmlDoc);
-          if (cells[2]) setCellText(cells[2], matchedNote.followUp || '', xmlDoc);
+        // Exact or flexible row matching
+        let matchedData = toolboxLookup[labelText];
+        if (!matchedData) {
+          const matchedKey = Object.keys(toolboxLookup).find(k => labelText.includes(k) || k.includes(labelText));
+          if (matchedKey) matchedData = toolboxLookup[matchedKey];
+        }
+
+        if (matchedData) {
+          if (cells[1]) setCellText(cells[1], matchedData.action || '', xmlDoc);
+          if (cells[2]) setCellText(cells[2], matchedData.followUp || '', xmlDoc);
         }
       }
 
@@ -839,56 +884,33 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               </div>
             </div>
 
-            <div className="space-y-4">
-              <h3 className="text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">Agenda Items & Discussions</h3>
-              {[
-                { key: 'previousActions', label: 'Action Follow ups from Previous Meeting' },
-                { key: 'safetyInspectionReview', label: 'Review Site Safety Inspection Report & Training Needs' },
-                { key: 'incidents', label: 'Event Investigations and Recorded Accidents/Incidents' },
-                { key: 'hazards', label: 'Hazards & Control Measures (PPE, Hazard Board)' },
-                { key: 'plantAndEquipment', label: 'Plant and Equipment (including Test & Tag)' },
-                { key: 'taskPlanning', label: 'Weekly Task Planning and Goals' },
-                { key: 'operationalIssues', label: 'Operational Issues / Other Business' },
-              ].map((agenda) => (
-                <div key={agenda.key} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
-                  <span className="font-bold text-slate-800 block">{agenda.label}</span>
+            {/* SECTION: Action Follow ups from Previous Meeting */}
+            <div className="space-y-3 pt-2">
+              <h3 className="text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">
+                Action Follow ups from Previous Meeting
+              </h3>
+              {toolboxData.previousActions.map((row, idx) => (
+                <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
+                  <span className="font-bold text-slate-800 block">{row.item}</span>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     <div>
-                      <label className="text-slate-500 font-medium text-[10px] block mb-1">Action Taken</label>
+                      <label className="text-slate-500 font-medium text-[10px] block">Action Taken</label>
                       <input
                         type="text"
-                        value={toolboxData.agendaNotes[agenda.key].action}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setToolboxData(prev => ({
-                            ...prev,
-                            agendaNotes: {
-                              ...prev.agendaNotes,
-                              [agenda.key]: { ...prev.agendaNotes[agenda.key], action: val }
-                            }
-                          }));
-                        }}
-                        placeholder="Enter action taken..."
-                        className="w-full bg-white border border-slate-300 rounded p-2 text-slate-800"
+                        value={row.action}
+                        onChange={(e) => handleToolboxRowChange('previousActions', idx, 'action', e.target.value)}
+                        placeholder="Action taken..."
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
                     </div>
                     <div>
-                      <label className="text-slate-500 font-medium text-[10px] block mb-1">Further Follow up / Responsible</label>
+                      <label className="text-slate-500 font-medium text-[10px] block">Further Follow up</label>
                       <input
                         type="text"
-                        value={toolboxData.agendaNotes[agenda.key].followUp}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setToolboxData(prev => ({
-                            ...prev,
-                            agendaNotes: {
-                              ...prev.agendaNotes,
-                              [agenda.key]: { ...prev.agendaNotes[agenda.key], followUp: val }
-                            }
-                          }));
-                        }}
-                        placeholder="Enter follow up details..."
-                        className="w-full bg-white border border-slate-300 rounded p-2 text-slate-800"
+                        value={row.followUp}
+                        onChange={(e) => handleToolboxRowChange('previousActions', idx, 'followUp', e.target.value)}
+                        placeholder="Follow up details..."
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
                     </div>
                   </div>
@@ -896,6 +918,131 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
+            {/* SECTION: Health and Safety – Review Site Safety Inspection Report */}
+            <div className="space-y-3 pt-2">
+              <h3 className="text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">
+                Health and Safety – Review Site Safety Inspection Report & Training Needs
+              </h3>
+              {toolboxData.siteSafetyReview.map((row, idx) => (
+                <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
+                  <span className="font-bold text-slate-800 block">{row.item}</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">Action</label>
+                      <input
+                        type="text"
+                        value={row.action}
+                        onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'action', e.target.value)}
+                        placeholder="Action..."
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
+                      <input
+                        type="text"
+                        value={row.byWhoAndWhen}
+                        onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'byWhoAndWhen', e.target.value)}
+                        placeholder="Name / Date"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* SECTION: Event Investigations */}
+            <div className="space-y-3 pt-2">
+              <h3 className="text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">
+                Event Investigations and Recorded Accidents/Incidents
+              </h3>
+              {toolboxData.eventInvestigations.map((row, idx) => (
+                <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
+                  <span className="font-bold text-slate-800 block">{row.item}</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">Action Taken</label>
+                      <input
+                        type="text"
+                        value={row.action}
+                        onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'action', e.target.value)}
+                        placeholder="Action..."
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
+                      <input
+                        type="text"
+                        value={row.byWhoAndWhen}
+                        onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'byWhoAndWhen', e.target.value)}
+                        placeholder="Name / Date"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* SECTION: Hazards */}
+            <div className="space-y-3 pt-2">
+              <h3 className="text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">
+                Hazards & Control Measures (PPE Requirements, Hazard Board)
+              </h3>
+              {toolboxData.hazards.map((row, idx) => (
+                <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
+                  <span className="font-bold text-slate-800 block">{row.item}</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">Action / Update</label>
+                      <input
+                        type="text"
+                        value={row.action}
+                        onChange={(e) => handleToolboxRowChange('hazards', idx, 'action', e.target.value)}
+                        placeholder="Action..."
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
+                      <input
+                        type="text"
+                        value={row.byWhoAndWhen}
+                        onChange={(e) => handleToolboxRowChange('hazards', idx, 'byWhoAndWhen', e.target.value)}
+                        placeholder="Name / Date"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* SECTION: Plant and Equipment */}
+            <div className="space-y-3 pt-2">
+              <h3 className="text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">
+                Plant and Equipment (including Test & Tag)
+              </h3>
+              {toolboxData.plantEquipment.map((row, idx) => (
+                <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
+                  <span className="font-bold text-slate-800 block">{row.item}</span>
+                  <div>
+                    <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
+                    <input
+                      type="text"
+                      value={row.byWhoAndWhen}
+                      onChange={(e) => handleToolboxRowChange('plantEquipment', idx, 'byWhoAndWhen', e.target.value)}
+                      placeholder="Requirements, name, and date"
+                      className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* SECTION: Attendees */}
             <div className="space-y-3 pt-2">
               <div className="flex justify-between items-center">
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">Present / Attendees</h3>
