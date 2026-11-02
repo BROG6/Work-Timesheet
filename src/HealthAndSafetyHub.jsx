@@ -417,14 +417,13 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
       console.error("Export error details:", err);
+      let errorDesc = err.message;
       if (err.properties && err.properties.errors) {
-        err.properties.errors.forEach((subErr, i) => {
-          console.error(`Template Error #${i + 1}:`, subErr.properties?.explanation || subErr.message);
-        });
+        errorDesc = err.properties.errors.map(e => e.properties?.explanation || e.message).join(' | ');
       }
+      alert(`Template Error: ${errorDesc}`);
       if (!err?.message?.includes('canceled') && !err?.message?.includes('cancelled')) {
-        alert(`Export Failed: ${err?.message || "Check template placeholders"}`);
-        setStatusMessage({ type: 'error', text: `Export failed: ${err?.message || "Error generating document"}` });
+        setStatusMessage({ type: 'error', text: `Export failed: ${errorDesc}` });
       }
     } finally {
       setExportingDocx(false);
