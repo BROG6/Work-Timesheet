@@ -454,7 +454,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       });
     });
 
-    // Ensure all 91 item slots are safely populated up to 90 to prevent any missing tag multi-errors
     while (idx <= 90) {
       templatePayload[`items_${idx}_complies`] = 'Yes';
       templatePayload[`items_${idx}_action`] = '';
