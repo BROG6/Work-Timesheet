@@ -243,7 +243,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   });
 
-  // STATE: Toolbox Meeting Worksheet (Fully broken down with 3/4 column support)
+  // STATE: Toolbox Meeting Worksheet
   const [toolboxData, setToolboxData] = useState({
     date: new Date().toISOString().split('T')[0],
     time: '07:00',
@@ -258,11 +258,11 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       { item: "Other", action: "", followUp: "" },
     ],
     siteSafetyReview: [
-      { item: "Issues Raised from Site Safety Inspection", action: "", byWhoAndWhen: "" },
-      { item: "Worker Training Needs", action: "", byWhoAndWhen: "" },
+      { col1: "Issues Raised from Site Safety Inspection", col2: "", col3: "" },
+      { col1: "Worker Training Needs", col2: "", col3: "" },
     ],
     eventInvestigations: [
-      { item: "Has any Event/Accident/Incident occurred", action: "", byWhoAndWhen: "" },
+      { col1: "Has any Event/Accident/Incident occurred", col2: "", col3: "" },
     ],
     hazards: [
       { col1: "", col2: "", col3: "" },
@@ -276,6 +276,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     taskPlanning: [
       { col1: "", col2: "", col3: "", col4: "" },
     ],
+    taskPlanningDiscussion: "",
+    operationalIssues: "",
     attendees: [
       { name: userName || '', company: 'SJR Builders', signature: '', date: new Date().toISOString().split('T')[0] }
     ],
@@ -505,6 +507,10 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             pStr = `Meeting Closed: ${toolboxData.time || ''}    Next Meeting: Next week`;
           } else if (pStr.includes("Signed – Management:")) {
             pStr = `Signed – Management: ${userName || ''}    Dated: ${toolboxData.managementDate || toolboxData.date || ''}`;
+          } else if (pStr.includes("Discussion About Task Planning and Weekly Goals:")) {
+            pStr = `Discussion About Task Planning and Weekly Goals: ${toolboxData.taskPlanningDiscussion || ''}`;
+          } else if (pStr.includes("Operational Issues/other Business:")) {
+            pStr = `Operational Issues/other Business: ${toolboxData.operationalIssues || ''}`;
           }
 
           tNodes[0].textContent = pStr;
@@ -523,9 +529,29 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         if (headerCells.length === 0) continue;
         const tableLabel = getCellText(headerCells[0]).toLowerCase();
 
-        if (tableLabel.includes("hazard:")) {
+        if (tableLabel.includes("issues raised from site safety inspection") || tableLabel.includes("worker training needs")) {
+          toolboxData.siteSafetyReview.forEach((row, idx) => {
+            const rowIndex = idx + 1;
+            if (rows[rowIndex]) {
+              const cells = rows[rowIndex].getElementsByTagName("w:tc");
+              if (cells[0]) setCellText(cells[0], row.col1 || '', xmlDoc);
+              if (cells[1]) setCellText(cells[1], row.col2 || '', xmlDoc);
+              if (cells[2]) setCellText(cells[2], row.col3 || '', xmlDoc);
+            }
+          });
+        } else if (tableLabel.includes("has any event") || tableLabel.includes("event investigations")) {
+          toolboxData.eventInvestigations.forEach((row, idx) => {
+            const rowIndex = idx + 1;
+            if (rows[rowIndex]) {
+              const cells = rows[rowIndex].getElementsByTagName("w:tc");
+              if (cells[0]) setCellText(cells[0], row.col1 || '', xmlDoc);
+              if (cells[1]) setCellText(cells[1], row.col2 || '', xmlDoc);
+              if (cells[2]) setCellText(cells[2], row.col3 || '', xmlDoc);
+            }
+          });
+        } else if (tableLabel.includes("hazard:")) {
           toolboxData.hazards.forEach((haz, idx) => {
-            const rowIndex = idx + 1; // Skip header row 0
+            const rowIndex = idx + 1;
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
               if (cells[0]) setCellText(cells[0], haz.col1 || '', xmlDoc);
@@ -565,7 +591,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             }
           });
         } else {
-          // Generic table row matcher for previous actions, site safety reviews, etc.
+          // Generic table row matcher for previous actions
           for (let i = 1; i < rows.length; i++) {
             const cells = rows[i].getElementsByTagName("w:tc");
             if (cells.length < 2) continue;
@@ -575,18 +601,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             if (matchedPrevious) {
               if (cells[1]) setCellText(cells[1], matchedPrevious.action || '', xmlDoc);
               if (cells[2]) setCellText(cells[2], matchedPrevious.followUp || '', xmlDoc);
-            }
-
-            const matchedReview = toolboxData.siteSafetyReview.find(r => rowLabel.includes(r.item.toLowerCase()));
-            if (matchedReview) {
-              if (cells[1]) setCellText(cells[1], matchedReview.action || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], matchedReview.byWhoAndWhen || '', xmlDoc);
-            }
-
-            const matchedIncidents = toolboxData.eventInvestigations.find(inc => rowLabel.includes(inc.item.toLowerCase()));
-            if (matchedIncidents) {
-              if (cells[1]) setCellText(cells[1], matchedIncidents.action || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], matchedIncidents.byWhoAndWhen || '', xmlDoc);
             }
           }
         }
@@ -971,21 +985,26 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* SECTION: Health and Safety – Review Site Safety Inspection Report */}
+            {/* SECTION: Health and Safety – Review Site Safety Inspection Report & Training Needs (3-Column) */}
             <div className="space-y-3 pt-2">
               <h3 className="text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">
                 Health and Safety – Review Site Safety Inspection Report & Training Needs
               </h3>
               {toolboxData.siteSafetyReview.map((row, idx) => (
                 <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
-                  <span className="font-bold text-slate-800 block">{row.item}</span>
+                  <input
+                    type="text"
+                    value={row.col1}
+                    onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'col1', e.target.value)}
+                    className="font-bold text-slate-800 w-full bg-white border border-slate-300 rounded p-1.5"
+                  />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Action</label>
                       <input
                         type="text"
-                        value={row.action}
-                        onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'action', e.target.value)}
+                        value={row.col2}
+                        onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'col2', e.target.value)}
                         placeholder="Action..."
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -994,8 +1013,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
                       <input
                         type="text"
-                        value={row.byWhoAndWhen}
-                        onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'byWhoAndWhen', e.target.value)}
+                        value={row.col3}
+                        onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'col3', e.target.value)}
                         placeholder="Name / Date"
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1005,21 +1024,52 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* SECTION: Event Investigations */}
+            {/* SECTION: Event Investigations (3-Column) */}
             <div className="space-y-3 pt-2">
-              <h3 className="text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">
-                Event Investigations and Recorded Accidents/Incidents
-              </h3>
+              <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
+                <h3 className="text-xs font-extrabold text-slate-800 uppercase">
+                  Event Investigations and Recorded Accidents/Incidents
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => addToolboxRow('eventInvestigations', { col1: '', col2: '', col3: '' })}
+                  className="text-xs font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                >
+                  + Add Event Row
+                </button>
+              </div>
+
               {toolboxData.eventInvestigations.map((row, idx) => (
                 <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
-                  <span className="font-bold text-slate-800 block">{row.item}</span>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-slate-700 uppercase">Event Row #{idx + 1}</span>
+                    {toolboxData.eventInvestigations.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeToolboxRow('eventInvestigations', idx)}
+                        className="text-rose-600 font-semibold cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">Event / Incident</label>
+                      <input
+                        type="text"
+                        value={row.col1}
+                        onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'col1', e.target.value)}
+                        placeholder="Has any event occurred..."
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Action Taken</label>
                       <input
                         type="text"
-                        value={row.action}
-                        onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'action', e.target.value)}
+                        value={row.col2}
+                        onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'col2', e.target.value)}
                         placeholder="Action..."
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1028,8 +1078,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
                       <input
                         type="text"
-                        value={row.byWhoAndWhen}
-                        onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'byWhoAndWhen', e.target.value)}
+                        value={row.col3}
+                        onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'col3', e.target.value)}
                         placeholder="Name / Date"
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1039,7 +1089,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* SECTION: Hazards (3-Column Table Input) */}
+            {/* SECTION: Hazards (3-Column) */}
             <div className="space-y-3 pt-2">
               <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase">Hazards</h3>
@@ -1102,7 +1152,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* SECTION: Hazard Board - Updating (3-Column Table Input) */}
+            {/* SECTION: Hazard Board - Updating (3-Column) */}
             <div className="space-y-3 pt-2">
               <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase">Hazard Board - Updating</h3>
@@ -1165,7 +1215,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* SECTION: Plant and Equipment (3-Column Table Input) */}
+            {/* SECTION: Plant and Equipment (3-Column) */}
             <div className="space-y-3 pt-2">
               <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase">Plant and Equipment (including Test & Tag)</h3>
@@ -1194,7 +1244,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <div>
-                      <label className="text-slate-500 font-medium text-[10px] block">Plant and Equipment Requirements</label>
+                      <label className="text-slate-500 font-medium text-[10px] block">Requirements</label>
                       <input
                         type="text"
                         value={row.col1}
@@ -1228,7 +1278,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* SECTION: Task Planning and Weekly Goals (4-Column Table Input) */}
+            {/* SECTION: Task Planning and Weekly Goals (4-Column Table) */}
             <div className="space-y-3 pt-2">
               <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase">Task Planning and Weekly Goals</h3>
@@ -1299,6 +1349,34 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* SECTION: Discussion About Task Planning and Weekly Goals (Comment Box) */}
+            <div className="space-y-2 pt-2">
+              <label className="block text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">
+                Discussion About Task Planning and Weekly Goals
+              </label>
+              <textarea
+                value={toolboxData.taskPlanningDiscussion}
+                onChange={(e) => setToolboxData({ ...toolboxData, taskPlanningDiscussion: e.target.value })}
+                placeholder="Enter discussion notes and comments..."
+                rows={3}
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              />
+            </div>
+
+            {/* SECTION: Operational Issues / other Business (Comment Box) */}
+            <div className="space-y-2 pt-2">
+              <label className="block text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">
+                Operational Issues / other Business
+              </label>
+              <textarea
+                value={toolboxData.operationalIssues}
+                onChange={(e) => setToolboxData({ ...toolboxData, operationalIssues: e.target.value })}
+                placeholder="Enter operational issues or other business notes..."
+                rows={3}
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              />
             </div>
 
             {/* SECTION: Attendees */}
