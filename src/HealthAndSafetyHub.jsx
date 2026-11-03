@@ -82,6 +82,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   const [exportingDocx, setExportingDocx] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
   const [savedSites, setSavedSites] = useState([]);
+  const [autoFillContractor, setAutoFillContractor] = useState(true);
 
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [activeSignatureTarget, setActiveSignatureTarget] = useState(null);
@@ -310,12 +311,20 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
   const handleInspectionItemChange = (sectionKey, index, field, value) => {
     setInspectionData(prev => {
-      const updatedSection = [...prev.sections[sectionKey]];
-      updatedSection[index][field] = value;
-      return {
-        ...prev,
-        sections: { ...prev.sections, [sectionKey]: updatedSection }
-      };
+      const updatedSections = { ...prev.sections };
+      if (field === 'contractor' && autoFillContractor) {
+        Object.keys(updatedSections).forEach(sKey => {
+          updatedSections[sKey] = updatedSections[sKey].map(row => ({
+            ...row,
+            contractor: value
+          }));
+        });
+      } else {
+        const updatedSection = [...updatedSections[sectionKey]];
+        updatedSection[index][field] = value;
+        updatedSections[sectionKey] = updatedSection;
+      }
+      return { ...prev, sections: updatedSections };
     });
   };
 
@@ -927,6 +936,19 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           </div>
 
           <form onSubmit={handleInspectionSubmit} className="space-y-6">
+            <div className="flex items-center justify-between bg-emerald-50 p-3 rounded-lg border border-emerald-200 text-xs">
+              <span className="font-bold text-emerald-900">⚡ Auto-fill Contractor across all rows:</span>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoFillContractor}
+                  onChange={(e) => setAutoFillContractor(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+              </label>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Site / Project</label>
@@ -1003,7 +1025,18 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                         />
                       </div>
                       <div>
-                        <label className="text-slate-500 font-medium text-[10px] block">Contractor Responsible</label>
+                        <div className="flex justify-between items-center mb-0.5">
+                          <label className="text-slate-500 font-medium text-[10px] block">Contractor</label>
+                          {userName && (
+                            <button
+                              type="button"
+                              onClick={() => handleInspectionItemChange(sectionKey, idx, 'contractor', userName)}
+                              className="text-[9px] text-emerald-700 font-bold underline hover:text-emerald-800 cursor-pointer"
+                            >
+                              + Me
+                            </button>
+                          )}
+                        </div>
                         <textarea
                           rows={1}
                           value={row.contractor}
