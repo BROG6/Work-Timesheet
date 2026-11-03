@@ -792,45 +792,32 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   };
 
   const saveAndShareFile = async (zip, outputFileName) => {
-    if (Capacitor.isNativePlatform()) {
-      const content = zip.generate({ type: 'uint8array' });
-      let binary = '';
-      const bytes = new Uint8Array(content);
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const base64Data = window.btoa(binary);
-
-      const writtenFile = await Filesystem.writeFile({
-        path: outputFileName,
-        data: base64Data,
-        directory: Directory.Cache,
-        recursive: true
-      });
-
-      const uriResult = await Filesystem.getUri({
-        path: outputFileName,
-        directory: Directory.Cache,
-      });
-
-      await Share.share({
-        files: [uriResult.uri || writtenFile.uri],
-        dialogTitle: `Export ${outputFileName}`,
-      });
-    } else {
-      const blob = zip.generate({
-        type: 'blob',
-        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = outputFileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+    const content = zip.generate({ type: 'uint8array' });
+    let binary = '';
+    const bytes = new Uint8Array(content);
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
     }
+    const base64Data = window.btoa(binary);
+
+    const writtenFile = await Filesystem.writeFile({
+      path: outputFileName,
+      data: base64Data,
+      directory: Directory.Cache,
+      recursive: true
+    });
+
+    const uriResult = await Filesystem.getUri({
+      path: outputFileName,
+      directory: Directory.Cache,
+    });
+
+    await Share.share({
+      files: [uriResult.uri || writtenFile.uri],
+      title: outputFileName,
+      text: `Here is the generated ${outputFileName}`,
+      dialogTitle: `Export ${outputFileName}`,
+    });
   };
 
   const handleInspectionSubmit = async (e) => {
