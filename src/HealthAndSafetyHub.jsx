@@ -104,6 +104,11 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     return `${day}/${month}/${year}`;
   };
 
+  const handleAutoResize = (e) => {
+    e.target.style.height = 'auto';
+    e.target.style.height = `${e.target.scrollHeight}px`;
+  };
+
   useEffect(() => {
     const fetchSites = async () => {
       try {
@@ -974,7 +979,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 {items.map((row, idx) => (
                   <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
                     <span className="font-semibold text-slate-800 block">{row.item}</span>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                       <div>
                         <label className="text-slate-500 font-medium text-[10px] block">Complies</label>
                         <select
@@ -989,22 +994,24 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       </div>
                       <div>
                         <label className="text-slate-500 font-medium text-[10px] block">Action & Comment</label>
-                        <input
-                          type="text"
+                        <textarea
+                          rows={1}
                           value={row.action}
                           onChange={(e) => handleInspectionItemChange(sectionKey, idx, 'action', e.target.value)}
+                          onInput={handleAutoResize}
                           placeholder="Optional notes"
-                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         />
                       </div>
                       <div>
                         <label className="text-slate-500 font-medium text-[10px] block">Contractor Responsible</label>
-                        <input
-                          type="text"
+                        <textarea
+                          rows={1}
                           value={row.contractor}
                           onChange={(e) => handleInspectionItemChange(sectionKey, idx, 'contractor', e.target.value)}
+                          onInput={handleAutoResize}
                           placeholder="Name"
-                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         />
                       </div>
                     </div>
@@ -1115,22 +1122,24 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Action Taken</label>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={1}
                         value={row.action}
                         onChange={(e) => handleToolboxRowChange('previousActions', idx, 'action', e.target.value)}
+                        onInput={handleAutoResize}
                         placeholder="Action taken..."
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Further Follow up</label>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={1}
                         value={row.followUp}
                         onChange={(e) => handleToolboxRowChange('previousActions', idx, 'followUp', e.target.value)}
+                        onInput={handleAutoResize}
                         placeholder="Follow up details..."
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
                   </div>
@@ -1150,33 +1159,36 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                   <div className="space-y-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Issues Raised</label>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={1}
                         value={row.details || ''}
                         onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'details', e.target.value)}
+                        onInput={handleAutoResize}
                         placeholder="Enter details..."
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       <div>
                         <label className="text-slate-500 font-medium text-[10px] block">Action</label>
-                        <input
-                          type="text"
+                        <textarea
+                          rows={1}
                           value={row.action}
                           onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'action', e.target.value)}
+                          onInput={handleAutoResize}
                           placeholder="Action..."
-                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         />
                       </div>
                       <div>
                         <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
-                        <input
-                          type="text"
+                        <textarea
+                          rows={1}
                           value={row.whoWhen}
                           onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'whoWhen', e.target.value)}
+                          onInput={handleAutoResize}
                           placeholder="Name / Date"
-                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         />
                       </div>
                     </div>
@@ -1197,33 +1209,36 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                   <div className="space-y-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Worker Training Needs</label>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={1}
                         value={row.details || ''}
                         onChange={(e) => handleToolboxRowChange('workerTraining', idx, 'details', e.target.value)}
+                        onInput={handleAutoResize}
                         placeholder="Enter training needs..."
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       <div>
                         <label className="text-slate-500 font-medium text-[10px] block">Action</label>
-                        <input
-                          type="text"
+                        <textarea
+                          rows={1}
                           value={row.action}
                           onChange={(e) => handleToolboxRowChange('workerTraining', idx, 'action', e.target.value)}
+                          onInput={handleAutoResize}
                           placeholder="Action..."
-                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         />
                       </div>
                       <div>
                         <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
-                        <input
-                          type="text"
+                        <textarea
+                          rows={1}
                           value={row.whoWhen}
                           onChange={(e) => handleToolboxRowChange('workerTraining', idx, 'whoWhen', e.target.value)}
+                          onInput={handleAutoResize}
                           placeholder="Name / Date"
-                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         />
                       </div>
                     </div>
@@ -1264,33 +1279,36 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                   <div className="space-y-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Has any Event/Accident/Incident occurred</label>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={1}
                         value={row.details || ''}
                         onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'details', e.target.value)}
+                        onInput={handleAutoResize}
                         placeholder="Yes / No or details..."
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       <div>
                         <label className="text-slate-500 font-medium text-[10px] block">Action Taken</label>
-                        <input
-                          type="text"
+                        <textarea
+                          rows={1}
                           value={row.action}
                           onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'action', e.target.value)}
+                          onInput={handleAutoResize}
                           placeholder="Action..."
-                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         />
                       </div>
                       <div>
                         <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
-                        <input
-                          type="text"
+                        <textarea
+                          rows={1}
                           value={row.whoWhen}
                           onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'whoWhen', e.target.value)}
+                          onInput={handleAutoResize}
                           placeholder="Name / Date"
-                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         />
                       </div>
                     </div>
@@ -1329,32 +1347,35 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Hazard</label>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={1}
                         value={row.hazard}
                         onChange={(e) => handleToolboxRowChange('hazards', idx, 'hazard', e.target.value)}
+                        onInput={handleAutoResize}
                         placeholder="Hazard description..."
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Action</label>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={1}
                         value={row.action}
                         onChange={(e) => handleToolboxRowChange('hazards', idx, 'action', e.target.value)}
+                        onInput={handleAutoResize}
                         placeholder="Action..."
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={1}
                         value={row.whoWhen}
                         onChange={(e) => handleToolboxRowChange('hazards', idx, 'whoWhen', e.target.value)}
+                        onInput={handleAutoResize}
                         placeholder="Name / Date"
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
                   </div>
@@ -1392,32 +1413,35 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Hazard Board Item</label>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={1}
                         value={row.item}
                         onChange={(e) => handleToolboxRowChange('hazardBoard', idx, 'item', e.target.value)}
+                        onInput={handleAutoResize}
                         placeholder="Item..."
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">What needs to be updated</label>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={1}
                         value={row.update}
                         onChange={(e) => handleToolboxRowChange('hazardBoard', idx, 'update', e.target.value)}
+                        onInput={handleAutoResize}
                         placeholder="Update details..."
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={1}
                         value={row.whoWhen}
                         onChange={(e) => handleToolboxRowChange('hazardBoard', idx, 'whoWhen', e.target.value)}
+                        onInput={handleAutoResize}
                         placeholder="Name / Date"
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
                   </div>
@@ -1455,32 +1479,35 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Requirements</label>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={1}
                         value={row.requirement}
                         onChange={(e) => handleToolboxRowChange('plantEquipment', idx, 'requirement', e.target.value)}
+                        onInput={handleAutoResize}
                         placeholder="Requirements..."
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Action</label>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={1}
                         value={row.action}
                         onChange={(e) => handleToolboxRowChange('plantEquipment', idx, 'action', e.target.value)}
+                        onInput={handleAutoResize}
                         placeholder="Action..."
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={1}
                         value={row.whoWhen}
                         onChange={(e) => handleToolboxRowChange('plantEquipment', idx, 'whoWhen', e.target.value)}
+                        onInput={handleAutoResize}
                         placeholder="Name / Date"
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
                   </div>
@@ -1518,42 +1545,46 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Task</label>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={1}
                         value={row.task}
                         onChange={(e) => handleToolboxRowChange('taskPlanning', idx, 'task', e.target.value)}
+                        onInput={handleAutoResize}
                         placeholder="Task..."
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Equipment/PPE Required</label>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={1}
                         value={row.ppe}
                         onChange={(e) => handleToolboxRowChange('taskPlanning', idx, 'ppe', e.target.value)}
+                        onInput={handleAutoResize}
                         placeholder="Equipment / PPE..."
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Time Frame</label>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={1}
                         value={row.timeframe}
                         onChange={(e) => handleToolboxRowChange('taskPlanning', idx, 'timeframe', e.target.value)}
+                        onInput={handleAutoResize}
                         placeholder="Time frame..."
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={1}
                         value={row.whoWhen}
                         onChange={(e) => handleToolboxRowChange('taskPlanning', idx, 'whoWhen', e.target.value)}
+                        onInput={handleAutoResize}
                         placeholder="Name / Date"
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
                   </div>
@@ -1567,11 +1598,12 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 Discussion About Task Planning and Weekly Goals
               </label>
               <textarea
+                rows={2}
                 value={toolboxData.taskPlanningDiscussion}
                 onChange={(e) => setToolboxData({ ...toolboxData, taskPlanningDiscussion: e.target.value })}
+                onInput={handleAutoResize}
                 placeholder="Enter discussion notes and comments..."
-                rows={3}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
               />
             </div>
 
@@ -1581,11 +1613,12 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 Operational Issues / other Business
               </label>
               <textarea
+                rows={2}
                 value={toolboxData.operationalIssues}
                 onChange={(e) => setToolboxData({ ...toolboxData, operationalIssues: e.target.value })}
+                onInput={handleAutoResize}
                 placeholder="Enter operational issues or other business notes..."
-                rows={3}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
               />
             </div>
 
