@@ -1,7 +1,7 @@
 // src/HealthAndSafetyHub.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebaseConfig';
-import { collection, doc, setDoc, serverTimestamp, getDocs, query, where, getDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, serverTimestamp, getDocs, getDoc } from 'firebase/firestore';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import PZip from 'pizzip';
@@ -84,7 +84,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   const [savedSites, setSavedSites] = useState([]);
   const [autoFillContractor, setAutoFillContractor] = useState(true);
 
-  // Archive / Multiple Forms State
+  // Week & Site Navigation State
+  const [currentWeek, setCurrentWeek] = useState(new Date().toISOString().split('T')[0]);
   const [allExistingReports, setAllExistingReports] = useState([]);
   const [selectedReportId, setSelectedReportId] = useState('');
 
@@ -143,6 +144,37 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   useEffect(() => {
     fetchAllReports();
   }, [userId]);
+
+  // Shift week by +/- 7 days
+  const handleShiftWeek = (direction) => {
+    const d = new Date(currentWeek);
+    if (isNaN(d.getTime())) {
+      setCurrentWeek(new Date().toISOString().split('T')[0]);
+      return;
+    }
+    d.setDate(d.getDate() + (direction * 7));
+    const newWeekStr = d.toISOString().split('T')[0];
+    setCurrentWeek(newWeekStr);
+    
+    // Update active form week ending as well
+    if (hsSubView === 'inspection') {
+      setInspectionData(prev => ({ ...prev, weekEnding: newWeekStr }));
+    } else {
+      setToolboxData(prev => ({ ...prev, date: newWeekStr }));
+    }
+    setSelectedReportId('');
+  };
+
+  const handleThisWeek = () => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    setCurrentWeek(todayStr);
+    if (hsSubView === 'inspection') {
+      setInspectionData(prev => ({ ...prev, weekEnding: todayStr }));
+    } else {
+      setToolboxData(prev => ({ ...prev, date: todayStr }));
+    }
+    setSelectedReportId('');
+  };
 
   const defaultInspectionSections = {
     siteControl: [
@@ -255,16 +287,16 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
   const [inspectionData, setInspectionData] = useState({
     site: '',
-    weekEnding: new Date().toISOString().split('T')[0],
+    weekEnding: currentWeek,
     time: getCurrentTimeString(),
     inspectedBy: userName || '',
     signature: '',
-    dateSigned: new Date().toISOString().split('T')[0],
+    dateSigned: currentWeek,
     sections: defaultInspectionSections
   });
 
   const [toolboxData, setToolboxData] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: currentWeek,
     time: getCurrentTimeString(),
     location: '',
     previousActions: [
@@ -286,13 +318,19 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     taskPlanningDiscussion: "",
     operationalIssues: "",
     attendees: [
-      { name: userName || '', company: 'SJR Builders', signature: '', date: new Date().toISOString().split('T')[0] }
+      { name: userName || '', company: 'SJR Builders', signature: '', date: currentWeek }
     ],
     managementSignature: '',
-    managementDate: new Date().toISOString().split('T')[0]
+    managementDate: currentWeek
   });
 
-  const handleSelectExistingReport = (reportId) => {
+  // Filter reports matching the current week
+  const reportsForCurrentWeek = allExistingReports.filter(rep => {
+    const repWeek = rep.weekEnding || rep.date;
+    return repWeek === currentWeek;
+  });
+
+  const handleSelectReportById = (reportId) => {
     setSelectedReportId(reportId);
     if (!reportId) return;
 
@@ -302,17 +340,17 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         setHsSubView('inspection');
         setInspectionData({
           site: found.site || '',
-          weekEnding: found.weekEnding || new Date().toISOString().split('T')[0],
+          weekEnding: found.weekEnding || currentWeek,
           time: found.time || getCurrentTimeString(),
           inspectedBy: found.inspectedBy || userName || '',
           signature: found.signature || '',
-          dateSigned: found.dateSigned || new Date().toISOString().split('T')[0],
+          dateSigned: found.dateSigned || currentWeek,
           sections: found.sections || defaultInspectionSections
         });
-      } else if (found.type === 'H&S and Tool Box Meeting Worksheet' || found.previousActions) {
+      } else {
         setHsSubView('toolbox');
         setToolboxData({
-          date: found.date || new Date().toISOString().split('T')[0],
+          date: found.date || currentWeek,
           time: found.time || getCurrentTimeString(),
           location: found.location || '',
           previousActions: found.previousActions || toolboxData.previousActions,
@@ -327,7 +365,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           operationalIssues: found.operationalIssues || '',
           attendees: found.attendees || toolboxData.attendees,
           managementSignature: found.managementSignature || '',
-          managementDate: found.managementDate || found.date || new Date().toISOString().split('T')[0]
+          managementDate: found.managementDate || found.date || currentWeek
         });
       }
     }
@@ -338,16 +376,16 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     if (hsSubView === 'inspection') {
       setInspectionData({
         site: '',
-        weekEnding: new Date().toISOString().split('T')[0],
+        weekEnding: currentWeek,
         time: getCurrentTimeString(),
         inspectedBy: userName || '',
         signature: '',
-        dateSigned: new Date().toISOString().split('T')[0],
+        dateSigned: currentWeek,
         sections: defaultInspectionSections
       });
     } else {
       setToolboxData({
-        date: new Date().toISOString().split('T')[0],
+        date: currentWeek,
         time: getCurrentTimeString(),
         location: '',
         previousActions: [
@@ -368,12 +406,12 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         taskPlanning: [{ task: "", ppe: "", timeframe: "", whoWhen: "" }],
         taskPlanningDiscussion: "",
         operationalIssues: "",
-        attendees: [{ name: userName || '', company: 'SJR Builders', signature: '', date: new Date().toISOString().split('T')[0] }],
+        attendees: [{ name: userName || '', company: 'SJR Builders', signature: '', date: currentWeek }],
         managementSignature: '',
-        managementDate: new Date().toISOString().split('T')[0]
+        managementDate: currentWeek
       });
     }
-    setStatusMessage({ type: 'success', text: "Started a fresh blank form." });
+    setStatusMessage({ type: 'success', text: `Started a fresh form for week ending ${currentWeek}.` });
     setTimeout(() => setStatusMessage(null), 3000);
   };
 
@@ -393,7 +431,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           ...prev,
           ...found
         }));
-        setStatusMessage({ type: 'success', text: `Loaded existing live form for ${newSite} (${newWeek}) for collaboration.` });
+        setStatusMessage({ type: 'success', text: `Loaded existing live form for ${newSite} (${newWeek}).` });
         setTimeout(() => setStatusMessage(null), 4000);
       }
     } catch (err) {
@@ -465,7 +503,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   const addAttendeeRow = () => {
     setToolboxData(prev => ({
       ...prev,
-      attendees: [...prev.attendees, { name: '', company: 'SJR Builders', signature: '', date: new Date().toISOString().split('T')[0] }]
+      attendees: [...prev.attendees, { name: '', company: 'SJR Builders', signature: '', date: currentWeek }]
     }));
   };
 
@@ -1003,30 +1041,65 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         </button>
       </div>
 
-      {/* HISTORICAL SELECTOR & ADD SITE BAR */}
-      <div className="bg-slate-100 border border-slate-200 p-3 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="w-full sm:w-auto flex-1">
-          <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">Select Previous Form / Week</label>
-          <select
-            value={selectedReportId}
-            onChange={(e) => handleSelectExistingReport(e.target.value)}
-            className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-semibold text-slate-800"
-          >
-            <option value="">-- Choose past saved form or add site --</option>
-            {allExistingReports.map(rep => (
-              <option key={rep.id} value={rep.id}>
-                {rep.type} - {rep.site || rep.location || 'Unknown'} (Week ending: {rep.weekEnding || rep.date})
-              </option>
-            ))}
-          </select>
+      {/* WEEK NAVIGATION & SITE SELECTOR BAR */}
+      <div className="bg-slate-100 border border-slate-200 p-3 rounded-xl space-y-3">
+        {/* Week buttons */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-2 border-b border-slate-200 pb-3">
+          <div className="flex items-center gap-1.5 w-full sm:w-auto justify-center">
+            <button
+              type="button"
+              onClick={() => handleShiftWeek(-1)}
+              className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-bold text-xs py-1.5 px-3 rounded-lg shadow-xs cursor-pointer"
+            >
+              ← Prev Week
+            </button>
+            <button
+              type="button"
+              onClick={handleThisWeek}
+              className="bg-slate-900 text-white hover:bg-slate-800 font-bold text-xs py-1.5 px-3 rounded-lg shadow-xs cursor-pointer"
+            >
+              This Week
+            </button>
+            <button
+              type="button"
+              onClick={() => handleShiftWeek(1)}
+              className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-bold text-xs py-1.5 px-3 rounded-lg shadow-xs cursor-pointer"
+            >
+              Next Week →
+            </button>
+          </div>
+          <div className="text-xs font-bold text-slate-700 text-center sm:text-right">
+            Selected Week Ending: <span className="text-emerald-700">{currentWeek}</span>
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={handleStartFreshForm}
-          className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2.5 px-4 rounded-lg shadow transition-colors cursor-pointer whitespace-nowrap mt-4 sm:mt-0"
-        >
-          + Add Site
-        </button>
+
+        {/* Site Dropdown for this week & Add Site button */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
+          <div className="w-full sm:w-auto flex-1">
+            <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">
+              Sites with forms entered for this week ({reportsForCurrentWeek.length})
+            </label>
+            <select
+              value={selectedReportId}
+              onChange={(e) => handleSelectReportById(e.target.value)}
+              className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-semibold text-slate-800"
+            >
+              <option value="">-- Choose site for this week or click Add Site --</option>
+              {reportsForCurrentWeek.map(rep => (
+                <option key={rep.id} value={rep.id}>
+                  {rep.type} - {rep.site || rep.location || 'Unknown'}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={handleStartFreshForm}
+            className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2.5 px-4 rounded-lg shadow transition-colors cursor-pointer whitespace-nowrap mt-2 sm:mt-5"
+          >
+            + Add Site
+          </button>
+        </div>
       </div>
 
       {statusMessage && (
@@ -1088,7 +1161,11 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 <input
                   type="date"
                   value={inspectionData.weekEnding}
-                  onChange={(e) => handleSiteOrWeekChange(inspectionData.site, e.target.value)}
+                  onChange={(e) => {
+                    const newWk = e.target.value;
+                    setCurrentWeek(newWk);
+                    handleSiteOrWeekChange(inspectionData.site, newWk);
+                  }}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800"
                   required
                 />
@@ -1244,7 +1321,11 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 <input
                   type="date"
                   value={toolboxData.date}
-                  onChange={(e) => setToolboxData({ ...toolboxData, date: e.target.value })}
+                  onChange={(e) => {
+                    const newDt = e.target.value;
+                    setCurrentWeek(newDt);
+                    setToolboxData({ ...toolboxData, date: newDt });
+                  }}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800"
                   required
                 />
