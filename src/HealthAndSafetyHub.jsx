@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebaseConfig';
 import { collection, doc, setDoc, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
-import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import PZip from 'pizzip';
@@ -979,7 +978,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 {items.map((row, idx) => (
                   <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
                     <span className="font-semibold text-slate-800 block">{row.item}</span>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       <div>
                         <label className="text-slate-500 font-medium text-[10px] block">Complies</label>
                         <select
@@ -1119,7 +1118,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               {toolboxData.previousActions.map((row, idx) => (
                 <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
                   <span className="font-bold text-slate-800 block">{row.item}</span>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Action Taken</label>
                       <textarea
@@ -1156,7 +1155,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               </div>
               {toolboxData.siteSafetyReview.map((row, idx) => (
                 <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Issues Raised</label>
                       <textarea
@@ -1204,7 +1203,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               </div>
               {toolboxData.workerTraining.map((row, idx) => (
                 <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Worker Training Needs</label>
                       <textarea
@@ -1272,7 +1271,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       </button>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Has any Event/Accident/Incident occurred</label>
                       <textarea
@@ -1338,7 +1337,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       </button>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Hazard</label>
                       <textarea
@@ -1404,7 +1403,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       </button>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Hazard Board Item</label>
                       <textarea
@@ -1470,7 +1469,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       </button>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Requirements</label>
                       <textarea
@@ -1536,7 +1535,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       </button>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-4 gap-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Task</label>
                       <textarea
@@ -1643,7 +1642,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       </button>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <input
                       type="text"
                       value={attendee.name}
