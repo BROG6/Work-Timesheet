@@ -6,31 +6,7 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import PZip from 'pizzip';
-import Docxtemplater from 'docxtemplater';
-import ImageModule from 'docxtemplater-image-module-free';
 import sjrLogo from './assets/logo.jpg';
-
-// Helper to convert base64 signatures for DOCX embedding
-function dataURLtoArrayBuffer(dataURL) {
-  if (!dataURL || !dataURL.includes(',')) return null;
-  const base64 = dataURL.split(',')[1];
-  const binaryString = window.atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
-
-const imageOptions = {
-  getImage(tagValue) {
-    return dataURLtoArrayBuffer(tagValue);
-  },
-  getSize() {
-    return [150, 45];
-  }
-};
 
 export default function ManagerHealthAndSafetyDashboard() {
   const [submissions, setSubmissions] = useState([]);
@@ -80,160 +56,455 @@ export default function ManagerHealthAndSafetyDashboard() {
     }
   });
 
+  const formatDateShort = (dateStr) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = String(d.getFullYear()).slice(-2);
+    return `${day}/${month}/${year}`;
+  };
+
+  // --- DOM PARSER & IMAGE INJECTION HELPER FUNCTIONS ---
+  function setCellText(cell, text, xmlDoc) {
+    const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    const tNodes = cell.getElementsByTagNameNS(ns, "t");
+    if (tNodes.length > 0) {
+      tNodes[0].textContent = text;
+      tNodes[0].setAttribute("xml:space", "preserve");
+      for (let i = 1; i < tNodes.length; i++) {
+        tNodes[i].textContent = "";
+      }
+    } else {
+      let pNodes = cell.getElementsByTagNameNS(ns, "p");
+      let p = pNodes[0];
+      if (!p) {
+        p = xmlDoc.createElementNS(ns, "w:p");
+        cell.appendChild(p);
+      }
+      const r = xmlDoc.createElementNS(ns, "w:r");
+      const t = xmlDoc.createElementNS(ns, "w:t");
+      t.textContent = text;
+      t.setAttribute("xml:space", "preserve");
+      r.appendChild(t);
+      p.appendChild(r);
+    }
+  }
+
+  function getCellText(cell) {
+    const tNodes = cell.getElementsByTagName("w:t");
+    let str = "";
+    for (let tn of tNodes) str += tn.textContent;
+    return str.replace(/\s+/g, ' ').trim();
+  }
+
+  function insertSignatureWithParagraph(pNodeContainer, dataUrl, dateStr, zip, xmlDoc) {
+    if (!dataUrl || !dataUrl.startsWith("data:image")) return;
+
+    try {
+      const imgId = "sig_" + Math.random().toString(36).substring(2, 9);
+      const fileName = `media/${imgId}.png`;
+      const relsId = `rIdSig${Math.floor(Math.random() * 100000)}`;
+
+      const base64Data = dataUrl.split(',')[1];
+      const binaryStr = window.atob(base64Data);
+      const len = binaryStr.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+      zip.file(`word/${fileName}`, bytes);
+
+      const relsXmlStr = zip.file("word/_rels/document.xml.rels").asText();
+      const relsParser = new DOMParser();
+      const relsDoc = relsParser.parseFromString(relsXmlStr, "text/xml");
+      const relationships = relsDoc.getElementsByTagName("Relationships")[0];
+
+      if (relationships) {
+        const newRel = relsDoc.createElementNS(
+          "http://schemas.openxmlformats.org/package/2006/relationships",
+          "Relationship"
+        );
+        newRel.setAttribute("Id", relsId);
+        newRel.setAttribute(
+          "Type",
+          "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+        );
+        newRel.setAttribute("Target", fileName);
+        relationships.appendChild(newRel);
+
+        const relsSerializer = new XMLSerializer();
+        zip.file("word/_rels/document.xml.rels", relsSerializer.serializeToString(relsDoc));
+      }
+
+      const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+      const nsA = "http://schemas.openxmlformats.org/drawingml/2006/main";
+      const nsR = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+      const drawingXmlStr = `
+        <w:p xmlns:w="${nsW}">
+          <w:r>
+            <w:drawing>
+              <wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
+                <wp:extent cx="1000000" cy="350000"/>
+                <wp:docPr id="1" name="Signature ${imgId}"/>
+                <a:graphic xmlns:a="${nsA}">
+                  <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                    <pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                      <pic:nvPicPr>
+                        <pic:cNvPr id="0" name="${fileName}"/>
+                        <pic:cNvPicPr/>
+                      </pic:nvPicPr>
+                      <pic:blipFill>
+                        <a:blip r:embed="${relsId}" xmlns:r="${nsR}"/>
+                        <a:stretch><a:fillRect/></a:stretch>
+                      </pic:blipFill>
+                      <pic:spPr>
+                        <a:xfrm><a:off x="0" y="0"/><a:ext cx="1000000" cy="350000"/></a:xfrm>
+                        <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+                      </pic:spPr>
+                    </pic:pic>
+                  </a:graphicData>
+                </a:graphic>
+              </wp:inline>
+            </w:drawing>
+          </w:r>
+          <w:r>
+            <w:rPr><w:sz w:val="20"/></w:rPr>
+            <w:t xml:space="preserve">   Dated: ${dateStr}</w:t>
+          </w:r>
+        </w:p>`;
+
+      const imgDoc = new DOMParser().parseFromString(drawingXmlStr, "text/xml");
+      const pNode = xmlDoc.importNode(imgDoc.documentElement, true);
+
+      if (pNodeContainer.nodeName === 'w:tc') {
+        while (pNodeContainer.firstChild) pNodeContainer.removeChild(pNodeContainer.firstChild);
+        pNodeContainer.appendChild(pNode);
+      } else if (pNodeContainer.nodeName === 'w:p') {
+        pNodeContainer.parentNode.replaceChild(pNode, pNodeContainer);
+      }
+    } catch (e) {
+      console.error("Failed to inject signature image into document:", e);
+    }
+  }
+
+  const saveAndShareFile = async (zip, outputFileName) => {
+    if (Capacitor.isNativePlatform()) {
+      const content = zip.generate({ type: 'uint8array' });
+      let binary = '';
+      const bytes = new Uint8Array(content);
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64Data = window.btoa(binary);
+
+      const writtenFile = await Filesystem.writeFile({
+        path: outputFileName,
+        data: base64Data,
+        directory: Directory.Cache,
+        recursive: true
+      });
+
+      const uriResult = await Filesystem.getUri({
+        path: outputFileName,
+        directory: Directory.Cache,
+      });
+
+      await Share.share({
+        files: [uriResult.uri || writtenFile.uri],
+        dialogTitle: `Export ${outputFileName}`,
+      });
+    } else {
+      const blob = zip.generate({
+        type: 'blob',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = outputFileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+  };
+
   const exportDocxForRecord = async (record) => {
     setExportingId(record.id);
     try {
       const isInspection = record.type === 'Site Safety Inspection Report';
-      const templateName = isInspection 
-        ? 'Site Safety Inspection Report.docx' 
+      const templateFileName = isInspection
+        ? 'Site Safety Inspection Report.docx'
         : 'H&S and Toolbox Meeting Worksheet.docx';
 
-      const response = await fetch(`/${templateName}`);
+      const response = await fetch(`/${templateFileName}`);
       if (!response.ok) {
-        throw new Error(`Template file '${templateName}' not found in public folder.`);
+        throw new Error(`Template file '${templateFileName}' not found in public folder.`);
       }
       const templateArrayBuffer = await response.arrayBuffer();
       const zip = new PZip(templateArrayBuffer);
 
-      const imageModule = new ImageModule(imageOptions);
-      const docx = new Docxtemplater(zip, {
-        modules: [imageModule],
-        paragraphLoop: true,
-        linebreaks: true,
-      });
-
-      // Build payload based on record type
-      let templatePayload = {};
+      const docXmlStr = zip.file("word/document.xml").asText();
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
 
       if (isInspection) {
-        templatePayload = {
-          site: record.site || '',
-          weekEnding: record.weekEnding || '',
-          time: record.time || '',
-          inspectedBy: record.inspectedBy || record.userName || '',
-          signature: record.signature || '',
-          dateSigned: record.dateSigned || record.weekEnding || ''
-        };
+        const paragraphs = xmlDoc.getElementsByTagName("w:p");
+        const rows = xmlDoc.getElementsByTagName("w:tr");
 
-        // Map checklist items back into template indices if stored as sections
+        for (let p of paragraphs) {
+          const text = getCellText(p);
+          if (text.includes("Site:") || text.includes("Week Ending:") || text.includes("Inspected By:") || text.includes("Signed:")) {
+            const tNodes = p.getElementsByTagName("w:t");
+            if (tNodes.length > 0) {
+              let pStr = "";
+              for (let tn of tNodes) pStr += tn.textContent;
+              
+              if (pStr.includes("Site:")) {
+                pStr = `Site: ${record.site || ''}`;
+                tNodes[0].textContent = pStr;
+                for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+              }
+              if (pStr.includes("Week Ending:")) {
+                pStr = `Week Ending: ${record.weekEnding || ''}      Time: ${record.time || ''}`;
+                tNodes[0].textContent = pStr;
+                for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+              }
+              if (pStr.includes("Inspected By:")) {
+                pStr = `Inspected By: ${record.inspectedBy || record.userName || ''}`;
+                tNodes[0].textContent = pStr;
+                for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+              }
+              if (pStr.includes("Signed:")) {
+                const formattedDate = formatDateShort(record.dateSigned || record.weekEnding);
+                if (record.signature) {
+                  insertSignatureWithParagraph(p, record.signature, formattedDate, zip, xmlDoc);
+                } else {
+                  pStr = `Signed: ________________      Dated: ${formattedDate}`;
+                  tNodes[0].textContent = pStr;
+                  for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+                }
+              }
+            }
+          }
+        }
+
+        const itemLookup = {};
         if (record.sections) {
-          let idx = 0;
-          Object.values(record.sections).forEach((sectionItems) => {
-            sectionItems.forEach((row) => {
-              templatePayload[`items_${idx}_complies`] = row.complies || 'Yes';
-              templatePayload[`items_${idx}_action`] = row.action || '';
-              templatePayload[`items_${idx}_contractor`] = row.contractor || '';
-              idx++;
+          Object.values(record.sections).forEach(sectionItems => {
+            sectionItems.forEach(row => {
+              if (row.item) {
+                itemLookup[row.item.toLowerCase().trim()] = row;
+              }
             });
           });
         }
-      } else {
-        // Toolbox Meeting Payload
-        templatePayload = {
-          date: record.date || '',
-          time: record.time || '',
-          location: record.location || '',
-          
-          previousActions: record.agendaNotes?.previousActions || 'N/A',
-          previousActions_action: 'Reviewed',
-          previousActions_byWho: record.userName || '',
 
-          safetyInspectionReview_action: record.agendaNotes?.safetyInspectionReview || 'Reviewed',
-          safetyInspectionReview_followup: 'Ongoing',
+        for (let tr of rows) {
+          const cells = tr.getElementsByTagName("w:tc");
+          if (cells.length < 2) continue;
 
-          trainingNeeds: 'Standard induction',
-          trainingNeeds_action: 'Briefed',
-          trainingNeeds_byWho: record.userName || '',
+          const labelText = getCellText(cells[0]).toLowerCase().trim();
+          const matchedItem = itemLookup[labelText];
 
-          incidents: record.agendaNotes?.incidents || 'None reported',
-          incidents_actionTaken: 'N/A',
-          incidents_byWho: record.userName || '',
-
-          hazards: record.agendaNotes?.hazards || 'Standard hazards',
-          hazards_actionTaken: 'PPE active',
-          hazards_byWho: record.userName || '',
-
-          hazardBoard: record.location || 'Main Site',
-          hazardBoard_updates: 'Current',
-          hazardBoard_byWho: record.userName || '',
-
-          plantAndEquipment: record.agendaNotes?.plantAndEquipment || 'Checked',
-          plantAndEquipment_byWho: record.userName || '',
-
-          weeklyTask: record.agendaNotes?.taskPlanning || 'General construction',
-          weeklyTask_ppe: 'Standard PPE',
-          weeklyTask_timeframe: 'This week',
-          weeklyTask_byWho: record.userName || '',
-
-          taskPlanningDiscussion: record.agendaNotes?.taskPlanning || '',
-          operationalIssuesNotes: record.agendaNotes?.operationalIssues || '',
-
-          meetingClosed: record.time || '16:00',
-          nextMeetingDate: 'Next week',
-
-          attendees: (record.attendees || []).map(att => ({
-            name: att.name || '',
-            company: att.company || '',
-            signature: att.signature || ''
-          })),
-
-          managementSignature: record.managementSignature || '',
-          managementDate: record.managementDate || record.date || ''
-        };
-      }
-
-      docx.render(templatePayload);
-      const generatedZip = docx.getZip();
-
-      const siteName = record.site || record.location || 'Site';
-      const dateStr = record.weekEnding || record.date || 'Record';
-      const cleanName = `${record.type} - ${siteName} (${dateStr})`.replace(/[^a-zA-Z0-9_\-]/g, '_') + '.docx';
-
-      if (Capacitor.isNativePlatform()) {
-        const content = generatedZip.generate({ type: 'uint8array' });
-        let binary = '';
-        const bytes = new Uint8Array(content);
-        for (let i = 0; i < bytes.byteLength; i++) {
-          binary += String.fromCharCode(bytes[i]);
+          if (matchedItem) {
+            if (cells[1]) setCellText(cells[1], matchedItem.complies || 'Yes', xmlDoc);
+            if (cells[2]) setCellText(cells[2], matchedItem.action || '', xmlDoc);
+            if (cells[3]) setCellText(cells[3], matchedItem.contractor || '', xmlDoc);
+          }
         }
-        const base64Data = window.btoa(binary);
 
-        const writtenFile = await Filesystem.writeFile({
-          path: cleanName,
-          data: base64Data,
-          directory: Directory.Cache,
-          recursive: true
-        });
+        const serializer = new XMLSerializer();
+        zip.file("word/document.xml", serializer.serializeToString(xmlDoc));
 
-        const uriResult = await Filesystem.getUri({
-          path: cleanName,
-          directory: Directory.Cache,
-        });
+        const siteNameClean = (record.site || 'Site').replace(/[^a-zA-Z0-9_\-]/g, '_');
+        const outputFileName = `Site Safety Inspection - ${siteNameClean} (${record.weekEnding}).docx`;
+        await saveAndShareFile(zip, outputFileName);
 
-        await Share.share({
-          files: [uriResult.uri || writtenFile.uri],
-          dialogTitle: `Export ${cleanName}`,
-        });
       } else {
-        const blob = generatedZip.generate({
-          type: 'blob',
-          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = cleanName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        const paragraphs = xmlDoc.getElementsByTagName("w:p");
+        const tables = xmlDoc.getElementsByTagName("w:tbl");
+
+        for (let i = 0; i < paragraphs.length; i++) {
+          const p = paragraphs[i];
+          const tNodes = p.getElementsByTagName("w:t");
+          if (tNodes.length > 0) {
+            let pStr = "";
+            for (let tn of tNodes) pStr += tn.textContent;
+
+            if (pStr.includes("Date and Time:")) {
+              pStr = `Date and Time: ${record.date || ''} ${record.time || ''}    Location: ${record.location || ''}`;
+              tNodes[0].textContent = pStr;
+              for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+            } else if (pStr.includes("Meeting Closed:")) {
+              pStr = `Meeting Closed: ${record.time || ''}    Next Meeting: Next week`;
+              tNodes[0].textContent = pStr;
+              for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+            } else if (pStr.includes("Signed – Management:")) {
+              if (record.managementSignature) {
+                const dateVal = formatDateShort(record.managementDate || record.date);
+                pStr = `Signed – Management: Signed (${dateVal})    Dated: ${dateVal}`;
+                tNodes[0].textContent = pStr;
+                for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+              } else {
+                pStr = `Signed – Management: ________________    Dated: ____________`;
+                tNodes[0].textContent = pStr;
+                for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+              }
+            } else if (pStr.toLowerCase().startsWith("discussion about task planning")) {
+              tNodes[0].textContent = "Discussion About Task Planning and Weekly Goals:";
+              for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+
+              let nextSibling = p.parentNode && p.parentNode.nodeName === 'w:tc' ? p.parentNode.parentNode.nextElementSibling : p.nextElementSibling;
+              if (nextSibling && record.taskPlanningDiscussion) {
+                const targetCell = nextSibling.getElementsByTagName ? nextSibling.getElementsByTagName("w:tc")[0] : null;
+                if (targetCell) {
+                  setCellText(targetCell, record.taskPlanningDiscussion, xmlDoc);
+                }
+              }
+            } else if (pStr.toLowerCase().startsWith("operational issues/other business")) {
+              tNodes[0].textContent = "Operational Issues/other Business:";
+              for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+
+              let nextSibling = p.parentNode && p.parentNode.nodeName === 'w:tc' ? p.parentNode.parentNode.nextElementSibling : p.nextElementSibling;
+              if (nextSibling && record.operationalIssues) {
+                const targetCell = nextSibling.getElementsByTagName ? nextSibling.getElementsByTagName("w:tc")[0] : null;
+                if (targetCell) {
+                  setCellText(targetCell, record.operationalIssues, xmlDoc);
+                }
+              }
+            }
+          }
+        }
+
+        for (let table of tables) {
+          const rows = table.getElementsByTagName("w:tr");
+          if (rows.length < 2) continue;
+
+          const headerCells = rows[0].getElementsByTagName("w:tc");
+          if (headerCells.length === 0) continue;
+          const tableLabel = getCellText(headerCells[0]).toLowerCase();
+
+          if (tableLabel.includes("present")) {
+            (record.attendees || []).forEach((att, idx) => {
+              const rowIndex = idx + 1;
+              if (rows[rowIndex]) {
+                const cells = rows[rowIndex].getElementsByTagName("w:tc");
+                if (cells[0]) setCellText(cells[0], att.name || '', xmlDoc);
+                if (cells[1]) setCellText(cells[1], att.company || '', xmlDoc);
+                if (cells[2]) {
+                  const formattedDate = formatDateShort(att.date || record.date);
+                  if (att.signature) {
+                    insertSignatureWithParagraph(cells[2], att.signature, formattedDate, zip, xmlDoc);
+                  } else {
+                    setCellText(cells[2], formattedDate, xmlDoc);
+                  }
+                }
+              }
+            });
+          } else if (tableLabel.includes("issues raised from site safety inspection")) {
+            (record.siteSafetyReview || []).forEach((row, idx) => {
+              const rowIndex = idx + 1;
+              if (rows[rowIndex]) {
+                const cells = rows[rowIndex].getElementsByTagName("w:tc");
+                if (cells[0]) setCellText(cells[0], row.details || '', xmlDoc);
+                if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
+                if (cells[2]) setCellText(cells[2], row.whoWhen || '', xmlDoc);
+              }
+            });
+          } else if (tableLabel.includes("worker training needs")) {
+            (record.workerTraining || []).forEach((row, idx) => {
+              const rowIndex = idx + 1;
+              if (rows[rowIndex]) {
+                const cells = rows[rowIndex].getElementsByTagName("w:tc");
+                if (cells[0]) setCellText(cells[0], row.details || '', xmlDoc);
+                if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
+                if (cells[2]) setCellText(cells[2], row.whoWhen || '', xmlDoc);
+              }
+            });
+          } else if (tableLabel.includes("has any event") || tableLabel.includes("event investigations")) {
+            (record.eventInvestigations || []).forEach((row, idx) => {
+              const rowIndex = idx + 1;
+              if (rows[rowIndex]) {
+                const cells = rows[rowIndex].getElementsByTagName("w:tc");
+                if (cells[0]) setCellText(cells[0], row.details || '', xmlDoc);
+                if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
+                if (cells[2]) setCellText(cells[2], row.whoWhen || '', xmlDoc);
+              }
+            });
+          } else if (tableLabel.includes("hazard:") && !tableLabel.includes("board")) {
+            (record.hazards || []).forEach((haz, idx) => {
+              const rowIndex = idx + 1;
+              if (rows[rowIndex]) {
+                const cells = rows[rowIndex].getElementsByTagName("w:tc");
+                if (cells[0]) setCellText(cells[0], haz.hazard || '', xmlDoc);
+                if (cells[1]) setCellText(cells[1], haz.action || '', xmlDoc);
+                if (cells[2]) setCellText(cells[2], haz.whoWhen || '', xmlDoc);
+              }
+            });
+          } else if (tableLabel.includes("hazard board")) {
+            (record.hazardBoard || []).forEach((hb, idx) => {
+              const rowIndex = idx + 1;
+              if (rows[rowIndex]) {
+                const cells = rows[rowIndex].getElementsByTagName("w:tc");
+                if (cells[0]) setCellText(cells[0], hb.item || '', xmlDoc);
+                if (cells[1]) setCellText(cells[1], hb.update || '', xmlDoc);
+                if (cells[2]) setCellText(cells[2], hb.whoWhen || '', xmlDoc);
+              }
+            });
+          } else if (tableLabel.includes("plant and equipment requirements") || tableLabel.includes("plant and equipment (including")) {
+            (record.plantEquipment || []).forEach((plant, idx) => {
+              const rowIndex = idx + 1;
+              if (rows[rowIndex]) {
+                const cells = rows[rowIndex].getElementsByTagName("w:tc");
+                if (cells[0]) setCellText(cells[0], plant.requirement || '', xmlDoc);
+                if (cells[1]) setCellText(cells[1], plant.action || '', xmlDoc);
+                if (cells[2]) setCellText(cells[2], plant.whoWhen || '', xmlDoc);
+              }
+            });
+          } else if (tableLabel.includes("task:")) {
+            (record.taskPlanning || []).forEach((tp, idx) => {
+              const rowIndex = idx + 1;
+              if (rows[rowIndex]) {
+                const cells = rows[rowIndex].getElementsByTagName("w:tc");
+                if (cells[0]) setCellText(cells[0], tp.task || '', xmlDoc);
+                if (cells[1]) setCellText(cells[1], tp.ppe || '', xmlDoc);
+                if (cells[2]) setCellText(cells[2], tp.timeframe || '', xmlDoc);
+                if (cells[3]) setCellText(cells[3], tp.whoWhen || '', xmlDoc);
+              }
+            });
+          } else if (tableLabel.includes("agenda item")) {
+            for (let i = 1; i < rows.length; i++) {
+              const cells = rows[i].getElementsByTagName("w:tc");
+              if (cells.length < 2) continue;
+              const rowLabel = getCellText(cells[0]).toLowerCase();
+
+              const matchedPrevious = (record.previousActions || []).find(p => rowLabel.includes(p.item.toLowerCase()));
+              if (matchedPrevious) {
+                if (cells[1]) setCellText(cells[1], matchedPrevious.action || '', xmlDoc);
+                if (cells[2]) setCellText(cells[2], matchedPrevious.followUp || '', xmlDoc);
+              }
+            }
+          }
+        }
+
+        const serializer = new XMLSerializer();
+        zip.file("word/document.xml", serializer.serializeToString(xmlDoc));
+
+        const locClean = (record.location || 'Site').replace(/[^a-zA-Z0-9_\-]/g, '_');
+        const outputFileName = `Toolbox Meeting - ${locClean} (${record.date}).docx`;
+        await saveAndShareFile(zip, outputFileName);
       }
 
-      setStatusMessage({ type: 'success', text: `Downloaded ${cleanName}!` });
+      setStatusMessage({ type: 'success', text: `Downloaded successfully!` });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
       console.error("Manager Export Error:", err);
       alert(`Export Failed: ${err?.message || "Could not generate file"}`);
+      setStatusMessage({ type: 'error', text: `Export failed: ${err.message}` });
     } finally {
       setExportingId(null);
     }
