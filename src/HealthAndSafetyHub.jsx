@@ -424,7 +424,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               pStr = `Inspected By: ${inspectionData.inspectedBy || ''}`;
             }
             if (pStr.includes("Signed:")) {
-              pStr = `Signed: ${inspectionData.inspectedBy || ''}      Dated: ${inspectionData.dateSigned || inspectionData.weekEnding || ''}`;
+              const sigText = inspectionData.signature ? `[✓ Verified Digital Signature: ${inspectionData.inspectedBy}]` : '';
+              pStr = `Signed: ${sigText}      Dated: ${inspectionData.dateSigned || inspectionData.weekEnding || ''}`;
             }
 
             tNodes[0].textContent = pStr;
@@ -497,31 +498,62 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const tables = xmlDoc.getElementsByTagName("w:tbl");
 
       // 1. Header & Footer Paragraph replacements & Dotted-line stacking
-      for (let p of paragraphs) {
+      for (let i = 0; i < paragraphs.length; i++) {
+        const p = paragraphs[i];
         const tNodes = p.getElementsByTagName("w:t");
         if (tNodes.length > 0) {
           let pStr = "";
           for (let tn of tNodes) pStr += tn.textContent;
 
-          // Only match standalone paragraphs outside tables
           if (pStr.includes("Date and Time:")) {
             pStr = `Date and Time: ${toolboxData.date || ''} ${toolboxData.time || ''}    Location: ${toolboxData.location || ''}`;
             tNodes[0].textContent = pStr;
-            for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+            for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
           } else if (pStr.includes("Meeting Closed:")) {
             pStr = `Meeting Closed: ${toolboxData.time || ''}    Next Meeting: Next week`;
             tNodes[0].textContent = pStr;
-            for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+            for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
           } else if (pStr.includes("Signed – Management:")) {
-            pStr = `Signed – Management: ${userName || ''}    Dated: ${toolboxData.managementDate || toolboxData.date || ''}`;
+            const mgmtSig = toolboxData.managementSignature ? `[✓ Verified Digital Signature: ${userName}]` : '';
+            pStr = `Signed – Management: ${mgmtSig}    Dated: ${toolboxData.managementDate || toolboxData.date || ''}`;
             tNodes[0].textContent = pStr;
-            for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+            for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
           } else if (p.parentNode && p.parentNode.nodeName !== 'w:tc' && pStr.toLowerCase().startsWith("discussion about task planning")) {
             tNodes[0].textContent = `Discussion About Task Planning and Weekly Goals:\n${toolboxData.taskPlanningDiscussion || ''}`;
-            for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+            for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+
+            // Remove subsequent underline paragraphs so text doesn't float above blank lines
+            let nextSibling = p.nextElementSibling;
+            let removedCount = 0;
+            while (nextSibling && removedCount < 4) {
+              const sibText = getCellText(nextSibling);
+              if (sibText.includes("___") || sibText === "") {
+                const toRemove = nextSibling;
+                nextSibling = nextSibling.nextElementSibling;
+                toRemove.parentNode.removeChild(toRemove);
+                removedCount++;
+              } else {
+                break;
+              }
+            }
           } else if (p.parentNode && p.parentNode.nodeName !== 'w:tc' && pStr.toLowerCase().startsWith("operational issues/other business")) {
             tNodes[0].textContent = `Operational Issues/other Business:\n${toolboxData.operationalIssues || ''}`;
-            for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+            for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+
+            // Remove subsequent underline paragraphs
+            let nextSibling = p.nextElementSibling;
+            let removedCount = 0;
+            while (nextSibling && removedCount < 4) {
+              const sibText = getCellText(nextSibling);
+              if (sibText.includes("___") || sibText === "") {
+                const toRemove = nextSibling;
+                nextSibling = nextSibling.nextElementSibling;
+                toRemove.parentNode.removeChild(toRemove);
+                removedCount++;
+              } else {
+                break;
+              }
+            }
           }
         }
       }
@@ -542,7 +574,10 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
               if (cells[0]) setCellText(cells[0], att.name || '', xmlDoc);
               if (cells[1]) setCellText(cells[1], att.company || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], att.signature ? `[Signed: ${att.name}]` : (att.date || ''), xmlDoc);
+              if (cells[2]) {
+                const sigVal = att.signature ? `[✓ Verified Signature: ${att.name}]` : (att.date || '');
+                setCellText(cells[2], sigVal, xmlDoc);
+              }
             }
           });
         } else if (tableLabel.includes("issues raised from site safety inspection")) {
