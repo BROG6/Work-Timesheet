@@ -1147,7 +1147,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* CARD 1: Issues Raised from Site Safety Inspection: */}
+            {/* CARD 1: Issues Raised from Site Safety Inspection */}
             <div className="space-y-3 pt-2">
               <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase">
@@ -1156,7 +1156,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               </div>
               {toolboxData.siteSafetyReview.map((row, idx) => (
                 <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Issues Raised</label>
                       <textarea
@@ -1168,36 +1168,34 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-slate-500 font-medium text-[10px] block">Action</label>
-                        <textarea
-                          rows={1}
-                          value={row.action}
-                          onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'action', e.target.value)}
-                          onInput={handleAutoResize}
-                          placeholder="Action..."
-                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
-                        <textarea
-                          rows={1}
-                          value={row.whoWhen}
-                          onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'whoWhen', e.target.value)}
-                          onInput={handleAutoResize}
-                          placeholder="Name / Date"
-                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                        />
-                      </div>
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">Action</label>
+                      <textarea
+                        rows={1}
+                        value={row.action}
+                        onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'action', e.target.value)}
+                        onInput={handleAutoResize}
+                        placeholder="Action..."
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
+                      <textarea
+                        rows={1}
+                        value={row.whoWhen}
+                        onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'whoWhen', e.target.value)}
+                        onInput={handleAutoResize}
+                        placeholder="Name / Date"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
                     </div>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* CARD 2: Worker Training Needs: */}
+            {/* CARD 2: Worker Training Needs */}
             <div className="space-y-3 pt-2">
               <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase">
@@ -1206,7 +1204,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               </div>
               {toolboxData.workerTraining.map((row, idx) => (
                 <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Worker Training Needs</label>
                       <textarea
@@ -1218,29 +1216,27 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-slate-500 font-medium text-[10px] block">Action</label>
-                        <textarea
-                          rows={1}
-                          value={row.action}
-                          onChange={(e) => handleToolboxRowChange('workerTraining', idx, 'action', e.target.value)}
-                          onInput={handleAutoResize}
-                          placeholder="Action..."
-                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
-                        <textarea
-                          rows={1}
-                          value={row.whoWhen}
-                          onChange={(e) => handleToolboxRowChange('workerTraining', idx, 'whoWhen', e.target.value)}
-                          onInput={handleAutoResize}
-                          placeholder="Name / Date"
-                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                        />
-                      </div>
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">Action</label>
+                      <textarea
+                        rows={1}
+                        value={row.action}
+                        onChange={(e) => handleToolboxRowChange('workerTraining', idx, 'action', e.target.value)}
+                        onInput={handleAutoResize}
+                        placeholder="Action..."
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
+                      <textarea
+                        rows={1}
+                        value={row.whoWhen}
+                        onChange={(e) => handleToolboxRowChange('workerTraining', idx, 'whoWhen', e.target.value)}
+                        onInput={handleAutoResize}
+                        placeholder="Name / Date"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
                     </div>
                   </div>
                 </div>
@@ -1276,7 +1272,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       </button>
                     )}
                   </div>
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <div>
                       <label className="text-slate-500 font-medium text-[10px] block">Has any Event/Accident/Incident occurred</label>
                       <textarea
@@ -1288,29 +1284,27 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-slate-500 font-medium text-[10px] block">Action Taken</label>
-                        <textarea
-                          rows={1}
-                          value={row.action}
-                          onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'action', e.target.value)}
-                          onInput={handleAutoResize}
-                          placeholder="Action..."
-                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
-                        <textarea
-                          rows={1}
-                          value={row.whoWhen}
-                          onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'whoWhen', e.target.value)}
-                          onInput={handleAutoResize}
-                          placeholder="Name / Date"
-                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                        />
-                      </div>
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">Action Taken</label>
+                      <textarea
+                        rows={1}
+                        value={row.action}
+                        onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'action', e.target.value)}
+                        onInput={handleAutoResize}
+                        placeholder="Action..."
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
+                      <textarea
+                        rows={1}
+                        value={row.whoWhen}
+                        onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'whoWhen', e.target.value)}
+                        onInput={handleAutoResize}
+                        placeholder="Name / Date"
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800 resize-none overflow-hidden focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
                     </div>
                   </div>
                 </div>
