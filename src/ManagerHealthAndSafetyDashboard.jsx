@@ -1,7 +1,7 @@
 // src/ManagerHealthAndSafetyDashboard.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { db } from './firebaseConfig';
-import { collection, query, orderBy, getDocs, getDocsFromCache } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, getDocsFromCache, doc, deleteDoc } from 'firebase/firestore';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
@@ -12,6 +12,7 @@ export default function ManagerHealthAndSafetyDashboard() {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exportingId, setExportingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
   const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [statusMessage, setStatusMessage] = useState(null);
 
@@ -41,6 +42,30 @@ export default function ManagerHealthAndSafetyDashboard() {
   useEffect(() => {
     fetchSubmissions();
   }, [fetchSubmissions]);
+
+  const handleDeleteSubmission = async (record) => {
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete this ${record.type} for ${record.site || record.location}? This action cannot be undone.`
+    );
+    if (!confirmDelete) return;
+
+    setDeletingId(record.id);
+    try {
+      await deleteDoc(doc(db, 'health_safety', record.id));
+      setSubmissions((prev) => prev.filter((item) => item.id !== record.id));
+      if (selectedSubmission?.id === record.id) {
+        setSelectedSubmission(null);
+      }
+      setStatusMessage({ type: 'success', text: 'Entry deleted successfully!' });
+      setTimeout(() => setStatusMessage(null), 4000);
+    } catch (err) {
+      console.error('Error deleting submission:', err);
+      alert(`Failed to delete entry: ${err.message}`);
+      setStatusMessage({ type: 'error', text: `Delete failed: ${err.message}` });
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   // Group submissions by site name
   const siteMap = {};
@@ -587,6 +612,14 @@ export default function ManagerHealthAndSafetyDashboard() {
                         >
                           {exportingId === item.id ? "Exporting..." : "Download DOCX"}
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSubmission(item)}
+                          disabled={deletingId === item.id}
+                          className="bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                          {deletingId === item.id ? "Deleting..." : "Delete"}
+                        </button>
                       </div>
                     </div>
                   ))
@@ -620,6 +653,14 @@ export default function ManagerHealthAndSafetyDashboard() {
                           className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                         >
                           {exportingId === item.id ? "Exporting..." : "Download DOCX"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSubmission(item)}
+                          disabled={deletingId === item.id}
+                          className="bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                          {deletingId === item.id ? "Deleting..." : "Delete"}
                         </button>
                       </div>
                     </div>
@@ -682,7 +723,15 @@ export default function ManagerHealthAndSafetyDashboard() {
               )}
             </div>
 
-            <div className="flex justify-end pt-3 border-t border-slate-100">
+            <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => handleDeleteSubmission(selectedSubmission)}
+                disabled={deletingId === selectedSubmission.id}
+                className="px-3 py-2 bg-rose-600 text-white rounded-lg text-xs font-bold hover:bg-rose-700 cursor-pointer disabled:opacity-50"
+              >
+                {deletingId === selectedSubmission.id ? "Deleting..." : "Delete Entry"}
+              </button>
               <button
                 type="button"
                 onClick={() => setSelectedSubmission(null)}
