@@ -1,7 +1,7 @@
 // src/ManagerHealthAndSafetyDashboard.jsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from './firebaseConfig';
-import { collection, query, orderBy, getDocs, getDocsFromCache, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
@@ -16,32 +16,29 @@ export default function ManagerHealthAndSafetyDashboard() {
   const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [statusMessage, setStatusMessage] = useState(null);
 
-  const fetchSubmissions = useCallback(async () => {
-    setLoading(true);
-    try {
-      const q = query(collection(db, 'health_safety'), orderBy('createdAt', 'desc'));
-      let snapshot;
-      try {
-        snapshot = await getDocs(q);
-      } catch {
-        snapshot = await getDocsFromCache(q);
-      }
-
-      const list = [];
-      snapshot.forEach((docSnap) => {
-        list.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      setSubmissions(list);
-    } catch (err) {
-      console.warn("Could not fetch H&S submissions:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  // Real-time live listener for submissions
   useEffect(() => {
-    fetchSubmissions();
-  }, [fetchSubmissions]);
+    setLoading(true);
+    const q = query(collection(db, 'health_safety'), orderBy('createdAt', 'desc'));
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const list = [];
+        snapshot.forEach((docSnap) => {
+          list.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        setSubmissions(list);
+        setLoading(false);
+      },
+      (err) => {
+        console.warn("Could not load live H&S submissions:", err);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
 
   const handleDeleteSubmission = async (record) => {
     const confirmDelete = window.confirm(
@@ -52,7 +49,6 @@ export default function ManagerHealthAndSafetyDashboard() {
     setDeletingId(record.id);
     try {
       await deleteDoc(doc(db, 'health_safety', record.id));
-      setSubmissions((prev) => prev.filter((item) => item.id !== record.id));
       if (selectedSubmission?.id === record.id) {
         setSelectedSubmission(null);
       }
@@ -74,7 +70,7 @@ export default function ManagerHealthAndSafetyDashboard() {
     if (!siteMap[siteName]) {
       siteMap[siteName] = { inspections: [], toolboxes: [] };
     }
-    if (item.type === 'Site Safety Inspection Report') {
+    if (item.type === 'Site Safety Inspection Report' || item.sections) {
       siteMap[siteName].inspections.push(item);
     } else {
       siteMap[siteName].toolboxes.push(item);
@@ -260,7 +256,7 @@ export default function ManagerHealthAndSafetyDashboard() {
   const exportDocxForRecord = async (record) => {
     setExportingId(record.id);
     try {
-      const isInspection = record.type === 'Site Safety Inspection Report';
+      const isInspection = record.type === 'Site Safety Inspection Report' || record.sections;
       const templateFileName = isInspection
         ? 'Site Safety Inspection Report.docx'
         : 'H&S and Toolbox Meeting Worksheet.docx';
@@ -546,14 +542,6 @@ export default function ManagerHealthAndSafetyDashboard() {
             <p className="text-xs text-slate-500 font-medium mt-0.5">Manager overview of submitted weekly site documents & compliance</p>
           </div>
         </div>
-
-        <button
-          type="button"
-          onClick={fetchSubmissions}
-          className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold py-2 px-3 rounded-lg transition-colors cursor-pointer"
-        >
-          🔄 Refresh
-        </button>
       </div>
 
       {statusMessage && (
