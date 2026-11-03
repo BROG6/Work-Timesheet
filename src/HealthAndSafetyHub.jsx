@@ -404,7 +404,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     return str.replace(/\s+/g, ' ').trim();
   }
 
-  function insertSignatureWithDate(cell, dataUrl, dateStr, zip, xmlDoc) {
+  function insertSignatureWithParagraph(pNodeContainer, dataUrl, dateStr, zip, xmlDoc) {
     if (!dataUrl || !dataUrl.startsWith("data:image")) return;
 
     try {
@@ -477,15 +477,19 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           </w:r>
           <w:r>
             <w:rPr><w:sz w:val="20"/></w:rPr>
-            <w:t xml:space="preserve">   ${dateStr}</w:t>
+            <w:t xml:space="preserve">   Dated: ${dateStr}</w:t>
           </w:r>
         </w:p>`;
 
       const imgDoc = new DOMParser().parseFromString(drawingXmlStr, "text/xml");
       const pNode = xmlDoc.importNode(imgDoc.documentElement, true);
 
-      while (cell.firstChild) cell.removeChild(cell.firstChild);
-      cell.appendChild(pNode);
+      if (pNodeContainer.nodeName === 'w:tc') {
+        while (pNodeContainer.firstChild) pNodeContainer.removeChild(pNodeContainer.firstChild);
+        pNodeContainer.appendChild(pNode);
+      } else if (pNodeContainer.nodeName === 'w:p') {
+        pNodeContainer.parentNode.replaceChild(pNode, pNodeContainer);
+      }
     } catch (e) {
       console.error("Failed to inject signature image into document:", e);
     }
@@ -520,20 +524,25 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             
             if (pStr.includes("Site:")) {
               pStr = `Site: ${inspectionData.site || ''}`;
-            }
-            if (pStr.includes("Week Ending:")) {
+              tNodes[0].textContent = pStr;
+              for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+            } else if (pStr.includes("Week Ending:")) {
               pStr = `Week Ending: ${inspectionData.weekEnding || ''}      Time: ${inspectionData.time || ''}`;
-            }
-            if (pStr.includes("Inspected By:")) {
+              tNodes[0].textContent = pStr;
+              for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+            } else if (pStr.includes("Inspected By:")) {
               pStr = `Inspected By: ${inspectionData.inspectedBy || ''}`;
-            }
-            if (pStr.includes("Signed:")) {
-              pStr = `Signed (${formatDateShort(inspectionData.dateSigned || inspectionData.weekEnding)})      Dated: ${formatDateShort(inspectionData.dateSigned || inspectionData.weekEnding)}`;
-            }
-
-            tNodes[0].textContent = pStr;
-            for (let i = 1; i < tNodes.length; i++) {
-              tNodes[i].textContent = "";
+              tNodes[0].textContent = pStr;
+              for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+            } else if (pStr.includes("Signed:")) {
+              const formattedDate = formatDateShort(inspectionData.dateSigned || inspectionData.weekEnding);
+              if (inspectionData.signature) {
+                insertSignatureWithParagraph(p, inspectionData.signature, formattedDate, zip, xmlDoc);
+              } else {
+                pStr = `Signed: ________________      Dated: ${formattedDate}`;
+                tNodes[0].textContent = pStr;
+                for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+              }
             }
           }
         }
@@ -600,7 +609,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const paragraphs = xmlDoc.getElementsByTagName("w:p");
       const tables = xmlDoc.getElementsByTagName("w:tbl");
 
-      // 1. Header & Footer Paragraph replacements & Line Stacking
       for (let i = 0; i < paragraphs.length; i++) {
         const p = paragraphs[i];
         const tNodes = p.getElementsByTagName("w:t");
@@ -653,7 +661,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         }
       }
 
-      // 2. Iterate through tables safely
       for (let table of tables) {
         const rows = table.getElementsByTagName("w:tr");
         if (rows.length < 2) continue;
@@ -672,7 +679,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               if (cells[2]) {
                 const formattedDate = formatDateShort(att.date || toolboxData.date);
                 if (att.signature) {
-                  insertSignatureWithDate(cells[2], att.signature, formattedDate, zip, xmlDoc);
+                  insertSignatureWithParagraph(cells[2], att.signature, formattedDate, zip, xmlDoc);
                 } else {
                   setCellText(cells[2], formattedDate, xmlDoc);
                 }
