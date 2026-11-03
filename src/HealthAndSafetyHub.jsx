@@ -87,6 +87,13 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [activeSignatureTarget, setActiveSignatureTarget] = useState(null);
 
+  const getCurrentTimeString = () => {
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+
   const formatDateShort = (dateStr) => {
     if (!dateStr) return '';
     const d = new Date(dateStr);
@@ -139,7 +146,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   const [inspectionData, setInspectionData] = useState({
     site: localStorage.getItem(`sjr_last_project_${userId}`) || localStorage.getItem('last_site_name') || '',
     weekEnding: new Date().toISOString().split('T')[0],
-    time: '07:30',
+    time: getCurrentTimeString(),
     inspectedBy: userName || '',
     signature: '',
     dateSigned: new Date().toISOString().split('T')[0],
@@ -256,7 +263,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   // STATE: Toolbox Meeting Worksheet
   const [toolboxData, setToolboxData] = useState({
     date: new Date().toISOString().split('T')[0],
-    time: '07:00',
+    time: getCurrentTimeString(),
     location: localStorage.getItem(`sjr_last_project_${userId}`) || localStorage.getItem('last_site_name') || '',
     previousActions: [
       { item: "Health and Safety", action: "", followUp: "" },
@@ -440,7 +447,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const nsA = "http://schemas.openxmlformats.org/drawingml/2006/main";
       const nsR = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
-      // Combined paragraph with image and text run for the date side-by-side
       const drawingXmlStr = `
         <w:p xmlns:w="${nsW}">
           <w:r>
@@ -621,38 +627,26 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               tNodes[0].textContent = pStr;
               for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
             }
-          } else if (p.parentNode && p.parentNode.nodeName !== 'w:tc' && pStr.toLowerCase().startsWith("discussion about task planning")) {
-            tNodes[0].textContent = `Discussion About Task Planning and Weekly Goals:\n${toolboxData.taskPlanningDiscussion || ''}`;
+          } else if (pStr.toLowerCase().startsWith("discussion about task planning")) {
+            tNodes[0].textContent = "Discussion About Task Planning and Weekly Goals:";
             for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
 
-            let nextSibling = p.nextElementSibling;
-            let removedCount = 0;
-            while (nextSibling && removedCount < 6) {
-              const sibText = getCellText(nextSibling);
-              if (sibText.includes("___") || sibText === "") {
-                const toRemove = nextSibling;
-                nextSibling = nextSibling.nextElementSibling;
-                toRemove.parentNode.removeChild(toRemove);
-                removedCount++;
-              } else {
-                break;
+            let nextSibling = p.parentNode && p.parentNode.nodeName === 'w:tc' ? p.parentNode.parentNode.nextElementSibling : p.nextElementSibling;
+            if (nextSibling && toolboxData.taskPlanningDiscussion) {
+              const targetCell = nextSibling.getElementsByTagName ? nextSibling.getElementsByTagName("w:tc")[0] : null;
+              if (targetCell) {
+                setCellText(targetCell, toolboxData.taskPlanningDiscussion, xmlDoc);
               }
             }
-          } else if (p.parentNode && p.parentNode.nodeName !== 'w:tc' && pStr.toLowerCase().startsWith("operational issues/other business")) {
-            tNodes[0].textContent = `Operational Issues/other Business:\n${toolboxData.operationalIssues || ''}`;
+          } else if (pStr.toLowerCase().startsWith("operational issues/other business")) {
+            tNodes[0].textContent = "Operational Issues/other Business:";
             for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
 
-            let nextSibling = p.nextElementSibling;
-            let removedCount = 0;
-            while (nextSibling && removedCount < 6) {
-              const sibText = getCellText(nextSibling);
-              if (sibText.includes("___") || sibText === "") {
-                const toRemove = nextSibling;
-                nextSibling = nextSibling.nextElementSibling;
-                toRemove.parentNode.removeChild(toRemove);
-                removedCount++;
-              } else {
-                break;
+            let nextSibling = p.parentNode && p.parentNode.nodeName === 'w:tc' ? p.parentNode.parentNode.nextElementSibling : p.nextElementSibling;
+            if (nextSibling && toolboxData.operationalIssues) {
+              const targetCell = nextSibling.getElementsByTagName ? nextSibling.getElementsByTagName("w:tc")[0] : null;
+              if (targetCell) {
+                setCellText(targetCell, toolboxData.operationalIssues, xmlDoc);
               }
             }
           }
