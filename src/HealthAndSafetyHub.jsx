@@ -927,7 +927,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           </div>
 
           <form onSubmit={handleInspectionSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Site / Project</label>
                 <SiteAutoCompleteInput
@@ -948,7 +948,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Time</label>
                 <input
@@ -1080,7 +1080,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           </div>
 
           <form onSubmit={handleToolboxSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Date</label>
                 <input
