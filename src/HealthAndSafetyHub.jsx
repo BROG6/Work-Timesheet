@@ -258,13 +258,13 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       { item: "Other", action: "", followUp: "" },
     ],
     siteSafetyReview: [
-      { label: "Issues Raised from Site Safety Inspection:", details: "", action: "", whoWhen: "" },
+      { details: "", action: "", whoWhen: "" },
     ],
     workerTraining: [
-      { label: "Worker Training Needs:", details: "", action: "", whoWhen: "" },
+      { details: "", action: "", whoWhen: "" },
     ],
     eventInvestigations: [
-      { label: "Has any Event/Accident/Incident occurred:", details: "", action: "", whoWhen: "" },
+      { details: "", action: "", whoWhen: "" },
     ],
     hazards: [
       { hazard: "", action: "", whoWhen: "" },
@@ -1013,14 +1013,16 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
             {/* CARD 1: Issues Raised from Site Safety Inspection: */}
             <div className="space-y-3 pt-2">
+              <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
+                <h3 className="text-xs font-extrabold text-slate-800 uppercase">
+                  Issues Raised from Site Safety Inspection
+                </h3>
+              </div>
               {toolboxData.siteSafetyReview.map((row, idx) => (
                 <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
-                  <span className="font-bold text-slate-800 block">
-                    {row.label}
-                  </span>
                   <div className="space-y-2">
                     <div>
-                      <label className="text-slate-500 font-medium text-[10px] block">Answer / Details</label>
+                      <label className="text-slate-500 font-medium text-[10px] block">Issues Raised</label>
                       <input
                         type="text"
                         value={row.details || ''}
@@ -1058,14 +1060,16 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
             {/* CARD 2: Worker Training Needs: */}
             <div className="space-y-3 pt-2">
+              <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
+                <h3 className="text-xs font-extrabold text-slate-800 uppercase">
+                  Worker Training Needs
+                </h3>
+              </div>
               {toolboxData.workerTraining.map((row, idx) => (
                 <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
-                  <span className="font-bold text-slate-800 block">
-                    {row.label}
-                  </span>
                   <div className="space-y-2">
                     <div>
-                      <label className="text-slate-500 font-medium text-[10px] block">Answer / Details</label>
+                      <label className="text-slate-500 font-medium text-[10px] block">Worker Training Needs</label>
                       <input
                         type="text"
                         value={row.details || ''}
@@ -1109,7 +1113,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 </h3>
                 <button
                   type="button"
-                  onClick={() => addToolboxRow('eventInvestigations', { label: 'Has any Event/Accident/Incident occurred:', details: '', action: '', whoWhen: '' })}
+                  onClick={() => addToolboxRow('eventInvestigations', { details: '', action: '', whoWhen: '' })}
                   className="text-xs font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
                 >
                   + Add Event Row
@@ -1130,12 +1134,9 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       </button>
                     )}
                   </div>
-                  <span className="font-bold text-slate-800 block">
-                    {row.label}
-                  </span>
                   <div className="space-y-2">
                     <div>
-                      <label className="text-slate-500 font-medium text-[10px] block">Answer / Details</label>
+                      <label className="text-slate-500 font-medium text-[10px] block">Has any Event/Accident/Incident occurred</label>
                       <input
                         type="text"
                         value={row.details || ''}
