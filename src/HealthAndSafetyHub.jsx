@@ -397,7 +397,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     return str.replace(/\s+/g, ' ').trim();
   }
 
-  function insertSignatureImage(containerNode, dataUrl, zip, xmlDoc) {
+  function insertSignatureWithDate(cell, dataUrl, dateStr, zip, xmlDoc) {
     if (!dataUrl || !dataUrl.startsWith("data:image")) return;
 
     try {
@@ -440,12 +440,13 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const nsA = "http://schemas.openxmlformats.org/drawingml/2006/main";
       const nsR = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
+      // Combined paragraph with image and text run for the date side-by-side
       const drawingXmlStr = `
         <w:p xmlns:w="${nsW}">
           <w:r>
             <w:drawing>
               <wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
-                <wp:extent cx="1143000" cy="381000"/>
+                <wp:extent cx="1000000" cy="350000"/>
                 <wp:docPr id="1" name="Signature ${imgId}"/>
                 <a:graphic xmlns:a="${nsA}">
                   <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
@@ -459,7 +460,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                         <a:stretch><a:fillRect/></a:stretch>
                       </pic:blipFill>
                       <pic:spPr>
-                        <a:xfrm><a:off x="0" y="0"/><a:ext cx="1143000" cy="381000"/></a:xfrm>
+                        <a:xfrm><a:off x="0" y="0"/><a:ext cx="1000000" cy="350000"/></a:xfrm>
                         <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
                       </pic:spPr>
                     </pic:pic>
@@ -468,13 +469,17 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               </wp:inline>
             </w:drawing>
           </w:r>
+          <w:r>
+            <w:rPr><w:sz w:val="20"/></w:rPr>
+            <w:t xml:space="preserve">   ${dateStr}</w:t>
+          </w:r>
         </w:p>`;
 
       const imgDoc = new DOMParser().parseFromString(drawingXmlStr, "text/xml");
       const pNode = xmlDoc.importNode(imgDoc.documentElement, true);
 
-      while (containerNode.firstChild) containerNode.removeChild(containerNode.firstChild);
-      containerNode.appendChild(pNode);
+      while (cell.firstChild) cell.removeChild(cell.firstChild);
+      cell.appendChild(pNode);
     } catch (e) {
       console.error("Failed to inject signature image into document:", e);
     }
@@ -617,7 +622,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
             }
           } else if (p.parentNode && p.parentNode.nodeName !== 'w:tc' && pStr.toLowerCase().startsWith("discussion about task planning")) {
-            tNodes[0].textContent = `Discussion About Task Planning and Weekly Goals: ${toolboxData.taskPlanningDiscussion || ''}`;
+            tNodes[0].textContent = `Discussion About Task Planning and Weekly Goals:\n${toolboxData.taskPlanningDiscussion || ''}`;
             for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
 
             let nextSibling = p.nextElementSibling;
@@ -634,7 +639,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               }
             }
           } else if (p.parentNode && p.parentNode.nodeName !== 'w:tc' && pStr.toLowerCase().startsWith("operational issues/other business")) {
-            tNodes[0].textContent = `Operational Issues/other Business: ${toolboxData.operationalIssues || ''}`;
+            tNodes[0].textContent = `Operational Issues/other Business:\n${toolboxData.operationalIssues || ''}`;
             for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
 
             let nextSibling = p.nextElementSibling;
@@ -673,7 +678,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               if (cells[2]) {
                 const formattedDate = formatDateShort(att.date || toolboxData.date);
                 if (att.signature) {
-                  insertSignatureImage(cells[2], att.signature, zip, xmlDoc);
+                  insertSignatureWithDate(cells[2], att.signature, formattedDate, zip, xmlDoc);
                 } else {
                   setCellText(cells[2], formattedDate, xmlDoc);
                 }
