@@ -260,9 +260,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     siteSafetyReview: [
       { label: "Issues Raised from Site Safety Inspection", action: "", whoWhen: "" },
     ],
-    workerTraining: [
-      { label: "Worker Training Needs", action: "", whoWhen: "" },
-    ],
     eventInvestigations: [
       { label: "Has any Event/Accident/Incident occurred", action: "", whoWhen: "" },
     ],
@@ -554,8 +551,9 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             }
           });
         } else if (tableLabel.includes("worker training needs")) {
-          toolboxData.workerTraining.forEach((row, idx) => {
-            const rowIndex = idx + 1;
+          // If template has a separate worker training table row
+          toolboxData.siteSafetyReview.forEach((row, idx) => {
+            const rowIndex = idx + 2; // if row 1 is issues raised, row 2 can map to training
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
               if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
@@ -1006,14 +1004,15 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* SECTION: Issues Raised from Site Safety Inspection */}
+            {/* SECTION: Health and Safety – Site Safety Inspection Report and Worker Training Needs */}
             <div className="space-y-3 pt-2">
               <h3 className="text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">
-                Issues Raised from Site Safety Inspection
+                Health and Safety – Site Safety Inspection Report and Worker Training Needs
               </h3>
               {toolboxData.siteSafetyReview.map((row, idx) => (
                 <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
-                  <span className="font-extrabold text-slate-800 uppercase block tracking-wider pt-1">
+                  {/* Greyed out label on top of typing bar */}
+                  <span className="text-[10px] font-extrabold text-slate-500 uppercase block tracking-wider">
                     {row.label}
                   </span>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -1033,42 +1032,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                         type="text"
                         value={row.whoWhen}
                         onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'whoWhen', e.target.value)}
-                        placeholder="Name / Date"
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* SECTION: Worker Training Needs */}
-            <div className="space-y-3 pt-2">
-              <h3 className="text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">
-                Worker Training Needs
-              </h3>
-              {toolboxData.workerTraining.map((row, idx) => (
-                <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
-                  <span className="font-extrabold text-slate-800 uppercase block tracking-wider pt-1">
-                    {row.label}
-                  </span>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-slate-500 font-medium text-[10px] block">Action</label>
-                      <input
-                        type="text"
-                        value={row.action}
-                        onChange={(e) => handleToolboxRowChange('workerTraining', idx, 'action', e.target.value)}
-                        placeholder="Action..."
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
-                      <input
-                        type="text"
-                        value={row.whoWhen}
-                        onChange={(e) => handleToolboxRowChange('workerTraining', idx, 'whoWhen', e.target.value)}
                         placeholder="Name / Date"
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
@@ -1107,7 +1070,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       </button>
                     )}
                   </div>
-                  <span className="font-extrabold text-slate-800 uppercase block tracking-wider pt-1">
+                  {/* Greyed out label on top of typing bar */}
+                  <span className="text-[10px] font-extrabold text-slate-500 uppercase block tracking-wider">
                     {row.label}
                   </span>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
