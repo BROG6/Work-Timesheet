@@ -2,12 +2,13 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { db } from './firebaseConfig';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 
-const DAILY_REMINDER_ID_BASE = 1010; // Base ID for daily slots (e.g., 1011 to 1015 for Mon-Fri)
-const WEEKLY_REMINDER_ID = 1002;
+const DAILY_REMINDER_ID_BASE = 1010; // Base ID for daily slots (1011 to 1015 for Mon-Fri)
+const H_S_WEEKLY_REMINDER_ID = 1002;
+const TIMESHEET_WEEKLY_REMINDER_ID = 1003;
 const CHANNEL_ID = 'timesheet_reminders';
 
 /**
- * Request permissions, setup Android notification channels, and schedule upcoming weekday reminders
+ * Request permissions, setup Android notification channels, and schedule upcoming reminders
  */
 export const initNotifications = async () => {
   try {
@@ -27,42 +28,57 @@ export const initNotifications = async () => {
     // 2. Create High-Priority Notification Channel
     await LocalNotifications.createChannel({
       id: CHANNEL_ID,
-      name: 'Timesheet Reminders',
-      description: 'Daily and weekly reminders to log site hours',
+      name: 'Site Reminders',
+      description: 'Daily and weekly reminders for timesheets and H&S documents',
       importance: 5,
       visibility: 1,
       vibration: true,
     });
 
-    // 3. Clear existing daily slots (legacy 1001, new 1011-1015) and weekly reminder to prevent duplicates
+    // 3. Clear existing notification slots to prevent duplicates
     await LocalNotifications.cancel({
       notifications: [
-        { id: 1001 }, // Clears legacy rolling daily reminder ID
+        { id: 1001 },
         { id: DAILY_REMINDER_ID_BASE + 1 },
         { id: DAILY_REMINDER_ID_BASE + 2 },
         { id: DAILY_REMINDER_ID_BASE + 3 },
         { id: DAILY_REMINDER_ID_BASE + 4 },
         { id: DAILY_REMINDER_ID_BASE + 5 },
-        { id: WEEKLY_REMINDER_ID }
+        { id: H_S_WEEKLY_REMINDER_ID },
+        { id: TIMESHEET_WEEKLY_REMINDER_ID }
       ]
     });
 
     const notificationsToSchedule = [
+      // Monday H&S Reminder
       {
-        id: WEEKLY_REMINDER_ID,
+        id: H_S_WEEKLY_REMINDER_ID,
+        title: 'Health & Safety Reminder',
+        body: "Don't forget to send your health and safety documents to the office!",
+        channelId: CHANNEL_ID,
+        smallIcon: 'ic_stat_icon',
+        iconColor: '#4F46E5',
+        schedule: {
+          on: { weekday: 2, hour: 7, minute: 30 }, // Monday at 7:30 AM (Capacitor: 2 = Monday)
+          repeats: true,
+        },
+      },
+      // Tuesday Timesheet Reminder
+      {
+        id: TIMESHEET_WEEKLY_REMINDER_ID,
         title: 'Weekly Timesheet Due',
         body: "Don't forget to send your timesheet!",
         channelId: CHANNEL_ID,
         smallIcon: 'ic_stat_icon',
         iconColor: '#4F46E5',
         schedule: {
-          on: { weekday: 3, hour: 18, minute: 0 }, // Tuesday at 6:00 PM
+          on: { weekday: 3, hour: 18, minute: 0 }, // Tuesday at 6:00 PM (Capacitor: 3 = Tuesday)
           repeats: true,
         },
       }
     ];
 
-    // 4. Generate upcoming weekday 5:30 PM triggers (looks ahead through the current/next 7 days)
+    // 4. Generate upcoming weekday 5:30 PM triggers for daily hours
     const now = new Date();
     for (let i = 0; i < 7; i++) {
       const targetDate = new Date();
@@ -71,17 +87,16 @@ export const initNotifications = async () => {
 
       const dayOfWeek = targetDate.getDay(); // 0 = Sun, 6 = Sat
 
-      // Only schedule if it's a weekday (Mon-Fri) and the time hasn't already passed today
       if (dayOfWeek >= 1 && dayOfWeek <= 5 && targetDate > now) {
         notificationsToSchedule.push({
-          id: DAILY_REMINDER_ID_BASE + dayOfWeek, // Unique ID per weekday (1 to 5)
+          id: DAILY_REMINDER_ID_BASE + dayOfWeek,
           title: 'Timesheet Reminder',
           body: "Don't forget to record your site hours for today!",
           channelId: CHANNEL_ID,
           smallIcon: 'ic_stat_icon',
           iconColor: '#4F46E5',
           schedule: {
-            at: targetDate, // Exact target timestamp
+            at: targetDate,
           },
         });
       }
@@ -92,7 +107,7 @@ export const initNotifications = async () => {
       notifications: notificationsToSchedule,
     });
 
-    console.log('[NotificationService] Weekday and weekly notifications successfully scheduled.');
+    console.log('[NotificationService] All notifications successfully scheduled.');
   } catch (err) {
     console.error('[NotificationService] Failed to initialize local notifications:', err);
   }
@@ -105,7 +120,7 @@ export const checkAndSuppressDailyReminder = async (userId) => {
   if (!userId) return;
 
   const today = new Date().getDay();
-  if (today === 0 || today === 6) return; // Skip on weekends
+  if (today === 0 || today === 6) return;
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -119,7 +134,6 @@ export const checkAndSuppressDailyReminder = async (userId) => {
     const snapshot = await getDocs(q);
 
     if (!snapshot.empty) {
-      // Cancel today's specific weekday slot ID (e.g., DAILY_REMINDER_ID_BASE + 1 for Monday)
       await LocalNotifications.cancel({ notifications: [{ id: DAILY_REMINDER_ID_BASE + today }] });
     }
   } catch (err) {
