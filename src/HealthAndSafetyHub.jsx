@@ -342,7 +342,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           site: found.site || '',
           weekEnding: found.weekEnding || currentWeek,
           time: found.time || getCurrentTimeString(),
-          inspectedBy: found.inspectedBy || userName || '',
+          // PRESERVE original inspector name if report exists
+          inspectedBy: found.inspectedBy || found.userName || userName || '',
           signature: found.signature || '',
           dateSigned: found.dateSigned || currentWeek,
           sections: found.sections || defaultInspectionSections
@@ -378,7 +379,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         site: '',
         weekEnding: currentWeek,
         time: getCurrentTimeString(),
-        inspectedBy: userName || '',
+        inspectedBy: userName || '', // Fresh form defaults back to current user
         signature: '',
         dateSigned: currentWeek,
         sections: defaultInspectionSections
@@ -429,7 +430,9 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         setSelectedReportId(docId);
         setInspectionData(prev => ({
           ...prev,
-          ...found
+          ...found,
+          // Retain original inspector if doc exists
+          inspectedBy: found.inspectedBy || found.userName || prev.inspectedBy
         }));
         setStatusMessage({ type: 'success', text: `Loaded existing live form for ${newSite} (${newWeek}).` });
         setTimeout(() => setStatusMessage(null), 4000);
