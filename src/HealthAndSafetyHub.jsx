@@ -258,10 +258,13 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       { item: "Other", action: "", followUp: "" },
     ],
     siteSafetyReview: [
-      { label: "Issues Raised from Site Safety Inspection", action: "", whoWhen: "" },
+      { label: "Issues Raised from Site Safety Inspection", details: "", action: "", whoWhen: "" },
+    ],
+    workerTraining: [
+      { label: "Worker Training Needs", details: "", action: "", whoWhen: "" },
     ],
     eventInvestigations: [
-      { label: "Has any Event/Accident/Incident occurred", action: "", whoWhen: "" },
+      { label: "Has any Event/Accident/Incident occurred", details: "", action: "", whoWhen: "" },
     ],
     hazards: [
       { hazard: "", action: "", whoWhen: "" },
@@ -546,16 +549,17 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
+              if (cells[0]) setCellText(cells[0], row.details ? `${row.label}: ${row.details}` : row.label, xmlDoc);
               if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
               if (cells[2]) setCellText(cells[2], row.whoWhen || '', xmlDoc);
             }
           });
         } else if (tableLabel.includes("worker training needs")) {
-          // If template has a separate worker training table row
-          toolboxData.siteSafetyReview.forEach((row, idx) => {
-            const rowIndex = idx + 2; // if row 1 is issues raised, row 2 can map to training
+          toolboxData.workerTraining.forEach((row, idx) => {
+            const rowIndex = idx + 1;
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
+              if (cells[0]) setCellText(cells[0], row.details ? `${row.label}: ${row.details}` : row.label, xmlDoc);
               if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
               if (cells[2]) setCellText(cells[2], row.whoWhen || '', xmlDoc);
             }
@@ -565,6 +569,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
+              if (cells[0]) setCellText(cells[0], row.details ? `${row.label}: ${row.details}` : row.label, xmlDoc);
               if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
               if (cells[2]) setCellText(cells[2], row.whoWhen || '', xmlDoc);
             }
@@ -1004,44 +1009,97 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* SECTION: Health and Safety – Site Safety Inspection Report and Worker Training Needs */}
+            {/* CARD 1: Issues Raised from Site Safety Inspection */}
             <div className="space-y-3 pt-2">
-              <h3 className="text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">
-                Health and Safety – Site Safety Inspection Report and Worker Training Needs
-              </h3>
               {toolboxData.siteSafetyReview.map((row, idx) => (
                 <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
-                  {/* Greyed out label on top of typing bar */}
                   <span className="text-[10px] font-extrabold text-slate-500 uppercase block tracking-wider">
                     {row.label}
                   </span>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="space-y-2">
                     <div>
-                      <label className="text-slate-500 font-medium text-[10px] block">Action</label>
+                      <label className="text-slate-500 font-medium text-[10px] block">Answer / Details</label>
                       <input
                         type="text"
-                        value={row.action}
-                        onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'action', e.target.value)}
-                        placeholder="Action..."
+                        value={row.details || ''}
+                        onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'details', e.target.value)}
+                        placeholder="Enter details..."
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
                     </div>
-                    <div>
-                      <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
-                      <input
-                        type="text"
-                        value={row.whoWhen}
-                        onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'whoWhen', e.target.value)}
-                        placeholder="Name / Date"
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
-                      />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-slate-500 font-medium text-[10px] block">Action</label>
+                        <input
+                          type="text"
+                          value={row.action}
+                          onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'action', e.target.value)}
+                          placeholder="Action..."
+                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
+                        <input
+                          type="text"
+                          value={row.whoWhen}
+                          onChange={(e) => handleToolboxRowChange('siteSafetyReview', idx, 'whoWhen', e.target.value)}
+                          placeholder="Name / Date"
+                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* SECTION: Event Investigations */}
+            {/* CARD 2: Worker Training Needs */}
+            <div className="space-y-3 pt-2">
+              {toolboxData.workerTraining.map((row, idx) => (
+                <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
+                  <span className="text-[10px] font-extrabold text-slate-500 uppercase block tracking-wider">
+                    {row.label}
+                  </span>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-slate-500 font-medium text-[10px] block">Answer / Details</label>
+                      <input
+                        type="text"
+                        value={row.details || ''}
+                        onChange={(e) => handleToolboxRowChange('workerTraining', idx, 'details', e.target.value)}
+                        placeholder="Enter training needs..."
+                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-slate-500 font-medium text-[10px] block">Action</label>
+                        <input
+                          type="text"
+                          value={row.action}
+                          onChange={(e) => handleToolboxRowChange('workerTraining', idx, 'action', e.target.value)}
+                          placeholder="Action..."
+                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
+                        <input
+                          type="text"
+                          value={row.whoWhen}
+                          onChange={(e) => handleToolboxRowChange('workerTraining', idx, 'whoWhen', e.target.value)}
+                          placeholder="Name / Date"
+                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* CARD 3: Event Investigations */}
             <div className="space-y-3 pt-2">
               <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase">
@@ -1049,7 +1107,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 </h3>
                 <button
                   type="button"
-                  onClick={() => addToolboxRow('eventInvestigations', { label: 'Has any Event/Accident/Incident occurred', action: '', whoWhen: '' })}
+                  onClick={() => addToolboxRow('eventInvestigations', { label: 'Has any Event/Accident/Incident occurred', details: '', action: '', whoWhen: '' })}
                   className="text-xs font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
                 >
                   + Add Event Row
@@ -1070,30 +1128,41 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       </button>
                     )}
                   </div>
-                  {/* Greyed out label on top of typing bar */}
                   <span className="text-[10px] font-extrabold text-slate-500 uppercase block tracking-wider">
                     {row.label}
                   </span>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="space-y-2">
                     <div>
-                      <label className="text-slate-500 font-medium text-[10px] block">Action Taken</label>
+                      <label className="text-slate-500 font-medium text-[10px] block">Answer / Details</label>
                       <input
                         type="text"
-                        value={row.action}
-                        onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'action', e.target.value)}
-                        placeholder="Action..."
+                        value={row.details || ''}
+                        onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'details', e.target.value)}
+                        placeholder="Yes / No or details..."
                         className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
                       />
                     </div>
-                    <div>
-                      <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
-                      <input
-                        type="text"
-                        value={row.whoWhen}
-                        onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'whoWhen', e.target.value)}
-                        placeholder="Name / Date"
-                        className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
-                      />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-slate-500 font-medium text-[10px] block">Action Taken</label>
+                        <input
+                          type="text"
+                          value={row.action}
+                          onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'action', e.target.value)}
+                          placeholder="Action..."
+                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-500 font-medium text-[10px] block">By Who and When</label>
+                        <input
+                          type="text"
+                          value={row.whoWhen}
+                          onChange={(e) => handleToolboxRowChange('eventInvestigations', idx, 'whoWhen', e.target.value)}
+                          placeholder="Name / Date"
+                          className="w-full bg-white border border-slate-300 rounded p-1.5 text-slate-800"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
