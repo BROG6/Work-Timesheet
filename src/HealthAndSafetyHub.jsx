@@ -503,6 +503,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           let pStr = "";
           for (let tn of tNodes) pStr += tn.textContent;
 
+          // Only match standalone paragraphs outside tables
           if (pStr.includes("Date and Time:")) {
             pStr = `Date and Time: ${toolboxData.date || ''} ${toolboxData.time || ''}    Location: ${toolboxData.location || ''}`;
             tNodes[0].textContent = pStr;
@@ -515,10 +516,10 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             pStr = `Signed – Management: ${userName || ''}    Dated: ${toolboxData.managementDate || toolboxData.date || ''}`;
             tNodes[0].textContent = pStr;
             for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
-          } else if (pStr.toLowerCase().includes("discussion about task planning and weekly goals")) {
+          } else if (p.parentNode && p.parentNode.nodeName !== 'w:tc' && pStr.toLowerCase().startsWith("discussion about task planning")) {
             tNodes[0].textContent = `Discussion About Task Planning and Weekly Goals:\n${toolboxData.taskPlanningDiscussion || ''}`;
             for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
-          } else if (pStr.toLowerCase().includes("operational issues/other business")) {
+          } else if (p.parentNode && p.parentNode.nodeName !== 'w:tc' && pStr.toLowerCase().startsWith("operational issues/other business")) {
             tNodes[0].textContent = `Operational Issues/other Business:\n${toolboxData.operationalIssues || ''}`;
             for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
           }
@@ -549,7 +550,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], row.details ? `${row.label} ${row.details}` : row.label, xmlDoc);
+              if (cells[0]) setCellText(cells[0], row.details || '', xmlDoc);
               if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
               if (cells[2]) setCellText(cells[2], row.whoWhen || '', xmlDoc);
             }
@@ -559,7 +560,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], row.details ? `${row.label} ${row.details}` : row.label, xmlDoc);
+              if (cells[0]) setCellText(cells[0], row.details || '', xmlDoc);
               if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
               if (cells[2]) setCellText(cells[2], row.whoWhen || '', xmlDoc);
             }
@@ -569,7 +570,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], row.details ? `${row.label} ${row.details}` : row.label, xmlDoc);
+              if (cells[0]) setCellText(cells[0], row.details || '', xmlDoc);
               if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
               if (cells[2]) setCellText(cells[2], row.whoWhen || '', xmlDoc);
             }
@@ -616,6 +617,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             }
           });
         } else if (tableLabel.includes("agenda item")) {
+          // Top Agenda Table mapping
           for (let i = 1; i < rows.length; i++) {
             const cells = rows[i].getElementsByTagName("w:tc");
             if (cells.length < 2) continue;
