@@ -258,13 +258,13 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       { item: "Other", action: "", followUp: "" },
     ],
     siteSafetyReview: [
-      { label: "Issues Raised from Site Safety Inspection", details: "", action: "", whoWhen: "" },
+      { label: "Issues Raised from Site Safety Inspection:", details: "", action: "", whoWhen: "" },
     ],
     workerTraining: [
-      { label: "Worker Training Needs", details: "", action: "", whoWhen: "" },
+      { label: "Worker Training Needs:", details: "", action: "", whoWhen: "" },
     ],
     eventInvestigations: [
-      { label: "Has any Event/Accident/Incident occurred", details: "", action: "", whoWhen: "" },
+      { label: "Has any Event/Accident/Incident occurred:", details: "", action: "", whoWhen: "" },
     ],
     hazards: [
       { hazard: "", action: "", whoWhen: "" },
@@ -549,7 +549,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], row.details ? `${row.label}: ${row.details}` : row.label, xmlDoc);
+              if (cells[0]) setCellText(cells[0], row.details ? `${row.label} ${row.details}` : row.label, xmlDoc);
               if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
               if (cells[2]) setCellText(cells[2], row.whoWhen || '', xmlDoc);
             }
@@ -559,7 +559,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], row.details ? `${row.label}: ${row.details}` : row.label, xmlDoc);
+              if (cells[0]) setCellText(cells[0], row.details ? `${row.label} ${row.details}` : row.label, xmlDoc);
               if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
               if (cells[2]) setCellText(cells[2], row.whoWhen || '', xmlDoc);
             }
@@ -569,7 +569,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             const rowIndex = idx + 1;
             if (rows[rowIndex]) {
               const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], row.details ? `${row.label}: ${row.details}` : row.label, xmlDoc);
+              if (cells[0]) setCellText(cells[0], row.details ? `${row.label} ${row.details}` : row.label, xmlDoc);
               if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
               if (cells[2]) setCellText(cells[2], row.whoWhen || '', xmlDoc);
             }
@@ -1009,11 +1009,11 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* CARD 1: Issues Raised from Site Safety Inspection */}
+            {/* CARD 1: Issues Raised from Site Safety Inspection: */}
             <div className="space-y-3 pt-2">
               {toolboxData.siteSafetyReview.map((row, idx) => (
                 <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
-                  <span className="text-[10px] font-extrabold text-slate-500 uppercase block tracking-wider">
+                  <span className="font-bold text-slate-800 block">
                     {row.label}
                   </span>
                   <div className="space-y-2">
@@ -1054,11 +1054,11 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* CARD 2: Worker Training Needs */}
+            {/* CARD 2: Worker Training Needs: */}
             <div className="space-y-3 pt-2">
               {toolboxData.workerTraining.map((row, idx) => (
                 <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
-                  <span className="text-[10px] font-extrabold text-slate-500 uppercase block tracking-wider">
+                  <span className="font-bold text-slate-800 block">
                     {row.label}
                   </span>
                   <div className="space-y-2">
@@ -1107,7 +1107,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 </h3>
                 <button
                   type="button"
-                  onClick={() => addToolboxRow('eventInvestigations', { label: 'Has any Event/Accident/Incident occurred', details: '', action: '', whoWhen: '' })}
+                  onClick={() => addToolboxRow('eventInvestigations', { label: 'Has any Event/Accident/Incident occurred:', details: '', action: '', whoWhen: '' })}
                   className="text-xs font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
                 >
                   + Add Event Row
@@ -1128,7 +1128,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                       </button>
                     )}
                   </div>
-                  <span className="text-[10px] font-extrabold text-slate-500 uppercase block tracking-wider">
+                  <span className="font-bold text-slate-800 block">
                     {row.label}
                   </span>
                   <div className="space-y-2">
