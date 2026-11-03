@@ -1,7 +1,7 @@
 // src/HealthAndSafetyHub.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebaseConfig';
-import { collection, doc, setDoc, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, setDoc, serverTimestamp, getDocs, query, where, getDoc } from 'firebase/firestore';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import PZip from 'pizzip';
@@ -84,6 +84,10 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   const [savedSites, setSavedSites] = useState([]);
   const [autoFillContractor, setAutoFillContractor] = useState(true);
 
+  // Archive / Multiple Forms State
+  const [allExistingReports, setAllExistingReports] = useState([]);
+  const [selectedReportId, setSelectedReportId] = useState('');
+
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [activeSignatureTarget, setActiveSignatureTarget] = useState(null);
 
@@ -109,167 +113,160 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     e.target.style.height = `${e.target.scrollHeight}px`;
   };
 
-  useEffect(() => {
-    const fetchSites = async () => {
-      try {
-        const sitesSet = new Set();
-        const knownSitesRaw = localStorage.getItem('sjr_known_sites');
-        if (knownSitesRaw) {
-          const parsed = JSON.parse(knownSitesRaw);
-          if (Array.isArray(parsed)) {
-            parsed.forEach(site => site && sitesSet.add(site.trim()));
-          }
-        }
+  const fetchAllReports = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, 'health_safety'));
+      const reports = [];
+      const sitesSet = new Set();
 
-        const lastProject = localStorage.getItem(`sjr_last_project_${userId}`) || localStorage.getItem('last_site_name');
-        if (lastProject) {
-          sitesSet.add(lastProject.trim());
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        reports.push({ id: docSnap.id, ...data });
+        if (data.site || data.location) {
+          sitesSet.add((data.site || data.location).trim());
         }
+      });
 
-        if (userId) {
-          const q = query(collection(db, 'timesheets'), where('userId', '==', userId));
-          const snapshot = await getDocs(q);
-          snapshot.forEach(docSnap => {
-            const d = docSnap.data();
-            if (d.project && d.project.trim() !== '') {
-              sitesSet.add(d.project.trim());
-            }
-          });
-        }
-
-        setSavedSites(Array.from(sitesSet));
-      } catch (err) {
-        console.warn("Could not load past sites for H&S:", err);
-        const saved = localStorage.getItem('sjr_known_sites');
-        if (saved) setSavedSites(JSON.parse(saved));
+      const knownSitesRaw = localStorage.getItem('sjr_known_sites');
+      if (knownSitesRaw) {
+        const parsed = JSON.parse(knownSitesRaw);
+        if (Array.isArray(parsed)) parsed.forEach(s => s && sitesSet.add(s.trim()));
       }
-    };
-    fetchSites();
+
+      setSavedSites(Array.from(sitesSet));
+      setAllExistingReports(reports);
+    } catch (err) {
+      console.warn("Could not fetch H&S reports:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchAllReports();
   }, [userId]);
 
-  // STATE: Site Safety Inspection Report
+  const defaultInspectionSections = {
+    siteControl: [
+      { item: "Accommodation and lunchroom clean and hygienic", complies: "Yes", action: "", contractor: "" },
+      { item: "Toilet facilities clean and hygienic", complies: "Yes", action: "", contractor: "" },
+      { item: "General housekeeping up to date", complies: "Yes", action: "", contractor: "" },
+      { item: "Warning signs displayed", complies: "Yes", action: "", contractor: "" },
+      { item: "Hazard identification up to date", complies: "Yes", action: "", contractor: "" },
+      { item: "Site hoardings/fences in place", complies: "Yes", action: "", contractor: "" },
+      { item: "Hazardous materials stored safely", complies: "Yes", action: "", contractor: "" },
+    ],
+    firstAid: [
+      { item: "First Aid boxes are available and stocked", complies: "Yes", action: "", contractor: "" },
+      { item: "Accident Register is available", complies: "Yes", action: "", contractor: "" },
+      { item: "Fire Extinguisher is available and current", complies: "Yes", action: "", contractor: "" },
+      { item: "Evacuation Procedure current – emergencies included", complies: "Yes", action: "", contractor: "" },
+    ],
+    personalSafety: [
+      { item: "Signage displayed and legible", complies: "Yes", action: "", contractor: "" },
+      { item: "Hardhats being worn", complies: "Yes", action: "", contractor: "" },
+      { item: "Correct footwear being worn", complies: "Yes", action: "", contractor: "" },
+      { item: "Glasses/earmuffs/vests/masks used", complies: "Yes", action: "", contractor: "" },
+    ],
+    tidiness: [
+      { item: "Routes in/out clear", complies: "Yes", action: "", contractor: "" },
+      { item: "Site office clearly defined for visitors", complies: "Yes", action: "", contractor: "" },
+      { item: "Loose materials secure from wind", complies: "Yes", action: "", contractor: "" },
+    ],
+    excavations: [
+      { item: "Correctly shored and secured – isolated if possible", complies: "Yes", action: "", contractor: "" },
+    ],
+    electrical: [
+      { item: "Main board locked and waterproof", complies: "Yes", action: "", contractor: "" },
+      { item: "Condition and position of cables and leads", complies: "Yes", action: "", contractor: "" },
+      { item: "3 monthly tags on all tools and leads", complies: "Yes", action: "", contractor: "" },
+      { item: "RCD’s in use and tagged", complies: "Yes", action: "", contractor: "" },
+      { item: "No domestic multi boxes being used", complies: "Yes", action: "", contractor: "" },
+    ],
+    equipment: [
+      { item: "Equipment in good condition", complies: "Yes", action: "", contractor: "" },
+      { item: "Appropriate guards on equipment", complies: "Yes", action: "", contractor: "" },
+      { item: "Adequate temporary lighting", complies: "Yes", action: "", contractor: "" },
+    ],
+    scaffolding: [
+      { item: "Penetrations/holes identified and guarded", complies: "Yes", action: "", contractor: "" },
+      { item: "Safety harnesses and lines maintained and approved for use", complies: "Yes", action: "", contractor: "" },
+      { item: "Notifiable weekly Scaff tag current", complies: "Yes", action: "", contractor: "" },
+      { item: "Handrails/mid rails", complies: "Yes", action: "", contractor: "" },
+      { item: "Toe boards", complies: "Yes", action: "", contractor: "" },
+      { item: "Platforms", complies: "Yes", action: "", contractor: "" },
+      { item: "Ladders/stairs", complies: "Yes", action: "", contractor: "" },
+      { item: "Base Sound", complies: "Yes", action: "", contractor: "" },
+      { item: "Work Platforms clear", complies: "Yes", action: "", contractor: "" },
+      { item: "Platforms trip free", complies: "Yes", action: "", contractor: "" },
+      { item: "Planks tied down", complies: "Yes", action: "", contractor: "" },
+      { item: "Headroom clear", complies: "Yes", action: "", contractor: "" },
+      { item: "Ties/bracing adequate", complies: "Yes", action: "", contractor: "" },
+      { item: "Lift shafts/stairs", complies: "Yes", action: "", contractor: "" },
+    ],
+    ladders: [
+      { item: "Good condition", complies: "Yes", action: "", contractor: "" },
+      { item: "Secured top and bottom", complies: "Yes", action: "", contractor: "" },
+      { item: "Stays to step ladders", complies: "Yes", action: "", contractor: "" },
+      { item: "Working 2 steps down", complies: "Yes", action: "", contractor: "" },
+    ],
+    powderTools: [
+      { item: "Tools certificated", complies: "Yes", action: "", contractor: "" },
+      { item: "Operators certificated", complies: "Yes", action: "", contractor: "" },
+      { item: "PPE worn", complies: "Yes", action: "", contractor: "" },
+      { item: "Tools/charges stored in a secure place", complies: "Yes", action: "", contractor: "" },
+      { item: "Notice displayed", complies: "Yes", action: "", contractor: "" },
+    ],
+    welding: [
+      { item: "Hot Works permits being used", complies: "Yes", action: "", contractor: "" },
+      { item: "Bottles secure or in stand", complies: "Yes", action: "", contractor: "" },
+      { item: "Gauges/plugs/leads/hoses maintained", complies: "Yes", action: "", contractor: "" },
+      { item: "Welding screens", complies: "Yes", action: "", contractor: "" },
+      { item: "Flashback arresters", complies: "Yes", action: "", contractor: "" },
+      { item: "Extinguisher readily accessible", complies: "Yes", action: "", contractor: "" },
+      { item: "Operators using PPE", complies: "Yes", action: "", contractor: "" },
+    ],
+    plant: [
+      { item: "Service Certificate maintained", complies: "Yes", action: "", contractor: "" },
+      { item: "Warning devices (horn/reverse beeper)", complies: "Yes", action: "", contractor: "" },
+      { item: "Mirrors fitted", complies: "Yes", action: "", contractor: "" },
+      { item: "Seatbelts fitted", complies: "Yes", action: "", contractor: "" },
+      { item: "Roll over structures (ROPS) fitted", complies: "Yes", action: "", contractor: "" },
+    ],
+    cranes: [
+      { item: "Proper lift assessment plan completed", complies: "Yes", action: "", contractor: "" },
+      { item: "Current test certificate", complies: "Yes", action: "", contractor: "" },
+      { item: "Current test certificate for slings/chains/hooks", complies: "Yes", action: "", contractor: "" },
+      { item: "Slings/chains certified", complies: "Yes", action: "", contractor: "" },
+      { item: "Operator Procedures in place", complies: "Yes", action: "", contractor: "" },
+      { item: "Emergency Plan in place", complies: "Yes", action: "", contractor: "" },
+    ],
+    ewp: [
+      { item: "Log book filled in before use", complies: "Yes", action: "", contractor: "" },
+      { item: "Tyres inflated", complies: "Yes", action: "", contractor: "" },
+      { item: "Harnesses available for cherry pickers", complies: "Yes", action: "", contractor: "" },
+      { item: "Current test certificate", complies: "Yes", action: "", contractor: "" },
+    ],
+    hazardousGoods: [
+      { item: "Materials clearly labelled", complies: "Yes", action: "", contractor: "" },
+      { item: "Material safety data sheets available", complies: "Yes", action: "", contractor: "" },
+      { item: "Materials safely stored", complies: "Yes", action: "", contractor: "" },
+      { item: "No smoking sign displayed", complies: "Yes", action: "", contractor: "" },
+    ]
+  };
+
   const [inspectionData, setInspectionData] = useState({
-    site: localStorage.getItem(`sjr_last_project_${userId}`) || localStorage.getItem('last_site_name') || '',
+    site: '',
     weekEnding: new Date().toISOString().split('T')[0],
     time: getCurrentTimeString(),
     inspectedBy: userName || '',
     signature: '',
     dateSigned: new Date().toISOString().split('T')[0],
-    sections: {
-      siteControl: [
-        { item: "Accommodation and lunchroom clean and hygienic", complies: "Yes", action: "", contractor: "" },
-        { item: "Toilet facilities clean and hygienic", complies: "Yes", action: "", contractor: "" },
-        { item: "General housekeeping up to date", complies: "Yes", action: "", contractor: "" },
-        { item: "Warning signs displayed", complies: "Yes", action: "", contractor: "" },
-        { item: "Hazard identification up to date", complies: "Yes", action: "", contractor: "" },
-        { item: "Site hoardings/fences in place", complies: "Yes", action: "", contractor: "" },
-        { item: "Hazardous materials stored safely", complies: "Yes", action: "", contractor: "" },
-      ],
-      firstAid: [
-        { item: "First Aid boxes are available and stocked", complies: "Yes", action: "", contractor: "" },
-        { item: "Accident Register is available", complies: "Yes", action: "", contractor: "" },
-        { item: "Fire Extinguisher is available and current", complies: "Yes", action: "", contractor: "" },
-        { item: "Evacuation Procedure current – emergencies included", complies: "Yes", action: "", contractor: "" },
-      ],
-      personalSafety: [
-        { item: "Signage displayed and legible", complies: "Yes", action: "", contractor: "" },
-        { item: "Hardhats being worn", complies: "Yes", action: "", contractor: "" },
-        { item: "Correct footwear being worn", complies: "Yes", action: "", contractor: "" },
-        { item: "Glasses/earmuffs/vests/masks used", complies: "Yes", action: "", contractor: "" },
-      ],
-      tidiness: [
-        { item: "Routes in/out clear", complies: "Yes", action: "", contractor: "" },
-        { item: "Site office clearly defined for visitors", complies: "Yes", action: "", contractor: "" },
-        { item: "Loose materials secure from wind", complies: "Yes", action: "", contractor: "" },
-      ],
-      excavations: [
-        { item: "Correctly shored and secured – isolated if possible", complies: "Yes", action: "", contractor: "" },
-      ],
-      electrical: [
-        { item: "Main board locked and waterproof", complies: "Yes", action: "", contractor: "" },
-        { item: "Condition and position of cables and leads", complies: "Yes", action: "", contractor: "" },
-        { item: "3 monthly tags on all tools and leads", complies: "Yes", action: "", contractor: "" },
-        { item: "RCD’s in use and tagged", complies: "Yes", action: "", contractor: "" },
-        { item: "No domestic multi boxes being used", complies: "Yes", action: "", contractor: "" },
-      ],
-      equipment: [
-        { item: "Equipment in good condition", complies: "Yes", action: "", contractor: "" },
-        { item: "Appropriate guards on equipment", complies: "Yes", action: "", contractor: "" },
-        { item: "Adequate temporary lighting", complies: "Yes", action: "", contractor: "" },
-      ],
-      scaffolding: [
-        { item: "Penetrations/holes identified and guarded", complies: "Yes", action: "", contractor: "" },
-        { item: "Safety harnesses and lines maintained and approved for use", complies: "Yes", action: "", contractor: "" },
-        { item: "Notifiable weekly Scaff tag current", complies: "Yes", action: "", contractor: "" },
-        { item: "Handrails/mid rails", complies: "Yes", action: "", contractor: "" },
-        { item: "Toe boards", complies: "Yes", action: "", contractor: "" },
-        { item: "Platforms", complies: "Yes", action: "", contractor: "" },
-        { item: "Ladders/stairs", complies: "Yes", action: "", contractor: "" },
-        { item: "Base Sound", complies: "Yes", action: "", contractor: "" },
-        { item: "Work Platforms clear", complies: "Yes", action: "", contractor: "" },
-        { item: "Platforms trip free", complies: "Yes", action: "", contractor: "" },
-        { item: "Planks tied down", complies: "Yes", action: "", contractor: "" },
-        { item: "Headroom clear", complies: "Yes", action: "", contractor: "" },
-        { item: "Ties/bracing adequate", complies: "Yes", action: "", contractor: "" },
-        { item: "Lift shafts/stairs", complies: "Yes", action: "", contractor: "" },
-      ],
-      ladders: [
-        { item: "Good condition", complies: "Yes", action: "", contractor: "" },
-        { item: "Secured top and bottom", complies: "Yes", action: "", contractor: "" },
-        { item: "Stays to step ladders", complies: "Yes", action: "", contractor: "" },
-        { item: "Working 2 steps down", complies: "Yes", action: "", contractor: "" },
-      ],
-      powderTools: [
-        { item: "Tools certificated", complies: "Yes", action: "", contractor: "" },
-        { item: "Operators certificated", complies: "Yes", action: "", contractor: "" },
-        { item: "PPE worn", complies: "Yes", action: "", contractor: "" },
-        { item: "Tools/charges stored in a secure place", complies: "Yes", action: "", contractor: "" },
-        { item: "Notice displayed", complies: "Yes", action: "", contractor: "" },
-      ],
-      welding: [
-        { item: "Hot Works permits being used", complies: "Yes", action: "", contractor: "" },
-        { item: "Bottles secure or in stand", complies: "Yes", action: "", contractor: "" },
-        { item: "Gauges/plugs/leads/hoses maintained", complies: "Yes", action: "", contractor: "" },
-        { item: "Welding screens", complies: "Yes", action: "", contractor: "" },
-        { item: "Flashback arresters", complies: "Yes", action: "", contractor: "" },
-        { item: "Extinguisher readily accessible", complies: "Yes", action: "", contractor: "" },
-        { item: "Operators using PPE", complies: "Yes", action: "", contractor: "" },
-      ],
-      plant: [
-        { item: "Service Certificate maintained", complies: "Yes", action: "", contractor: "" },
-        { item: "Warning devices (horn/reverse beeper)", complies: "Yes", action: "", contractor: "" },
-        { item: "Mirrors fitted", complies: "Yes", action: "", contractor: "" },
-        { item: "Seatbelts fitted", complies: "Yes", action: "", contractor: "" },
-        { item: "Roll over structures (ROPS) fitted", complies: "Yes", action: "", contractor: "" },
-      ],
-      cranes: [
-        { item: "Proper lift assessment plan completed", complies: "Yes", action: "", contractor: "" },
-        { item: "Current test certificate", complies: "Yes", action: "", contractor: "" },
-        { item: "Current test certificate for slings/chains/hooks", complies: "Yes", action: "", contractor: "" },
-        { item: "Slings/chains certified", complies: "Yes", action: "", contractor: "" },
-        { item: "Operator Procedures in place", complies: "Yes", action: "", contractor: "" },
-        { item: "Emergency Plan in place", complies: "Yes", action: "", contractor: "" },
-      ],
-      ewp: [
-        { item: "Log book filled in before use", complies: "Yes", action: "", contractor: "" },
-        { item: "Tyres inflated", complies: "Yes", action: "", contractor: "" },
-        { item: "Harnesses available for cherry pickers", complies: "Yes", action: "", contractor: "" },
-        { item: "Current test certificate", complies: "Yes", action: "", contractor: "" },
-      ],
-      hazardousGoods: [
-        { item: "Materials clearly labelled", complies: "Yes", action: "", contractor: "" },
-        { item: "Material safety data sheets available", complies: "Yes", action: "", contractor: "" },
-        { item: "Materials safely stored", complies: "Yes", action: "", contractor: "" },
-        { item: "No smoking sign displayed", complies: "Yes", action: "", contractor: "" },
-      ]
-    }
+    sections: defaultInspectionSections
   });
 
-  // STATE: Toolbox Meeting Worksheet
   const [toolboxData, setToolboxData] = useState({
     date: new Date().toISOString().split('T')[0],
     time: getCurrentTimeString(),
-    location: localStorage.getItem(`sjr_last_project_${userId}`) || localStorage.getItem('last_site_name') || '',
+    location: '',
     previousActions: [
       { item: "Health and Safety", action: "", followUp: "" },
       { item: "Event Investigations", action: "", followUp: "" },
@@ -279,27 +276,13 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       { item: "Operational Issues/other Business", action: "", followUp: "" },
       { item: "Other", action: "", followUp: "" },
     ],
-    siteSafetyReview: [
-      { details: "", action: "", whoWhen: "" },
-    ],
-    workerTraining: [
-      { details: "", action: "", whoWhen: "" },
-    ],
-    eventInvestigations: [
-      { details: "", action: "", whoWhen: "" },
-    ],
-    hazards: [
-      { hazard: "", action: "", whoWhen: "" },
-    ],
-    hazardBoard: [
-      { item: "", update: "", whoWhen: "" },
-    ],
-    plantEquipment: [
-      { requirement: "", action: "", whoWhen: "" },
-    ],
-    taskPlanning: [
-      { task: "", ppe: "", timeframe: "", whoWhen: "" },
-    ],
+    siteSafetyReview: [{ details: "", action: "", whoWhen: "" }],
+    workerTraining: [{ details: "", action: "", whoWhen: "" }],
+    eventInvestigations: [{ details: "", action: "", whoWhen: "" }],
+    hazards: [{ hazard: "", action: "", whoWhen: "" }],
+    hazardBoard: [{ item: "", update: "", whoWhen: "" }],
+    plantEquipment: [{ requirement: "", action: "", whoWhen: "" }],
+    taskPlanning: [{ task: "", ppe: "", timeframe: "", whoWhen: "" }],
     taskPlanningDiscussion: "",
     operationalIssues: "",
     attendees: [
@@ -308,6 +291,115 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     managementSignature: '',
     managementDate: new Date().toISOString().split('T')[0]
   });
+
+  const handleSelectExistingReport = (reportId) => {
+    setSelectedReportId(reportId);
+    if (!reportId) return;
+
+    const found = allExistingReports.find(r => r.id === reportId);
+    if (found) {
+      if (found.type === 'Site Safety Inspection Report' || found.sections) {
+        setHsSubView('inspection');
+        setInspectionData({
+          site: found.site || '',
+          weekEnding: found.weekEnding || new Date().toISOString().split('T')[0],
+          time: found.time || getCurrentTimeString(),
+          inspectedBy: found.inspectedBy || userName || '',
+          signature: found.signature || '',
+          dateSigned: found.dateSigned || new Date().toISOString().split('T')[0],
+          sections: found.sections || defaultInspectionSections
+        });
+      } else if (found.type === 'H&S and Tool Box Meeting Worksheet' || found.previousActions) {
+        setHsSubView('toolbox');
+        setToolboxData({
+          date: found.date || new Date().toISOString().split('T')[0],
+          time: found.time || getCurrentTimeString(),
+          location: found.location || '',
+          previousActions: found.previousActions || toolboxData.previousActions,
+          siteSafetyReview: found.siteSafetyReview || toolboxData.siteSafetyReview,
+          workerTraining: found.workerTraining || toolboxData.workerTraining,
+          eventInvestigations: found.eventInvestigations || toolboxData.eventInvestigations,
+          hazards: found.hazards || toolboxData.hazards,
+          hazardBoard: found.hazardBoard || toolboxData.hazardBoard,
+          plantEquipment: found.plantEquipment || toolboxData.plantEquipment,
+          taskPlanning: found.taskPlanning || toolboxData.taskPlanning,
+          taskPlanningDiscussion: found.taskPlanningDiscussion || '',
+          operationalIssues: found.operationalIssues || '',
+          attendees: found.attendees || toolboxData.attendees,
+          managementSignature: found.managementSignature || '',
+          managementDate: found.managementDate || found.date || new Date().toISOString().split('T')[0]
+        });
+      }
+    }
+  };
+
+  const handleStartFreshForm = () => {
+    setSelectedReportId('');
+    if (hsSubView === 'inspection') {
+      setInspectionData({
+        site: '',
+        weekEnding: new Date().toISOString().split('T')[0],
+        time: getCurrentTimeString(),
+        inspectedBy: userName || '',
+        signature: '',
+        dateSigned: new Date().toISOString().split('T')[0],
+        sections: defaultInspectionSections
+      });
+    } else {
+      setToolboxData({
+        date: new Date().toISOString().split('T')[0],
+        time: getCurrentTimeString(),
+        location: '',
+        previousActions: [
+          { item: "Health and Safety", action: "", followUp: "" },
+          { item: "Event Investigations", action: "", followUp: "" },
+          { item: "Hazards", action: "", followUp: "" },
+          { item: "Plant and Equipment", action: "", followUp: "" },
+          { item: "Task Planning and Weekly Goals", action: "", followUp: "" },
+          { item: "Operational Issues/other Business", action: "", followUp: "" },
+          { item: "Other", action: "", followUp: "" },
+        ],
+        siteSafetyReview: [{ details: "", action: "", whoWhen: "" }],
+        workerTraining: [{ details: "", action: "", whoWhen: "" }],
+        eventInvestigations: [{ details: "", action: "", whoWhen: "" }],
+        hazards: [{ hazard: "", action: "", whoWhen: "" }],
+        hazardBoard: [{ item: "", update: "", whoWhen: "" }],
+        plantEquipment: [{ requirement: "", action: "", whoWhen: "" }],
+        taskPlanning: [{ task: "", ppe: "", timeframe: "", whoWhen: "" }],
+        taskPlanningDiscussion: "",
+        operationalIssues: "",
+        attendees: [{ name: userName || '', company: 'SJR Builders', signature: '', date: new Date().toISOString().split('T')[0] }],
+        managementSignature: '',
+        managementDate: new Date().toISOString().split('T')[0]
+      });
+    }
+    setStatusMessage({ type: 'success', text: "Started a fresh blank form." });
+    setTimeout(() => setStatusMessage(null), 3000);
+  };
+
+  const handleSiteOrWeekChange = async (newSite, newWeek) => {
+    setInspectionData(prev => ({ ...prev, site: newSite, weekEnding: newWeek }));
+    if (!newSite || !newWeek) return;
+
+    const cleanSite = newSite.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
+    const docId = `inspection_${cleanSite}_${newWeek}`;
+
+    try {
+      const docSnap = await getDoc(doc(db, 'health_safety', docId));
+      if (docSnap.exists()) {
+        const found = docSnap.data();
+        setSelectedReportId(docId);
+        setInspectionData(prev => ({
+          ...prev,
+          ...found
+        }));
+        setStatusMessage({ type: 'success', text: `Loaded existing live form for ${newSite} (${newWeek}) for collaboration.` });
+        setTimeout(() => setStatusMessage(null), 4000);
+      }
+    } catch (err) {
+      console.warn("Error checking existing collaboration doc:", err);
+    }
+  };
 
   const handleInspectionItemChange = (sectionKey, index, field, value) => {
     setInspectionData(prev => {
@@ -384,7 +476,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }));
   };
 
-  // --- DOM PARSER & IMAGE INJECTION HELPER FUNCTIONS ---
   function setCellText(cell, text, xmlDoc) {
     const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     const tNodes = cell.getElementsByTagNameNS(ns, "t");
@@ -508,7 +599,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   }
 
-  // DOM Parser Export for Site Safety Inspection Report
   const handleExportInspectionDocx = async () => {
     setExportingDocx(true);
     try {
@@ -603,7 +693,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   };
 
-  // DOM Parser Export for H&S and Toolbox Meeting Worksheet
   const handleExportToolboxDocx = async () => {
     setExportingDocx(true);
     try {
@@ -837,15 +926,20 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     e.preventDefault();
     setLoading(true);
     try {
-      const docId = `hs_inspection_${userId}_${Date.now()}`;
+      const cleanSite = (inspectionData.site || 'Site').replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
+      const docId = selectedReportId || `inspection_${cleanSite}_${inspectionData.weekEnding}`;
+      
       await setDoc(doc(db, 'health_safety', docId), {
         userId,
         userName,
         type: 'Site Safety Inspection Report',
         createdAt: serverTimestamp(),
         ...inspectionData
-      });
-      setStatusMessage({ type: 'success', text: "Site Safety Inspection Report submitted successfully!" });
+      }, { merge: true });
+
+      setSelectedReportId(docId);
+      await fetchAllReports();
+      setStatusMessage({ type: 'success', text: "Site Safety Inspection Report saved and synced for collaboration!" });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
       console.error("Error saving inspection:", err);
@@ -859,15 +953,20 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     e.preventDefault();
     setLoading(true);
     try {
-      const docId = `hs_toolbox_${userId}_${Date.now()}`;
+      const cleanLoc = (toolboxData.location || 'Site').replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
+      const docId = selectedReportId || `toolbox_${cleanLoc}_${toolboxData.date}`;
+
       await setDoc(doc(db, 'health_safety', docId), {
         userId,
         userName,
         type: 'H&S and Tool Box Meeting Worksheet',
         createdAt: serverTimestamp(),
         ...toolboxData
-      });
-      setStatusMessage({ type: 'success', text: "Toolbox Meeting Worksheet submitted successfully!" });
+      }, { merge: true });
+
+      setSelectedReportId(docId);
+      await fetchAllReports();
+      setStatusMessage({ type: 'success', text: "Toolbox Meeting Worksheet saved and synced for collaboration!" });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
       console.error("Error saving toolbox meeting:", err);
@@ -904,6 +1003,32 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         </button>
       </div>
 
+      {/* HISTORICAL SELECTOR & ADD SITE BAR */}
+      <div className="bg-slate-100 border border-slate-200 p-3 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="w-full sm:w-auto flex-1">
+          <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">Select Previous Form / Week</label>
+          <select
+            value={selectedReportId}
+            onChange={(e) => handleSelectExistingReport(e.target.value)}
+            className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-semibold text-slate-800"
+          >
+            <option value="">-- Choose past saved form or add site --</option>
+            {allExistingReports.map(rep => (
+              <option key={rep.id} value={rep.id}>
+                {rep.type} - {rep.site || rep.location || 'Unknown'} (Week ending: {rep.weekEnding || rep.date})
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="button"
+          onClick={handleStartFreshForm}
+          className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2.5 px-4 rounded-lg shadow transition-colors cursor-pointer whitespace-nowrap mt-4 sm:mt-0"
+        >
+          + Add Site
+        </button>
+      </div>
+
       {statusMessage && (
         <div className={`p-3 rounded-lg text-sm font-semibold flex items-center gap-2 ${
           statusMessage.type === 'error' ? 'bg-rose-50 border border-rose-200 text-rose-800' : 'bg-emerald-50 border border-emerald-200 text-emerald-800'
@@ -921,7 +1046,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               <img src={sjrLogo} alt="SJR Builders Logo" className="h-10 w-auto object-contain" />
               <div>
                 <h2 className="text-xl font-bold text-slate-900 leading-tight">Site Safety Inspection Report</h2>
-                <p className="text-xs text-slate-500 font-medium mt-0.5">Weekly safety check & compliance audit</p>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">Weekly safety check & live collaboration audit</p>
               </div>
             </div>
 
@@ -954,7 +1079,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Site / Project</label>
                 <SiteAutoCompleteInput
                   value={inspectionData.site}
-                  onChange={(val) => setInspectionData({ ...inspectionData, site: val })}
+                  onChange={(val) => handleSiteOrWeekChange(val, inspectionData.weekEnding)}
                   existingSites={savedSites}
                 />
               </div>
@@ -963,7 +1088,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 <input
                   type="date"
                   value={inspectionData.weekEnding}
-                  onChange={(e) => setInspectionData({ ...inspectionData, weekEnding: e.target.value })}
+                  onChange={(e) => handleSiteOrWeekChange(inspectionData.site, e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800"
                   required
                 />
@@ -1084,7 +1209,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               disabled={loading}
               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors disabled:opacity-50 cursor-pointer"
             >
-              {loading ? "Saving Report..." : "Submit Site Safety Inspection Report"}
+              {loading ? "Saving Report..." : "Submit / Sync Site Safety Inspection Report"}
             </button>
           </form>
         </div>
@@ -1764,7 +1889,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               disabled={loading}
               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors disabled:opacity-50 cursor-pointer"
             >
-              {loading ? "Saving Meeting..." : "Submit Toolbox Meeting Worksheet"}
+              {loading ? "Saving Meeting..." : "Submit / Sync Toolbox Meeting Worksheet"}
             </button>
           </form>
         </div>
