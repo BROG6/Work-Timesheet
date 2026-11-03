@@ -87,6 +87,16 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [activeSignatureTarget, setActiveSignatureTarget] = useState(null);
 
+  const formatDateShort = (dateStr) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = String(d.getFullYear()).slice(-2);
+    return `${day}/${month}/${year}`;
+  };
+
   useEffect(() => {
     const fetchSites = async () => {
       try {
@@ -354,7 +364,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }));
   };
 
-  // --- DOM PARSER HELPER FUNCTIONS ---
+  // --- DOM PARSER & IMAGE INJECTION HELPER FUNCTIONS ---
   function setCellText(cell, text, xmlDoc) {
     const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     const tNodes = cell.getElementsByTagNameNS(ns, "t");
@@ -385,6 +395,89 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     let str = "";
     for (let tn of tNodes) str += tn.textContent;
     return str.replace(/\s+/g, ' ').trim();
+  }
+
+  function insertSignatureImage(containerNode, dataUrl, zip, xmlDoc) {
+    if (!dataUrl || !dataUrl.startsWith("data:image")) return;
+
+    try {
+      const imgId = "sig_" + Math.random().toString(36).substring(2, 9);
+      const fileName = `media/${imgId}.png`;
+      const relsId = `rIdSig${Math.floor(Math.random() * 100000)}`;
+
+      const base64Data = dataUrl.split(',')[1];
+      const binaryStr = window.atob(base64Data);
+      const len = binaryStr.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+      zip.file(`word/${fileName}`, bytes);
+
+      const relsXmlStr = zip.file("word/_rels/document.xml.rels").asText();
+      const relsParser = new DOMParser();
+      const relsDoc = relsParser.parseFromString(relsXmlStr, "text/xml");
+      const relationships = relsDoc.getElementsByTagName("Relationships")[0];
+
+      if (relationships) {
+        const newRel = relsDoc.createElementNS(
+          "http://schemas.openxmlformats.org/package/2006/relationships",
+          "Relationship"
+        );
+        newRel.setAttribute("Id", relsId);
+        newRel.setAttribute(
+          "Type",
+          "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+        );
+        newRel.setAttribute("Target", fileName);
+        relationships.appendChild(newRel);
+
+        const relsSerializer = new XMLSerializer();
+        zip.file("word/_rels/document.xml.rels", relsSerializer.serializeToString(relsDoc));
+      }
+
+      const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+      const nsA = "http://schemas.openxmlformats.org/drawingml/2006/main";
+      const nsR = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+      const drawingXmlStr = `
+        <w:p xmlns:w="${nsW}">
+          <w:r>
+            <w:drawing>
+              <wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
+                <wp:extent cx="1143000" cy="381000"/>
+                <wp:docPr id="1" name="Signature ${imgId}"/>
+                <a:graphic xmlns:a="${nsA}">
+                  <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                    <pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                      <pic:nvPicPr>
+                        <pic:cNvPr id="0" name="${fileName}"/>
+                        <pic:cNvPicPr/>
+                      </pic:nvPicPr>
+                      <pic:blipFill>
+                        <a:blip r:embed="${relsId}" xmlns:r="${nsR}"/>
+                        <a:stretch><a:fillRect/></a:stretch>
+                      </pic:blipFill>
+                      <pic:spPr>
+                        <a:xfrm><a:off x="0" y="0"/><a:ext cx="1143000" cy="381000"/></a:xfrm>
+                        <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+                      </pic:spPr>
+                    </pic:pic>
+                  </a:graphicData>
+                </a:graphic>
+              </wp:inline>
+            </w:drawing>
+          </w:r>
+        </w:p>`;
+
+      const imgDoc = new DOMParser().parseFromString(drawingXmlStr, "text/xml");
+      const pNode = xmlDoc.importNode(imgDoc.documentElement, true);
+
+      while (containerNode.firstChild) containerNode.removeChild(containerNode.firstChild);
+      containerNode.appendChild(pNode);
+    } catch (e) {
+      console.error("Failed to inject signature image into document:", e);
+    }
   }
 
   // DOM Parser Export for Site Safety Inspection Report
@@ -424,8 +517,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               pStr = `Inspected By: ${inspectionData.inspectedBy || ''}`;
             }
             if (pStr.includes("Signed:")) {
-              const sigText = inspectionData.signature ? `[✓ Verified Digital Signature: ${inspectionData.inspectedBy}]` : '';
-              pStr = `Signed: ${sigText}      Dated: ${inspectionData.dateSigned || inspectionData.weekEnding || ''}`;
+              pStr = `Signed (${formatDateShort(inspectionData.dateSigned || inspectionData.weekEnding)})      Dated: ${formatDateShort(inspectionData.dateSigned || inspectionData.weekEnding)}`;
             }
 
             tNodes[0].textContent = pStr;
@@ -497,7 +589,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const paragraphs = xmlDoc.getElementsByTagName("w:p");
       const tables = xmlDoc.getElementsByTagName("w:tbl");
 
-      // 1. Header & Footer Paragraph replacements & Dotted-line stacking
+      // 1. Header & Footer Paragraph replacements & Line Stacking
       for (let i = 0; i < paragraphs.length; i++) {
         const p = paragraphs[i];
         const tNodes = p.getElementsByTagName("w:t");
@@ -514,18 +606,23 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             tNodes[0].textContent = pStr;
             for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
           } else if (pStr.includes("Signed – Management:")) {
-            const mgmtSig = toolboxData.managementSignature ? `[✓ Verified Digital Signature: ${userName}]` : '';
-            pStr = `Signed – Management: ${mgmtSig}    Dated: ${toolboxData.managementDate || toolboxData.date || ''}`;
-            tNodes[0].textContent = pStr;
-            for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+            if (toolboxData.managementSignature) {
+              const dateVal = formatDateShort(toolboxData.managementDate || toolboxData.date);
+              pStr = `Signed – Management: Signed (${dateVal})    Dated: ${dateVal}`;
+              tNodes[0].textContent = pStr;
+              for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+            } else {
+              pStr = `Signed – Management: ________________    Dated: ____________`;
+              tNodes[0].textContent = pStr;
+              for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+            }
           } else if (p.parentNode && p.parentNode.nodeName !== 'w:tc' && pStr.toLowerCase().startsWith("discussion about task planning")) {
-            tNodes[0].textContent = `Discussion About Task Planning and Weekly Goals:\n${toolboxData.taskPlanningDiscussion || ''}`;
+            tNodes[0].textContent = `Discussion About Task Planning and Weekly Goals: ${toolboxData.taskPlanningDiscussion || ''}`;
             for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
 
-            // Remove subsequent underline paragraphs so text doesn't float above blank lines
             let nextSibling = p.nextElementSibling;
             let removedCount = 0;
-            while (nextSibling && removedCount < 4) {
+            while (nextSibling && removedCount < 6) {
               const sibText = getCellText(nextSibling);
               if (sibText.includes("___") || sibText === "") {
                 const toRemove = nextSibling;
@@ -537,13 +634,12 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               }
             }
           } else if (p.parentNode && p.parentNode.nodeName !== 'w:tc' && pStr.toLowerCase().startsWith("operational issues/other business")) {
-            tNodes[0].textContent = `Operational Issues/other Business:\n${toolboxData.operationalIssues || ''}`;
+            tNodes[0].textContent = `Operational Issues/other Business: ${toolboxData.operationalIssues || ''}`;
             for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
 
-            // Remove subsequent underline paragraphs
             let nextSibling = p.nextElementSibling;
             let removedCount = 0;
-            while (nextSibling && removedCount < 4) {
+            while (nextSibling && removedCount < 6) {
               const sibText = getCellText(nextSibling);
               if (sibText.includes("___") || sibText === "") {
                 const toRemove = nextSibling;
@@ -575,8 +671,12 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               if (cells[0]) setCellText(cells[0], att.name || '', xmlDoc);
               if (cells[1]) setCellText(cells[1], att.company || '', xmlDoc);
               if (cells[2]) {
-                const sigVal = att.signature ? `[✓ Verified Signature: ${att.name}]` : (att.date || '');
-                setCellText(cells[2], sigVal, xmlDoc);
+                const formattedDate = formatDateShort(att.date || toolboxData.date);
+                if (att.signature) {
+                  insertSignatureImage(cells[2], att.signature, zip, xmlDoc);
+                } else {
+                  setCellText(cells[2], formattedDate, xmlDoc);
+                }
               }
             }
           });
@@ -652,7 +752,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             }
           });
         } else if (tableLabel.includes("agenda item")) {
-          // Top Agenda Table mapping
           for (let i = 1; i < rows.length; i++) {
             const cells = rows[i].getElementsByTagName("w:tc");
             if (cells.length < 2) continue;
