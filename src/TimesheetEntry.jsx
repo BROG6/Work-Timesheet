@@ -947,31 +947,49 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               }
             }
           }
+        }
 
-          // Map Other Work / Other Leave comments to the COMMENTS section template lines
-          if (fullText.includes("If Other - please detail what type of work you were undertaking")) {
-            let collectedComments = [];
-            siteEntriesForExport.forEach(entry => {
-              if (entry.tasks) {
-                entry.tasks.forEach(t => {
-                  const tName = (t.taskName || '').toLowerCase();
-                  const tGroup = (t.categoryGroup || '').toLowerCase();
-                  
-                  const isOtherWork = tName.includes("other work") || tGroup.includes("other work");
-                  const isOtherLeave = tName.includes("other leave") || tGroup.includes("leave");
+        // Map Other Work / Other Leave comments to the COMMENTS section template lines (checking both paragraphs and table cells)
+        let collectedComments = [];
+        siteEntriesForExport.forEach(entry => {
+          if (entry.tasks) {
+            entry.tasks.forEach(t => {
+              const tName = (t.taskName || '').toLowerCase();
+              const tGroup = (t.categoryGroup || '').toLowerCase();
+              
+              const isOtherWork = tName.includes("other work") || tGroup.includes("other work");
+              const isOtherLeave = tName.includes("other leave") || tGroup.includes("leave");
 
-                  if ((isOtherWork || isOtherLeave) && t.comments && t.comments.trim() !== '') {
-                    const label = isOtherLeave ? "Other Leave" : "Other Work";
-                    collectedComments.push(`${displayDate(entry.date)} [${label}]: ${t.comments.trim()}`);
-                  }
-                });
+              if ((isOtherWork || isOtherLeave) && t.comments && t.comments.trim() !== '') {
+                const label = isOtherLeave ? "Other Leave" : "Other Work";
+                collectedComments.push(`${displayDate(entry.date)} [${label}]: ${t.comments.trim()}`);
               }
             });
+          }
+        });
 
-            if (collectedComments.length > 0) {
-              tNodes[0].textContent = `If Other - please detail what type of work you were undertaking: ${collectedComments.join(' | ')}`;
+        if (collectedComments.length > 0) {
+          const commentString = `If Other - please detail what type of work you were undertaking: ${collectedComments.join(' | ')}`;
+          
+          for (let p of paragraphs) {
+            const tNodes = p.getElementsByTagName("w:t");
+            if (tNodes.length > 0 && tNodes[0].textContent.includes("If Other - please detail")) {
+              tNodes[0].textContent = commentString;
               for (let i = 1; i < tNodes.length; i++) {
                 tNodes[i].textContent = "";
+              }
+            }
+          }
+
+          for (let tr of rows) {
+            const cells = tr.getElementsByTagName("w:tc");
+            for (let cell of cells) {
+              const tNodes = cell.getElementsByTagName("w:t");
+              if (tNodes.length > 0 && tNodes[0].textContent.includes("If Other - please detail")) {
+                tNodes[0].textContent = commentString;
+                for (let i = 1; i < tNodes.length; i++) {
+                  tNodes[i].textContent = "";
+                }
               }
             }
           }
