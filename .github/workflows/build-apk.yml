@@ -1,4 +1,4 @@
-name: Build and Release APK
+Name: Build and Release APK
 
 on:
   push:
@@ -25,12 +25,15 @@ jobs:
           node-version: 22
           cache: 'npm'
 
-      # 1. Automatically increment patch version in package.json
+      # 1. Automatically increment patch version in package.json & sync with remote
       - name: Auto-Bump Version
         id: bump_version
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Pull latest changes to avoid non-fast-forward rejections
+          git pull origin main --rebase
           
           NEW_VERSION=$(npm version patch --no-git-tag-version)
           echo "VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
