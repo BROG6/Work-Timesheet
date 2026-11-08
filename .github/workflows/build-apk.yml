@@ -61,8 +61,8 @@ jobs:
       - name: Pre-download Gradle Distribution with Retries
         run: |
           cd android
-          # Read the distribution URL from gradle-wrapper.properties and download with curl retries
-          GRADLE_URL=$(grep "distributionUrl" gradle/wrapper/gradle-wrapper.properties | cut -d'=' -f2-)
+          # Extract and clean up URL from carriage returns/whitespace
+          GRADLE_URL=$(grep "distributionUrl" gradle/wrapper/gradle-wrapper.properties | cut -d'=' -f2- | tr -d '\r' | xargs)
           echo "Downloading Gradle from: $GRADLE_URL"
           curl --retry 5 --retry-delay 10 --retry-connrefused -fLo gradle-wrapper.zip "$GRADLE_URL"
           ./gradlew --version
