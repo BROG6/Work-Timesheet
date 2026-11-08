@@ -947,6 +947,28 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               }
             }
           }
+
+          // Map Other Work / Comments to the COMMENTS section template lines
+          if (fullText.includes("If Other - please detail what type of work you were undertaking")) {
+            let collectedComments = [];
+            siteEntriesForExport.forEach(entry => {
+              if (entry.tasks) {
+                entry.tasks.forEach(t => {
+                  const tName = (t.taskName || '').toLowerCase();
+                  if ((tName.includes("other work") || t.taskCategoryGroup === "Other Work") && t.comments && t.comments.trim() !== '') {
+                    collectedComments.push(`${displayDate(entry.date)}: ${t.comments.trim()}`);
+                  }
+                });
+              }
+            });
+
+            if (collectedComments.length > 0) {
+              tNodes[0].textContent = `If Other - please detail what type of work you were undertaking: ${collectedComments.join(' | ')}`;
+              for (let i = 1; i < tNodes.length; i++) {
+                tNodes[i].textContent = "";
+              }
+            }
+          }
         }
 
         function getCellText(cell) {
