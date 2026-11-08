@@ -970,8 +970,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         });
 
         if (collectedComments.length > 0) {
-          const commentString = `If Other - please detail what type of work you were undertaking:\n${collectedComments.join('\n')}`;
-          
           let foundCommentBlock = false;
           for (let p of paragraphs) {
             let fullPText = "";
@@ -980,11 +978,27 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
             if (fullPText.includes("If Other") || fullPText.includes("detail what type of work")) {
               if (tNodes.length > 0) {
-                tNodes[0].textContent = commentString;
+                tNodes[0].textContent = "If Other - please detail what type of work you were undertaking:";
                 tNodes[0].setAttribute("xml:space", "preserve");
+                
                 for (let i = 1; i < tNodes.length; i++) {
                   tNodes[i].textContent = "";
                 }
+
+                const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+                const runEl = xmlDoc.createElementNS(ns, "w:r");
+                const brEl = xmlDoc.createElementNS(ns, "w:br");
+                runEl.appendChild(brEl);
+
+                const commentRun = xmlDoc.createElementNS(ns, "w:r");
+                const commentText = xmlDoc.createElementNS(ns, "w:t");
+                commentText.textContent = collectedComments.join('\n');
+                commentText.setAttribute("xml:space", "preserve");
+                commentRun.appendChild(commentText);
+
+                p.appendChild(runEl);
+                p.appendChild(commentRun);
+
                 foundCommentBlock = true;
                 break;
               }
@@ -1001,11 +1015,27 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
                 if (fullCellText.includes("If Other") || fullCellText.includes("detail what type of work")) {
                   if (tNodes.length > 0) {
-                    tNodes[0].textContent = commentString;
+                    tNodes[0].textContent = "If Other - please detail what type of work you were undertaking:";
                     tNodes[0].setAttribute("xml:space", "preserve");
+                    
                     for (let i = 1; i < tNodes.length; i++) {
                       tNodes[i].textContent = "";
                     }
+
+                    const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+                    const runEl = xmlDoc.createElementNS(ns, "w:r");
+                    const brEl = xmlDoc.createElementNS(ns, "w:br");
+                    runEl.appendChild(brEl);
+
+                    const commentRun = xmlDoc.createElementNS(ns, "w:r");
+                    const commentText = xmlDoc.createElementNS(ns, "w:t");
+                    commentText.textContent = collectedComments.join('\n');
+                    commentText.setAttribute("xml:space", "preserve");
+                    commentRun.appendChild(commentText);
+
+                    cell.appendChild(runEl);
+                    cell.appendChild(commentRun);
+
                     foundCommentBlock = true;
                     break;
                   }
