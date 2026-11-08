@@ -948,15 +948,21 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             }
           }
 
-          // Map Other Work / Comments to the COMMENTS section template lines
+          // Map Other Work / Other Leave comments to the COMMENTS section template lines
           if (fullText.includes("If Other - please detail what type of work you were undertaking")) {
             let collectedComments = [];
             siteEntriesForExport.forEach(entry => {
               if (entry.tasks) {
                 entry.tasks.forEach(t => {
                   const tName = (t.taskName || '').toLowerCase();
-                  if ((tName.includes("other work") || t.taskCategoryGroup === "Other Work") && t.comments && t.comments.trim() !== '') {
-                    collectedComments.push(`${displayDate(entry.date)}: ${t.comments.trim()}`);
+                  const tGroup = (t.categoryGroup || '').toLowerCase();
+                  
+                  const isOtherWork = tName.includes("other work") || tGroup.includes("other work");
+                  const isOtherLeave = tName.includes("other leave") || tGroup.includes("leave");
+
+                  if ((isOtherWork || isOtherLeave) && t.comments && t.comments.trim() !== '') {
+                    const label = isOtherLeave ? "Other Leave" : "Other Work";
+                    collectedComments.push(`${displayDate(entry.date)} [${label}]: ${t.comments.trim()}`);
                   }
                 });
               }
