@@ -1,4 +1,5 @@
 // src/TimesheetEntry.jsx
+/* SJR Timesheet Portal - Stable */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from './firebaseConfig';
 import { 
