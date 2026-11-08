@@ -950,7 +950,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           }
         }
 
-        // Map Other Work / Other Leave comments to the COMMENTS section template lines as a separate paragraph
+        // Map Other Work / Other Leave comments to the COMMENTS section template lines as separate bulleted list items
         let collectedComments = [];
         siteEntriesForExport.forEach(entry => {
           if (entry.tasks) {
@@ -985,19 +985,22 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   tNodes[i].textContent = "";
                 }
 
-                // Create a completely separate new paragraph element (<w:p>) so it sits on the line below
+                // Create a separate bulleted paragraph for each comment so they form a clean list
                 const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-                const newP = xmlDoc.createElementNS(ns, "w:p");
-                const newRun = xmlDoc.createElementNS(ns, "w:r");
-                const newT = xmlDoc.createElementNS(ns, "w:t");
-                newT.textContent = collectedComments.join('\n');
-                newT.setAttribute("xml:space", "preserve");
                 
-                newRun.appendChild(newT);
-                newP.appendChild(newRun);
+                collectedComments.forEach((commentTextStr) => {
+                  const newP = xmlDoc.createElementNS(ns, "w:p");
+                  const newRun = xmlDoc.createElementNS(ns, "w:r");
+                  const newT = xmlDoc.createElementNS(ns, "w:t");
+                  newT.textContent = `• ${commentTextStr}`;
+                  newT.setAttribute("xml:space", "preserve");
+                  
+                  newRun.appendChild(newT);
+                  newP.appendChild(newRun);
 
-                // Insert the new paragraph right after the prompt paragraph
-                p.parentNode.insertBefore(newP, p.nextSibling);
+                  // Insert each comment paragraph sequentially
+                  p.parentNode.insertBefore(newP, p.nextSibling);
+                });
 
                 foundCommentBlock = true;
                 break;
@@ -1023,16 +1026,19 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                     }
 
                     const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-                    const newP = xmlDoc.createElementNS(ns, "w:p");
-                    const newRun = xmlDoc.createElementNS(ns, "w:r");
-                    const newT = xmlDoc.createElementNS(ns, "w:t");
-                    newT.textContent = collectedComments.join('\n');
-                    newT.setAttribute("xml:space", "preserve");
                     
-                    newRun.appendChild(newT);
-                    newP.appendChild(newRun);
+                    collectedComments.forEach((commentTextStr) => {
+                      const newP = xmlDoc.createElementNS(ns, "w:p");
+                      const newRun = xmlDoc.createElementNS(ns, "w:r");
+                      const newT = xmlDoc.createElementNS(ns, "w:t");
+                      newT.textContent = `• ${commentTextStr}`;
+                      newT.setAttribute("xml:space", "preserve");
+                      
+                      newRun.appendChild(newT);
+                      newP.appendChild(newRun);
 
-                    cell.appendChild(newP);
+                      cell.appendChild(newP);
+                    });
 
                     foundCommentBlock = true;
                     break;
