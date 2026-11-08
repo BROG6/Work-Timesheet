@@ -950,7 +950,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           }
         }
 
-        // Map Other Work / Other Leave comments to the COMMENTS section template lines (with line break)
+        // Map Other Work / Other Leave comments to the COMMENTS section template lines as a separate paragraph
         let collectedComments = [];
         siteEntriesForExport.forEach(entry => {
           if (entry.tasks) {
@@ -985,19 +985,19 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   tNodes[i].textContent = "";
                 }
 
+                // Create a completely separate new paragraph element (<w:p>) so it sits on the line below
                 const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-                const runEl = xmlDoc.createElementNS(ns, "w:r");
-                const brEl = xmlDoc.createElementNS(ns, "w:br");
-                runEl.appendChild(brEl);
+                const newP = xmlDoc.createElementNS(ns, "w:p");
+                const newRun = xmlDoc.createElementNS(ns, "w:r");
+                const newT = xmlDoc.createElementNS(ns, "w:t");
+                newT.textContent = collectedComments.join('\n');
+                newT.setAttribute("xml:space", "preserve");
+                
+                newRun.appendChild(newT);
+                newP.appendChild(newRun);
 
-                const commentRun = xmlDoc.createElementNS(ns, "w:r");
-                const commentText = xmlDoc.createElementNS(ns, "w:t");
-                commentText.textContent = collectedComments.join('\n');
-                commentText.setAttribute("xml:space", "preserve");
-                commentRun.appendChild(commentText);
-
-                p.appendChild(runEl);
-                p.appendChild(commentRun);
+                // Insert the new paragraph right after the prompt paragraph
+                p.parentNode.insertBefore(newP, p.nextSibling);
 
                 foundCommentBlock = true;
                 break;
@@ -1023,18 +1023,16 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                     }
 
                     const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-                    const runEl = xmlDoc.createElementNS(ns, "w:r");
-                    const brEl = xmlDoc.createElementNS(ns, "w:br");
-                    runEl.appendChild(brEl);
+                    const newP = xmlDoc.createElementNS(ns, "w:p");
+                    const newRun = xmlDoc.createElementNS(ns, "w:r");
+                    const newT = xmlDoc.createElementNS(ns, "w:t");
+                    newT.textContent = collectedComments.join('\n');
+                    newT.setAttribute("xml:space", "preserve");
+                    
+                    newRun.appendChild(newT);
+                    newP.appendChild(newRun);
 
-                    const commentRun = xmlDoc.createElementNS(ns, "w:r");
-                    const commentText = xmlDoc.createElementNS(ns, "w:t");
-                    commentText.textContent = collectedComments.join('\n');
-                    commentText.setAttribute("xml:space", "preserve");
-                    commentRun.appendChild(commentText);
-
-                    cell.appendChild(runEl);
-                    cell.appendChild(commentRun);
+                    cell.appendChild(newP);
 
                     foundCommentBlock = true;
                     break;
