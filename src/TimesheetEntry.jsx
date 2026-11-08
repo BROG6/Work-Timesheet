@@ -949,7 +949,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           }
         }
 
-        // Map Other Work / Other Leave comments to the COMMENTS section template lines
+        // Map Other Work / Other Leave comments to the COMMENTS section template lines (with line break)
         let collectedComments = [];
         siteEntriesForExport.forEach(entry => {
           if (entry.tasks) {
