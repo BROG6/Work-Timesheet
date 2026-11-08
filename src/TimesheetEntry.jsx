@@ -949,7 +949,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           }
         }
 
-        // Map Other Work / Other Leave comments to the COMMENTS section template lines (checking both paragraphs and table cells)
+        // Map Other Work / Other Leave comments to the COMMENTS section template lines
         let collectedComments = [];
         siteEntriesForExport.forEach(entry => {
           if (entry.tasks) {
@@ -969,28 +969,48 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         });
 
         if (collectedComments.length > 0) {
-          const commentString = `If Other - please detail what type of work you were undertaking: ${collectedComments.join(' | ')}`;
+          const commentString = `If Other - please detail what type of work you were undertaking:\n${collectedComments.join('\n')}`;
           
+          let foundCommentBlock = false;
           for (let p of paragraphs) {
+            let fullPText = "";
             const tNodes = p.getElementsByTagName("w:t");
-            if (tNodes.length > 0 && tNodes[0].textContent.includes("If Other - please detail")) {
-              tNodes[0].textContent = commentString;
-              for (let i = 1; i < tNodes.length; i++) {
-                tNodes[i].textContent = "";
+            for (let tn of tNodes) fullPText += tn.textContent;
+
+            if (fullPText.includes("If Other") || fullPText.includes("detail what type of work")) {
+              if (tNodes.length > 0) {
+                tNodes[0].textContent = commentString;
+                tNodes[0].setAttribute("xml:space", "preserve");
+                for (let i = 1; i < tNodes.length; i++) {
+                  tNodes[i].textContent = "";
+                }
+                foundCommentBlock = true;
+                break;
               }
             }
           }
 
-          for (let tr of rows) {
-            const cells = tr.getElementsByTagName("w:tc");
-            for (let cell of cells) {
-              const tNodes = cell.getElementsByTagName("w:t");
-              if (tNodes.length > 0 && tNodes[0].textContent.includes("If Other - please detail")) {
-                tNodes[0].textContent = commentString;
-                for (let i = 1; i < tNodes.length; i++) {
-                  tNodes[i].textContent = "";
+          if (!foundCommentBlock) {
+            for (let tr of rows) {
+              const cells = tr.getElementsByTagName("w:tc");
+              for (let cell of cells) {
+                let fullCellText = "";
+                const tNodes = cell.getElementsByTagName("w:t");
+                for (let tn of tNodes) fullCellText += tn.textContent;
+
+                if (fullCellText.includes("If Other") || fullCellText.includes("detail what type of work")) {
+                  if (tNodes.length > 0) {
+                    tNodes[0].textContent = commentString;
+                    tNodes[0].setAttribute("xml:space", "preserve");
+                    for (let i = 1; i < tNodes.length; i++) {
+                      tNodes[i].textContent = "";
+                    }
+                    foundCommentBlock = true;
+                    break;
+                  }
                 }
               }
+              if (foundCommentBlock) break;
             }
           }
         }
