@@ -121,10 +121,11 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const sitesSet = new Set();
 
       snapshot.forEach(docSnap => {
-        const data = docSnap.data();
-        reports.push({ id: docSnap.id, ...data });
-        if (data.site || data.location) {
-          sitesSet.add((data.site || data.location).trim());
+        const docId = docSnap.id;
+        const docData = docSnap.data();
+        reports.push({ id: docId, ...docData });
+        if (docData.site || docData.location) {
+          sitesSet.add((docData.site || docData.location).trim());
         }
       });
 
@@ -145,7 +146,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     fetchAllReports();
   }, [userId]);
 
-  // Shift week by +/- 7 days
   const handleShiftWeek = (direction) => {
     const d = new Date(currentWeek);
     if (isNaN(d.getTime())) {
@@ -156,7 +156,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     const newWeekStr = d.toISOString().split('T')[0];
     setCurrentWeek(newWeekStr);
     
-    // Update active form week ending as well
     if (hsSubView === 'inspection') {
       setInspectionData(prev => ({ ...prev, weekEnding: newWeekStr }));
     } else {
@@ -324,7 +323,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     managementDate: currentWeek
   });
 
-  // Filter reports matching the current week
   const reportsForCurrentWeek = allExistingReports.filter(rep => {
     const repWeek = rep.weekEnding || rep.date;
     return repWeek === currentWeek;
@@ -342,7 +340,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           site: found.site || '',
           weekEnding: found.weekEnding || currentWeek,
           time: found.time || getCurrentTimeString(),
-          // PRESERVE original inspector name if report exists
           inspectedBy: found.inspectedBy || found.userName || userName || '',
           signature: found.signature || '',
           dateSigned: found.dateSigned || currentWeek,
@@ -379,7 +376,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         site: '',
         weekEnding: currentWeek,
         time: getCurrentTimeString(),
-        inspectedBy: userName || '', // Fresh form defaults back to current user
+        inspectedBy: userName || '',
         signature: '',
         dateSigned: currentWeek,
         sections: defaultInspectionSections
@@ -418,9 +415,9 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
   const handleSiteOrWeekChange = async (newSite, newWeek) => {
     setInspectionData(prev => ({ ...prev, site: newSite, weekEnding: newWeek }));
-    if (!newSite || !newWeek) return;
+    if (!newSite || !newSite.trim() || !newWeek) return;
 
-    const cleanSite = newSite.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
+    const cleanSite = newSite.trim().replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
     const docId = `inspection_${cleanSite}_${newWeek}`;
 
     try {
@@ -431,7 +428,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         setInspectionData(prev => ({
           ...prev,
           ...found,
-          // Retain original inspector if doc exists
           inspectedBy: found.inspectedBy || found.userName || prev.inspectedBy
         }));
         setStatusMessage({ type: 'success', text: `Loaded existing live form for ${newSite} (${newWeek}).` });
@@ -640,93 +636,307 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   }
 
-  const handleExportInspectionDocx = async () => {
-    setExportingDocx(true);
-    try {
-      const templateFileName = 'Site Safety Inspection Report.docx';
-      const response = await fetch(`/${templateFileName}`);
-      if (!response.ok) {
-        throw new Error(`Template file '${templateFileName}' not found in public folder.`);
-      }
-      const templateArrayBuffer = await response.arrayBuffer();
-      const zip = new PZip(templateArrayBuffer);
+  const generateInspectionZipBuffer = async () => {
+    const templateFileName = 'Site Safety Inspection Report.docx';
+    const response = await fetch(`/${templateFileName}`);
+    if (!response.ok) throw new Error(`Template file '${templateFileName}' not found.`);
+    const templateArrayBuffer = await response.arrayBuffer();
+    const zip = new PZip(templateArrayBuffer);
 
-      const docXmlStr = zip.file("word/document.xml").asText();
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
+    const docXmlStr = zip.file("word/document.xml").asText();
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
 
-      const paragraphs = xmlDoc.getElementsByTagName("w:p");
-      const rows = xmlDoc.getElementsByTagName("w:tr");
+    const paragraphs = xmlDoc.getElementsByTagName("w:p");
+    const rows = xmlDoc.getElementsByTagName("w:tr");
 
-      for (let p of paragraphs) {
-        const text = getCellText(p);
-        if (text.includes("Site:") || text.includes("Week Ending:") || text.includes("Inspected By:") || text.includes("Signed:")) {
-          const tNodes = p.getElementsByTagName("w:t");
-          if (tNodes.length > 0) {
-            let pStr = "";
-            for (let tn of tNodes) pStr += tn.textContent;
-            
-            if (pStr.includes("Site:")) {
-              pStr = `Site: ${inspectionData.site || ''}`;
+    for (let p of paragraphs) {
+      const text = getCellText(p);
+      if (text.includes("Site:") || text.includes("Week Ending:") || text.includes("Inspected By:") || text.includes("Signed:")) {
+        const tNodes = p.getElementsByTagName("w:t");
+        if (tNodes.length > 0) {
+          let pStr = "";
+          for (let tn of tNodes) pStr += tn.textContent;
+          
+          if (pStr.includes("Site:")) {
+            pStr = `Site: ${inspectionData.site || ''}`;
+            tNodes[0].textContent = pStr;
+            for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+          } else if (pStr.includes("Week Ending:")) {
+            pStr = `Week Ending: ${inspectionData.weekEnding || ''}      Time: ${inspectionData.time || ''}`;
+            tNodes[0].textContent = pStr;
+            for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+          } else if (pStr.includes("Inspected By:")) {
+            pStr = `Inspected By: ${inspectionData.inspectedBy || ''}`;
+            tNodes[0].textContent = pStr;
+            for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+          } else if (pStr.includes("Signed:")) {
+            const formattedDate = formatDateShort(inspectionData.dateSigned || inspectionData.weekEnding);
+            if (inspectionData.signature) {
+              insertSignatureWithParagraph(p, inspectionData.signature, formattedDate, zip, xmlDoc);
+            } else {
+              pStr = `Signed: ________________      Dated: ${formattedDate}`;
               tNodes[0].textContent = pStr;
               for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
-            } else if (pStr.includes("Week Ending:")) {
-              pStr = `Week Ending: ${inspectionData.weekEnding || ''}      Time: ${inspectionData.time || ''}`;
-              tNodes[0].textContent = pStr;
-              for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
-            } else if (pStr.includes("Inspected By:")) {
-              pStr = `Inspected By: ${inspectionData.inspectedBy || ''}`;
-              tNodes[0].textContent = pStr;
-              for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
-            } else if (pStr.includes("Signed:")) {
-              const formattedDate = formatDateShort(inspectionData.dateSigned || inspectionData.weekEnding);
-              if (inspectionData.signature) {
-                insertSignatureWithParagraph(p, inspectionData.signature, formattedDate, zip, xmlDoc);
-              } else {
-                pStr = `Signed: ________________      Dated: ${formattedDate}`;
-                tNodes[0].textContent = pStr;
-                for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
-              }
             }
           }
         }
       }
+    }
 
-      const itemLookup = {};
-      Object.values(inspectionData.sections).forEach(sectionItems => {
-        sectionItems.forEach(row => {
-          if (row.item) {
-            itemLookup[row.item.toLowerCase().trim()] = row;
-          }
-        });
+    const itemLookup = {};
+    Object.values(inspectionData.sections).forEach(sectionItems => {
+      sectionItems.forEach(row => {
+        if (row.item) itemLookup[row.item.toLowerCase().trim()] = row;
       });
+    });
 
-      for (let tr of rows) {
-        const cells = tr.getElementsByTagName("w:tc");
-        if (cells.length < 2) continue;
+    for (let tr of rows) {
+      const cells = tr.getElementsByTagName("w:tc");
+      if (cells.length < 2) continue;
+      const labelText = getCellText(cells[0]).toLowerCase().trim();
+      const matchedItem = itemLookup[labelText];
+      if (matchedItem) {
+        if (cells[1]) setCellText(cells[1], matchedItem.complies || 'Yes', xmlDoc);
+        if (cells[2]) setCellText(cells[2], matchedItem.action || '', xmlDoc);
+        if (cells[3]) setCellText(cells[3], matchedItem.contractor || '', xmlDoc);
+      }
+    }
 
-        const labelText = getCellText(cells[0]).toLowerCase().trim();
-        const matchedItem = itemLookup[labelText];
+    const serializer = new XMLSerializer();
+    zip.file("word/document.xml", serializer.serializeToString(xmlDoc));
+    return zip.generate({ type: 'uint8array' });
+  };
 
-        if (matchedItem) {
-          if (cells[1]) setCellText(cells[1], matchedItem.complies || 'Yes', xmlDoc);
-          if (cells[2]) setCellText(cells[2], matchedItem.action || '', xmlDoc);
-          if (cells[3]) setCellText(cells[3], matchedItem.contractor || '', xmlDoc);
+  const generateToolboxZipBuffer = async () => {
+    const templateFileName = 'H&S and Toolbox Meeting Worksheet.docx';
+    const response = await fetch(`/${templateFileName}`);
+    if (!response.ok) throw new Error(`Template file '${templateFileName}' not found.`);
+    const templateArrayBuffer = await response.arrayBuffer();
+    const zip = new PZip(templateArrayBuffer);
+
+    const docXmlStr = zip.file("word/document.xml").asText();
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
+
+    const paragraphs = xmlDoc.getElementsByTagName("w:p");
+    const tables = xmlDoc.getElementsByTagName("w:tbl");
+
+    for (let i = 0; i < paragraphs.length; i++) {
+      const p = paragraphs[i];
+      const tNodes = p.getElementsByTagName("w:t");
+      if (tNodes.length > 0) {
+        let pStr = "";
+        for (let tn of tNodes) pStr += tn.textContent;
+
+        if (pStr.includes("Date and Time:")) {
+          pStr = `Date and Time: ${toolboxData.date || ''} ${toolboxData.time || ''}    Location: ${toolboxData.location || ''}`;
+          tNodes[0].textContent = pStr;
+          for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+        } else if (pStr.includes("Meeting Closed:")) {
+          pStr = `Meeting Closed: ${toolboxData.time || ''}    Next Meeting: Next week`;
+          tNodes[0].textContent = pStr;
+          for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+        } else if (pStr.includes("Signed – Management:")) {
+          if (toolboxData.managementSignature) {
+            const dateVal = formatDateShort(toolboxData.managementDate || toolboxData.date);
+            pStr = `Signed – Management: Signed (${dateVal})    Dated: ${dateVal}`;
+            tNodes[0].textContent = pStr;
+            for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+          } else {
+            pStr = `Signed – Management: ________________    Dated: ____________`;
+            tNodes[0].textContent = pStr;
+            for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+          }
+        } else if (pStr.toLowerCase().startsWith("discussion about task planning")) {
+          tNodes[0].textContent = "Discussion About Task Planning and Weekly Goals:";
+          for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+          let nextSibling = p.parentNode && p.parentNode.nodeName === 'w:tc' ? p.parentNode.parentNode.nextElementSibling : p.nextElementSibling;
+          if (nextSibling && toolboxData.taskPlanningDiscussion) {
+            const targetCell = nextSibling.getElementsByTagName ? nextSibling.getElementsByTagName("w:tc")[0] : null;
+            if (targetCell) setCellText(targetCell, toolboxData.taskPlanningDiscussion, xmlDoc);
+          }
+        } else if (pStr.toLowerCase().startsWith("operational issues/other business")) {
+          tNodes[0].textContent = "Operational Issues/other Business:";
+          for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+          let nextSibling = p.parentNode && p.parentNode.nodeName === 'w:tc' ? p.parentNode.parentNode.nextElementSibling : p.nextElementSibling;
+          if (nextSibling && toolboxData.operationalIssues) {
+            const targetCell = nextSibling.getElementsByTagName ? nextSibling.getElementsByTagName("w:tc")[0] : null;
+            if (targetCell) setCellText(targetCell, toolboxData.operationalIssues, xmlDoc);
+          }
         }
       }
+    }
 
-      const serializer = new XMLSerializer();
-      const updatedXmlStr = serializer.serializeToString(xmlDoc);
-      zip.file("word/document.xml", updatedXmlStr);
+    for (let table of tables) {
+      const rows = table.getElementsByTagName("w:tr");
+      if (rows.length < 2) continue;
+      const headerCells = rows[0].getElementsByTagName("w:tc");
+      if (headerCells.length === 0) continue;
+      const tableLabel = getCellText(headerCells[0]).toLowerCase();
 
-      const siteNameClean = (inspectionData.site || 'Site').replace(/[^a-zA-Z0-9_\-]/g, '_');
-      const outputFileName = `Site Safety Inspection - ${siteNameClean} (${inspectionData.weekEnding}).docx`;
+      if (tableLabel.includes("present")) {
+        toolboxData.attendees.forEach((att, idx) => {
+          const rowIndex = idx + 1;
+          if (rows[rowIndex]) {
+            const cells = rows[rowIndex].getElementsByTagName("w:tc");
+            if (cells[0]) setCellText(cells[0], att.name || '', xmlDoc);
+            if (cells[1]) setCellText(cells[1], att.company || '', xmlDoc);
+            if (cells[2]) {
+              const formattedDate = formatDateShort(att.date || toolboxData.date);
+              if (att.signature) insertSignatureWithParagraph(cells[2], att.signature, formattedDate, zip, xmlDoc);
+              else setCellText(cells[2], formattedDate, xmlDoc);
+            }
+          }
+        });
+      } else if (tableLabel.includes("issues raised from site safety inspection")) {
+        toolboxData.siteSafetyReview.forEach((row, idx) => {
+          const rowIndex = idx + 1;
+          if (rows[rowIndex]) {
+            const cells = rows[rowIndex].getElementsByTagName("w:tc");
+            if (cells[0]) setCellText(cells[0], row.details || '', xmlDoc);
+            if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
+            if (cells[2]) setCellText(cells[2], row.whoWhen || '', xmlDoc);
+          }
+        });
+      } else if (tableLabel.includes("worker training needs")) {
+        toolboxData.workerTraining.forEach((row, idx) => {
+          const rowIndex = idx + 1;
+          if (rows[rowIndex]) {
+            const cells = rows[rowIndex].getElementsByTagName("w:tc");
+            if (cells[0]) setCellText(cells[0], row.details || '', xmlDoc);
+            if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
+            if (cells[2]) setCellText(cells[2], row.whoWhen || '', xmlDoc);
+          }
+        });
+      } else if (tableLabel.includes("has any event") || tableLabel.includes("event investigations")) {
+        toolboxData.eventInvestigations.forEach((row, idx) => {
+          const rowIndex = idx + 1;
+          if (rows[rowIndex]) {
+            const cells = rows[rowIndex].getElementsByTagName("w:tc");
+            if (cells[0]) setCellText(cells[0], row.details || '', xmlDoc);
+            if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
+            if (cells[2]) setCellText(cells[2], row.whoWhen || '', xmlDoc);
+          }
+        });
+      } else if (tableLabel.includes("hazard:") && !tableLabel.includes("board")) {
+        toolboxData.hazards.forEach((haz, idx) => {
+          const rowIndex = idx + 1;
+          if (rows[rowIndex]) {
+            const cells = rows[rowIndex].getElementsByTagName("w:tc");
+            if (cells[0]) setCellText(cells[0], haz.hazard || '', xmlDoc);
+            if (cells[1]) setCellText(cells[1], haz.action || '', xmlDoc);
+            if (cells[2]) setCellText(cells[2], haz.whoWhen || '', xmlDoc);
+          }
+        });
+      } else if (tableLabel.includes("hazard board")) {
+        toolboxData.hazardBoard.forEach((hb, idx) => {
+          const rowIndex = idx + 1;
+          if (rows[rowIndex]) {
+            const cells = rows[rowIndex].getElementsByTagName("w:tc");
+            if (cells[0]) setCellText(cells[0], hb.item || '', xmlDoc);
+            if (cells[1]) setCellText(cells[1], hb.update || '', xmlDoc);
+            if (cells[2]) setCellText(cells[2], hb.whoWhen || '', xmlDoc);
+          }
+        });
+      } else if (tableLabel.includes("plant and equipment requirements") || tableLabel.includes("plant and equipment (including")) {
+        toolboxData.plantEquipment.forEach((plant, idx) => {
+          const rowIndex = idx + 1;
+          if (rows[rowIndex]) {
+            const cells = rows[rowIndex].getElementsByTagName("w:tc");
+            if (cells[0]) setCellText(cells[0], plant.requirement || '', xmlDoc);
+            if (cells[1]) setCellText(cells[1], plant.action || '', xmlDoc);
+            if (cells[2]) setCellText(cells[2], plant.whoWhen || '', xmlDoc);
+          }
+        });
+      } else if (tableLabel.includes("task:")) {
+        toolboxData.taskPlanning.forEach((tp, idx) => {
+          const rowIndex = idx + 1;
+          if (rows[rowIndex]) {
+            const cells = rows[rowIndex].getElementsByTagName("w:tc");
+            if (cells[0]) setCellText(cells[0], tp.task || '', xmlDoc);
+            if (cells[1]) setCellText(cells[1], tp.ppe || '', xmlDoc);
+            if (cells[2]) setCellText(cells[2], tp.timeframe || '', xmlDoc);
+            if (cells[3]) setCellText(cells[3], tp.whoWhen || '', xmlDoc);
+          }
+        });
+      } else if (tableLabel.includes("agenda item")) {
+        for (let i = 1; i < rows.length; i++) {
+          const cells = rows[i].getElementsByTagName("w:tc");
+          if (cells.length < 2) continue;
+          const rowLabel = getCellText(cells[0]).toLowerCase();
+          const matchedPrevious = toolboxData.previousActions.find(p => rowLabel.includes(p.item.toLowerCase()));
+          if (matchedPrevious) {
+            if (cells[1]) setCellText(cells[1], matchedPrevious.action || '', xmlDoc);
+            if (cells[2]) setCellText(cells[2], matchedPrevious.followUp || '', xmlDoc);
+          }
+        }
+      }
+    }
 
-      await saveAndShareFile(zip, outputFileName);
-      setStatusMessage({ type: 'success', text: `Successfully generated ${outputFileName}!` });
+    const serializer = new XMLSerializer();
+    zip.file("word/document.xml", serializer.serializeToString(xmlDoc));
+    return zip.generate({ type: 'uint8array' });
+  };
+
+  const handleExportInspectionDocx = async () => {
+    setExportingDocx(true);
+    try {
+      const siteName = (inspectionData.site || '').trim();
+      if (!siteName) {
+        alert("Please enter or select a Site / Project name before exporting.");
+        setExportingDocx(false);
+        return;
+      }
+      const siteNameClean = siteName.replace(/[^a-zA-Z0-9_\-]/g, '_');
+      const filesToShare = [];
+
+      const inspectionUint8 = await generateInspectionZipBuffer();
+      const inspectionFileName = `Site Safety Inspection - ${siteNameClean} (${inspectionData.weekEnding}).docx`;
+      filesToShare.push(await writeBufferToCache(inspectionUint8, inspectionFileName));
+
+      const toolboxDocId = `toolbox_${siteName.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase()}_${inspectionData.weekEnding}`;
+      const toolboxSnap = await getDoc(doc(db, 'health_safety', toolboxDocId));
+      
+      let toolboxIncluded = false;
+      if (toolboxSnap.exists()) {
+        const tData = toolboxSnap.data();
+        const originalToolboxState = { ...toolboxData };
+        setToolboxData({
+          date: tData.date || inspectionData.weekEnding,
+          time: tData.time || '10:00',
+          location: tData.location || siteName,
+          previousActions: tData.previousActions || toolboxData.previousActions,
+          siteSafetyReview: tData.siteSafetyReview || toolboxData.siteSafetyReview,
+          workerTraining: tData.workerTraining || toolboxData.workerTraining,
+          eventInvestigations: tData.eventInvestigations || toolboxData.eventInvestigations,
+          hazards: tData.hazards || toolboxData.hazards,
+          hazardBoard: tData.hazardBoard || toolboxData.hazardBoard,
+          plantEquipment: tData.plantEquipment || toolboxData.plantEquipment,
+          taskPlanning: tData.taskPlanning || toolboxData.taskPlanning,
+          taskPlanningDiscussion: tData.taskPlanningDiscussion || '',
+          operationalIssues: tData.operationalIssues || '',
+          attendees: tData.attendees || toolboxData.attendees,
+          managementSignature: tData.managementSignature || '',
+          managementDate: tData.managementDate || tData.date || inspectionData.weekEnding
+        });
+
+        const toolboxUint8 = await generateToolboxZipBuffer();
+        const toolboxFileName = `Toolbox Meeting - ${siteNameClean} (${inspectionData.weekEnding}).docx`;
+        filesToShare.push(await writeBufferToCache(toolboxUint8, toolboxFileName));
+        toolboxIncluded = true;
+
+        setToolboxData(originalToolboxState);
+      }
+
+      await shareOrDownloadFiles(filesToShare);
+      setStatusMessage({ 
+        type: 'success', 
+        text: toolboxIncluded ? `Exported Inspection Report & Toolbox Meeting simultaneously!` : `Successfully generated inspection report!` 
+      });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
-      console.error("Export error details:", err);
+      console.error("Export error:", err);
       alert(`Export Failed: ${err.message}`);
       setStatusMessage({ type: 'error', text: `Export failed: ${err.message}` });
     } finally {
@@ -737,196 +947,52 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   const handleExportToolboxDocx = async () => {
     setExportingDocx(true);
     try {
-      const templateFileName = 'H&S and Toolbox Meeting Worksheet.docx';
-      const response = await fetch(`/${templateFileName}`);
-      if (!response.ok) {
-        throw new Error(`Template file '${templateFileName}' not found in public folder.`);
+      const locName = (toolboxData.location || '').trim();
+      if (!locName) {
+        alert("Please enter or select a Location / Site name before exporting.");
+        setExportingDocx(false);
+        return;
       }
-      const templateArrayBuffer = await response.arrayBuffer();
-      const zip = new PZip(templateArrayBuffer);
+      const locNameClean = locName.replace(/[^a-zA-Z0-9_\-]/g, '_');
+      const filesToShare = [];
 
-      const docXmlStr = zip.file("word/document.xml").asText();
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(docXmlStr, "text/xml");
+      const toolboxUint8 = await generateToolboxZipBuffer();
+      const toolboxFileName = `Toolbox Meeting - ${locNameClean} (${toolboxData.date}).docx`;
+      filesToShare.push(await writeBufferToCache(toolboxUint8, toolboxFileName));
 
-      const paragraphs = xmlDoc.getElementsByTagName("w:p");
-      const tables = xmlDoc.getElementsByTagName("w:tbl");
+      const inspectionDocId = `inspection_${locName.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase()}_${toolboxData.date}`;
+      const inspectionSnap = await getDoc(doc(db, 'health_safety', inspectionDocId));
 
-      for (let i = 0; i < paragraphs.length; i++) {
-        const p = paragraphs[i];
-        const tNodes = p.getElementsByTagName("w:t");
-        if (tNodes.length > 0) {
-          let pStr = "";
-          for (let tn of tNodes) pStr += tn.textContent;
+      let inspectionIncluded = false;
+      if (inspectionSnap.exists()) {
+        const iData = inspectionSnap.data();
+        const originalInspectionState = { ...inspectionData };
+        setInspectionData({
+          site: iData.site || locName,
+          weekEnding: iData.weekEnding || toolboxData.date,
+          time: iData.time || '10:00',
+          inspectedBy: iData.inspectedBy || userName || '',
+          signature: iData.signature || '',
+          dateSigned: iData.dateSigned || toolboxData.date,
+          sections: iData.sections || defaultInspectionSections
+        });
 
-          if (pStr.includes("Date and Time:")) {
-            pStr = `Date and Time: ${toolboxData.date || ''} ${toolboxData.time || ''}    Location: ${toolboxData.location || ''}`;
-            tNodes[0].textContent = pStr;
-            for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
-          } else if (pStr.includes("Meeting Closed:")) {
-            pStr = `Meeting Closed: ${toolboxData.time || ''}    Next Meeting: Next week`;
-            tNodes[0].textContent = pStr;
-            for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
-          } else if (pStr.includes("Signed – Management:")) {
-            if (toolboxData.managementSignature) {
-              const dateVal = formatDateShort(toolboxData.managementDate || toolboxData.date);
-              pStr = `Signed – Management: Signed (${dateVal})    Dated: ${dateVal}`;
-              tNodes[0].textContent = pStr;
-              for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
-            } else {
-              pStr = `Signed – Management: ________________    Dated: ____________`;
-              tNodes[0].textContent = pStr;
-              for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
-            }
-          } else if (pStr.toLowerCase().startsWith("discussion about task planning")) {
-            tNodes[0].textContent = "Discussion About Task Planning and Weekly Goals:";
-            for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+        const inspectionUint8 = await generateInspectionZipBuffer();
+        const inspectionFileName = `Site Safety Inspection - ${locNameClean} (${toolboxData.date}).docx`;
+        filesToShare.push(await writeBufferToCache(inspectionUint8, inspectionFileName));
+        inspectionIncluded = true;
 
-            let nextSibling = p.parentNode && p.parentNode.nodeName === 'w:tc' ? p.parentNode.parentNode.nextElementSibling : p.nextElementSibling;
-            if (nextSibling && toolboxData.taskPlanningDiscussion) {
-              const targetCell = nextSibling.getElementsByTagName ? nextSibling.getElementsByTagName("w:tc")[0] : null;
-              if (targetCell) {
-                setCellText(targetCell, toolboxData.taskPlanningDiscussion, xmlDoc);
-              }
-            }
-          } else if (pStr.toLowerCase().startsWith("operational issues/other business")) {
-            tNodes[0].textContent = "Operational Issues/other Business:";
-            for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
-
-            let nextSibling = p.parentNode && p.parentNode.nodeName === 'w:tc' ? p.parentNode.parentNode.nextElementSibling : p.nextElementSibling;
-            if (nextSibling && toolboxData.operationalIssues) {
-              const targetCell = nextSibling.getElementsByTagName ? nextSibling.getElementsByTagName("w:tc")[0] : null;
-              if (targetCell) {
-                setCellText(targetCell, toolboxData.operationalIssues, xmlDoc);
-              }
-            }
-          }
-        }
+        setInspectionData(originalInspectionState);
       }
 
-      for (let table of tables) {
-        const rows = table.getElementsByTagName("w:tr");
-        if (rows.length < 2) continue;
-
-        const headerCells = rows[0].getElementsByTagName("w:tc");
-        if (headerCells.length === 0) continue;
-        const tableLabel = getCellText(headerCells[0]).toLowerCase();
-
-        if (tableLabel.includes("present")) {
-          toolboxData.attendees.forEach((att, idx) => {
-            const rowIndex = idx + 1;
-            if (rows[rowIndex]) {
-              const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], att.name || '', xmlDoc);
-              if (cells[1]) setCellText(cells[1], att.company || '', xmlDoc);
-              if (cells[2]) {
-                const formattedDate = formatDateShort(att.date || toolboxData.date);
-                if (att.signature) {
-                  insertSignatureWithParagraph(cells[2], att.signature, formattedDate, zip, xmlDoc);
-                } else {
-                  setCellText(cells[2], formattedDate, xmlDoc);
-                }
-              }
-            }
-          });
-        } else if (tableLabel.includes("issues raised from site safety inspection")) {
-          toolboxData.siteSafetyReview.forEach((row, idx) => {
-            const rowIndex = idx + 1;
-            if (rows[rowIndex]) {
-              const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], row.details || '', xmlDoc);
-              if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], row.whoWhen || '', xmlDoc);
-            }
-          });
-        } else if (tableLabel.includes("worker training needs")) {
-          toolboxData.workerTraining.forEach((row, idx) => {
-            const rowIndex = idx + 1;
-            if (rows[rowIndex]) {
-              const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], row.details || '', xmlDoc);
-              if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], row.whoWhen || '', xmlDoc);
-            }
-          });
-        } else if (tableLabel.includes("has any event") || tableLabel.includes("event investigations")) {
-          toolboxData.eventInvestigations.forEach((row, idx) => {
-            const rowIndex = idx + 1;
-            if (rows[rowIndex]) {
-              const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], row.details || '', xmlDoc);
-              if (cells[1]) setCellText(cells[1], row.action || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], row.whoWhen || '', xmlDoc);
-            }
-          });
-        } else if (tableLabel.includes("hazard:") && !tableLabel.includes("board")) {
-          toolboxData.hazards.forEach((haz, idx) => {
-            const rowIndex = idx + 1;
-            if (rows[rowIndex]) {
-              const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], haz.hazard || '', xmlDoc);
-              if (cells[1]) setCellText(cells[1], haz.action || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], haz.whoWhen || '', xmlDoc);
-            }
-          });
-        } else if (tableLabel.includes("hazard board")) {
-          toolboxData.hazardBoard.forEach((hb, idx) => {
-            const rowIndex = idx + 1;
-            if (rows[rowIndex]) {
-              const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], hb.item || '', xmlDoc);
-              if (cells[1]) setCellText(cells[1], hb.update || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], hb.whoWhen || '', xmlDoc);
-            }
-          });
-        } else if (tableLabel.includes("plant and equipment requirements") || tableLabel.includes("plant and equipment (including")) {
-          toolboxData.plantEquipment.forEach((plant, idx) => {
-            const rowIndex = idx + 1;
-            if (rows[rowIndex]) {
-              const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], plant.requirement || '', xmlDoc);
-              if (cells[1]) setCellText(cells[1], plant.action || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], plant.whoWhen || '', xmlDoc);
-            }
-          });
-        } else if (tableLabel.includes("task:")) {
-          toolboxData.taskPlanning.forEach((tp, idx) => {
-            const rowIndex = idx + 1;
-            if (rows[rowIndex]) {
-              const cells = rows[rowIndex].getElementsByTagName("w:tc");
-              if (cells[0]) setCellText(cells[0], tp.task || '', xmlDoc);
-              if (cells[1]) setCellText(cells[1], tp.ppe || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], tp.timeframe || '', xmlDoc);
-              if (cells[3]) setCellText(cells[3], tp.whoWhen || '', xmlDoc);
-            }
-          });
-        } else if (tableLabel.includes("agenda item")) {
-          for (let i = 1; i < rows.length; i++) {
-            const cells = rows[i].getElementsByTagName("w:tc");
-            if (cells.length < 2) continue;
-            const rowLabel = getCellText(cells[0]).toLowerCase();
-
-            const matchedPrevious = toolboxData.previousActions.find(p => rowLabel.includes(p.item.toLowerCase()));
-            if (matchedPrevious) {
-              if (cells[1]) setCellText(cells[1], matchedPrevious.action || '', xmlDoc);
-              if (cells[2]) setCellText(cells[2], matchedPrevious.followUp || '', xmlDoc);
-            }
-          }
-        }
-      }
-
-      const serializer = new XMLSerializer();
-      const updatedXmlStr = serializer.serializeToString(xmlDoc);
-      zip.file("word/document.xml", updatedXmlStr);
-
-      const locClean = (toolboxData.location || 'Site').replace(/[^a-zA-Z0-9_\-]/g, '_');
-      const outputFileName = `Toolbox Meeting - ${locClean} (${toolboxData.date}).docx`;
-
-      await saveAndShareFile(zip, outputFileName);
-      setStatusMessage({ type: 'success', text: `Successfully generated ${outputFileName}!` });
+      await shareOrDownloadFiles(filesToShare);
+      setStatusMessage({ 
+        type: 'success', 
+        text: inspectionIncluded ? `Exported Toolbox Meeting & Inspection Report simultaneously!` : `Successfully generated toolbox meeting!` 
+      });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
-      console.error("Export error details:", err);
+      console.error("Export error:", err);
       alert(`Export Failed: ${err.message}`);
       setStatusMessage({ type: 'error', text: `Export failed: ${err.message}` });
     } finally {
@@ -934,12 +1000,10 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   };
 
-  const saveAndShareFile = async (zip, outputFileName) => {
-    const content = zip.generate({ type: 'uint8array' });
+  const writeBufferToCache = async (uint8Array, outputFileName) => {
     let binary = '';
-    const bytes = new Uint8Array(content);
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
+    for (let i = 0; i < uint8Array.byteLength; i++) {
+      binary += String.fromCharCode(uint8Array[i]);
     }
     const base64Data = window.btoa(binary);
 
@@ -955,19 +1019,40 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       directory: Directory.Cache,
     });
 
-    await Share.share({
-      files: [uriResult.uri || writtenFile.uri],
-      title: outputFileName,
-      text: `Here is the generated ${outputFileName}`,
-      dialogTitle: `Export ${outputFileName}`,
-    });
+    return uriResult?.uri || writtenFile?.uri;
+  };
+
+  const shareOrDownloadFiles = async (fileUris) => {
+    if (Capacitor.isNativePlatform()) {
+      await Share.share({
+        files: fileUris,
+        title: 'Export H&S Documents',
+        text: 'Here are your generated health & safety documents.',
+        dialogTitle: 'Export Documents',
+      });
+    } else {
+      fileUris.forEach(uri => {
+        const link = document.createElement("a");
+        link.href = uri;
+        link.download = uri.split('/').pop();
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      });
+    }
   };
 
   const handleInspectionSubmit = async (e) => {
     e.preventDefault();
+    const siteVal = (inspectionData.site || '').trim();
+    if (!siteVal) {
+      alert("Please enter or select a Site / Project name before submitting.");
+      return;
+    }
+
     setLoading(true);
     try {
-      const cleanSite = (inspectionData.site || 'Site').replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
+      const cleanSite = siteVal.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
       const docId = selectedReportId || `inspection_${cleanSite}_${inspectionData.weekEnding}`;
       
       await setDoc(doc(db, 'health_safety', docId), {
@@ -992,9 +1077,15 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
   const handleToolboxSubmit = async (e) => {
     e.preventDefault();
+    const locVal = (toolboxData.location || '').trim();
+    if (!locVal) {
+      alert("Please enter or select a Location / Site name before submitting.");
+      return;
+    }
+
     setLoading(true);
     try {
-      const cleanLoc = (toolboxData.location || 'Site').replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
+      const cleanLoc = locVal.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
       const docId = selectedReportId || `toolbox_${cleanLoc}_${toolboxData.date}`;
 
       await setDoc(doc(db, 'health_safety', docId), {
@@ -1024,9 +1115,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           type="button"
           onClick={() => setHsSubView('inspection')}
           className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-            hsSubView === 'inspection'
-              ? 'bg-slate-900 text-white shadow'
-              : 'text-slate-700 hover:text-slate-900'
+            hsSubView === 'inspection' ? 'bg-slate-900 text-white shadow' : 'text-slate-700 hover:text-slate-900'
           }`}
         >
           📋 Safety Inspection Report
@@ -1035,9 +1124,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           type="button"
           onClick={() => setHsSubView('toolbox')}
           className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-            hsSubView === 'toolbox'
-              ? 'bg-slate-900 text-white shadow'
-              : 'text-slate-700 hover:text-slate-900'
+            hsSubView === 'toolbox' ? 'bg-slate-900 text-white shadow' : 'text-slate-700 hover:text-slate-900'
           }`}
         >
           🛠️ Toolbox Meeting Worksheet
@@ -1046,7 +1133,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
       {/* WEEK NAVIGATION & SITE SELECTOR BAR */}
       <div className="bg-slate-100 border border-slate-200 p-3 rounded-xl space-y-3">
-        {/* Week buttons */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-2 border-b border-slate-200 pb-3">
           <div className="flex items-center gap-1.5 w-full sm:w-auto justify-center">
             <button
@@ -1076,7 +1162,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           </div>
         </div>
 
-        {/* Site Dropdown for this week & Add Site button */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="w-full sm:w-auto flex-1">
             <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">
@@ -1090,7 +1175,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               <option value="">-- Choose site for this week or click Add Site --</option>
               {reportsForCurrentWeek.map(rep => (
                 <option key={rep.id} value={rep.id}>
-                  {rep.type} - {rep.site || rep.location || 'Unknown'}
+                  {rep.type} - {rep.site || rep.location || 'Unknown Site'}
                 </option>
               ))}
             </select>
