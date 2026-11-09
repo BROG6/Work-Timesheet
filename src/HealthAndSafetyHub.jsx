@@ -636,6 +636,21 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   }
 
+  // Helper to safely update paragraph text while keeping run-level color styling intact
+  const updateParagraphValue = (pNode, valueText) => {
+    const tNodes = pNode.getElementsByTagName("w:t");
+    if (tNodes.length > 1) {
+      tNodes[1].textContent = valueText;
+      tNodes[1].setAttribute("xml:space", "preserve");
+      for (let i = 2; i < tNodes.length; i++) {
+        tNodes[i].textContent = "";
+      }
+    } else if (tNodes.length === 1) {
+      tNodes[0].textContent = valueText;
+      tNodes[0].setAttribute("xml:space", "preserve");
+    }
+  };
+
   const generateInspectionZipBuffer = async () => {
     const templateFileName = 'Site Safety Inspection Report.docx';
     const response = await fetch(`/${templateFileName}`);
@@ -659,25 +674,17 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           for (let tn of tNodes) pStr += tn.textContent;
           
           if (pStr.includes("Site:")) {
-            pStr = `Site: ${inspectionData.site || ''}`;
-            tNodes[0].textContent = pStr;
-            for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+            updateParagraphValue(p, ` ${inspectionData.site || ''}`);
           } else if (pStr.includes("Week Ending:")) {
-            pStr = `Week Ending: ${inspectionData.weekEnding || ''}      Time: ${inspectionData.time || ''}`;
-            tNodes[0].textContent = pStr;
-            for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+            updateParagraphValue(p, ` ${inspectionData.weekEnding || ''}      Time: ${inspectionData.time || ''}`);
           } else if (pStr.includes("Inspected By:")) {
-            pStr = `Inspected By: ${inspectionData.inspectedBy || ''}`;
-            tNodes[0].textContent = pStr;
-            for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+            updateParagraphValue(p, ` ${inspectionData.inspectedBy || ''}`);
           } else if (pStr.includes("Signed:")) {
             const formattedDate = formatDateShort(inspectionData.dateSigned || inspectionData.weekEnding);
             if (inspectionData.signature) {
               insertSignatureWithParagraph(p, inspectionData.signature, formattedDate, zip, xmlDoc);
             } else {
-              pStr = `Signed: ________________      Dated: ${formattedDate}`;
-              tNodes[0].textContent = pStr;
-              for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
+              updateParagraphValue(p, ` ________________      Dated: ${formattedDate}`);
             }
           }
         }
@@ -730,35 +737,23 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         for (let tn of tNodes) pStr += tn.textContent;
 
         if (pStr.includes("Date and Time:")) {
-          pStr = `Date and Time: ${toolboxData.date || ''} ${toolboxData.time || ''}    Location: ${toolboxData.location || ''}`;
-          tNodes[0].textContent = pStr;
-          for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+          updateParagraphValue(p, ` ${toolboxData.date || ''} ${toolboxData.time || ''}    Location: ${toolboxData.location || ''}`);
         } else if (pStr.includes("Meeting Closed:")) {
-          pStr = `Meeting Closed: ${toolboxData.time || ''}    Next Meeting: Next week`;
-          tNodes[0].textContent = pStr;
-          for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+          updateParagraphValue(p, ` ${toolboxData.time || ''}    Next Meeting: Next week`);
         } else if (pStr.includes("Signed – Management:")) {
           if (toolboxData.managementSignature) {
             const dateVal = formatDateShort(toolboxData.managementDate || toolboxData.date);
-            pStr = `Signed – Management: Signed (${dateVal})    Dated: ${dateVal}`;
-            tNodes[0].textContent = pStr;
-            for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+            updateParagraphValue(p, ` Signed (${dateVal})    Dated: ${dateVal}`);
           } else {
-            pStr = `Signed – Management: ________________    Dated: ____________`;
-            tNodes[0].textContent = pStr;
-            for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+            updateParagraphValue(p, ` ________________    Dated: ____________`);
           }
         } else if (pStr.toLowerCase().startsWith("discussion about task planning")) {
-          tNodes[0].textContent = "Discussion About Task Planning and Weekly Goals:";
-          for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
           let nextSibling = p.parentNode && p.parentNode.nodeName === 'w:tc' ? p.parentNode.parentNode.nextElementSibling : p.nextElementSibling;
           if (nextSibling && toolboxData.taskPlanningDiscussion) {
             const targetCell = nextSibling.getElementsByTagName ? nextSibling.getElementsByTagName("w:tc")[0] : null;
             if (targetCell) setCellText(targetCell, toolboxData.taskPlanningDiscussion, xmlDoc);
           }
         } else if (pStr.toLowerCase().startsWith("operational issues/other business")) {
-          tNodes[0].textContent = "Operational Issues/other Business:";
-          for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
           let nextSibling = p.parentNode && p.parentNode.nodeName === 'w:tc' ? p.parentNode.parentNode.nextElementSibling : p.nextElementSibling;
           if (nextSibling && toolboxData.operationalIssues) {
             const targetCell = nextSibling.getElementsByTagName ? nextSibling.getElementsByTagName("w:tc")[0] : null;
