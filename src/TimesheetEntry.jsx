@@ -11,6 +11,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 
 import PZip from 'pizzip';
+import JSZip from 'jszip';
 import sjrLogo from './assets/logo.jpg';
 import { checkAndSuppressDailyReminder } from './notifications';
 
@@ -189,6 +190,12 @@ function displayDate(dateStr) {
   }
   return dateStr;
 }
+
+// Detect iPhone / iOS browser environment to route zip bundling
+const isIPhoneUser = () => {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent) || 
+         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+};
 
 function getFormattedStaffName(user, userProfile) {
   const explicitName = userProfile?.name || userProfile?.fullName || userProfile?.userName || user?.displayName;
@@ -790,6 +797,9 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       const nativeFileUris = [];
       const generatedWebFiles = [];
 
+      const isIOSWeb = !Capacitor.isNativePlatform() && isIPhoneUser();
+      const zipArchive = isIOSWeb ? new JSZip() : null;
+
       function setCellText(cell, text, xmlDoc) {
         const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
         const tNodes = cell.getElementsByTagNameNS(ns, "t");
@@ -1129,12 +1139,18 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             type: 'blob',
             mimeType: blobMime,
           });
-          const fileObj = new File([blob], fileName, { type: blobMime });
-          generatedWebFiles.push({ fileObj, blob, fileName });
+
+          if (isIOSWeb) {
+            // Add generated .docx file directly to master zip archive for iPhone web users
+            zipArchive.file(fileName, blob);
+          } else {
+            const fileObj = new File([blob], fileName, { type: blobMime });
+            generatedWebFiles.push({ fileObj, blob, fileName });
+          }
         }
       }
 
-      // Universal Share & Download trigger for both Native App & Web App (iPhone/Desktop)
+      // Universal Share & Download trigger for Native App & Web (iPhone Zip / Desktop DOCX)
       if (Capacitor.isNativePlatform()) {
         if (nativeFileUris.length > 0) {
           try {
@@ -1152,8 +1168,26 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         } else {
           throw new Error("Failed to resolve file paths for sharing.");
         }
+      } else if (isIOSWeb) {
+        // iPhone Web Browser: Download bundled Zip file
+        const masterZipBlob = await zipArchive.generateAsync({ type: 'blob' });
+        const masterZipName = `Time_Cards_${formattedDateStr}.zip`;
+        
+        const url = URL.createObjectURL(masterZipBlob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = masterZipName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        setStatusMessage({ 
+          type: 'success', 
+          text: `Exported ${sitesToExport.length} site time card(s) as a .zip file!` 
+        });
       } else {
-        // Web Platform (iPhone Safari, Android Chrome, Desktop)
+        // Desktop / Android Web Browsers
         let didShare = false;
         if (navigator.share && navigator.canShare && generatedWebFiles.length > 0) {
           try {
@@ -1168,14 +1202,13 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             }
           } catch (shareErr) {
             if (shareErr.name === 'AbortError') {
-              didShare = true; // User intentionally dismissed share sheet
+              didShare = true;
             } else {
               console.warn("Web share fallback to download:", shareErr);
             }
           }
         }
 
-        // Fallback: Trigger direct file download if Web Share was not used/supported
         if (!didShare) {
           generatedWebFiles.forEach(({ blob, fileName }) => {
             const url = URL.createObjectURL(blob);
