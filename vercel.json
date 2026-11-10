@@ -1,4 +1,11 @@
 {
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "outputDirectory": "dist",
+  "engines": {
+    "node": "20.x"
+  },
   "headers": [
     {
       "source": "/index.html",
