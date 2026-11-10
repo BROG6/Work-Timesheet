@@ -110,10 +110,8 @@ const ALL_TEMPLATE_TASKS = [
   ""
 ];
 
-// Helper: Collision-proof unique ID generator
 const generateUniqueId = () => `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
-// Helper: Precise floating-point rounding for hours calculations
 const safeRound = (val) => Math.round((parseFloat(val) || 0) * 100) / 100;
 
 function parseLocalDate(dateInput) {
@@ -133,11 +131,6 @@ function isFriday(dateStr) {
   return d.getDay() === 5;
 }
 
-/**
- * Calculates net decimal work hours from HH:mm start and finish strings.
- * Standard Mon-Thu 07:00 to 16:30 (9.5 gross - 0.25 break) -> 9.25 hrs
- * Standard Friday  07:00 to 15:30 (8.5 gross - 0.50 break) -> 8.00 hrs
- */
 function calculateHoursFromTimes(startTime, timeFinished, dateStr) {
   if (!startTime || !timeFinished) {
     return isFriday(dateStr) ? 8 : 9.25;
@@ -156,7 +149,6 @@ function calculateHoursFromTimes(startTime, timeFinished, dateStr) {
   let diffMins = finishTotalMins - startTotalMins;
   if (diffMins <= 0) return 0;
 
-  // Deduct 30 mins on Friday, 15 mins on Monday-Thursday for shifts over 4 hours
   if (diffMins > 240) {
     diffMins -= isFriday(dateStr) ? 30 : 15;
   }
@@ -796,6 +788,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
       const sitesToExport = Object.keys(siteMap);
       const nativeFileUris = [];
+      const generatedWebFiles = [];
 
       function setCellText(cell, text, xmlDoc) {
         const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -950,7 +943,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           }
         }
 
-        // Map Other Work / Other Leave comments to the COMMENTS section template lines as separate bulleted list items
         let collectedComments = [];
         siteEntriesForExport.forEach(entry => {
           if (entry.tasks) {
@@ -985,7 +977,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   tNodes[i].textContent = "";
                 }
 
-                // Create a separate bulleted paragraph for each comment so they form a clean list
                 const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
                 
                 collectedComments.forEach((commentTextStr) => {
@@ -998,7 +989,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
                   newRun.appendChild(newT);
                   newP.appendChild(newRun);
 
-                  // Insert each comment paragraph sequentially
                   p.parentNode.insertBefore(newP, p.nextSibling);
                 });
 
@@ -1099,6 +1089,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         const fileName = `Time Cards ${formattedDateStr}${fileSuffix}.docx`;
         siteIndexCounter++;
 
+        const blobMime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
         if (Capacitor.isNativePlatform()) {
           const content = zip.generate({ type: 'uint8array' });
           let binary = '';
@@ -1135,19 +1127,14 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         } else {
           const blob = zip.generate({
             type: 'blob',
-            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            mimeType: blobMime,
           });
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = fileName;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
+          const fileObj = new File([blob], fileName, { type: blobMime });
+          generatedWebFiles.push({ fileObj, blob, fileName });
         }
       }
 
+      // Universal Share & Download trigger for both Native App & Web App (iPhone/Desktop)
       if (Capacitor.isNativePlatform()) {
         if (nativeFileUris.length > 0) {
           try {
@@ -1166,6 +1153,41 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           throw new Error("Failed to resolve file paths for sharing.");
         }
       } else {
+        // Web Platform (iPhone Safari, Android Chrome, Desktop)
+        let didShare = false;
+        if (navigator.share && navigator.canShare && generatedWebFiles.length > 0) {
+          try {
+            const filesToShare = generatedWebFiles.map(f => f.fileObj);
+            if (navigator.canShare({ files: filesToShare })) {
+              await navigator.share({
+                title: 'SJR Builders Time Cards',
+                text: `Weekly Time Cards for ${userName}`,
+                files: filesToShare
+              });
+              didShare = true;
+            }
+          } catch (shareErr) {
+            if (shareErr.name === 'AbortError') {
+              didShare = true; // User intentionally dismissed share sheet
+            } else {
+              console.warn("Web share fallback to download:", shareErr);
+            }
+          }
+        }
+
+        // Fallback: Trigger direct file download if Web Share was not used/supported
+        if (!didShare) {
+          generatedWebFiles.forEach(({ blob, fileName }) => {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+          });
+        }
         setStatusMessage({ type: 'success', text: `Exported ${sitesToExport.length} site time card(s)!` });
       }
 
@@ -1239,12 +1261,12 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             onClick={handleExportDocx}
             disabled={exportingDocx}
             className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-3 rounded-lg shadow transition-colors disabled:opacity-50 cursor-pointer"
-            title="Download Time Card DOCX (One per Site)"
+            title="Share or Download Time Card DOCX (One per Site)"
           >
             <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6zm10-10.5l-4-4 1.41-1.41L16 6.67V10.5z" />
+              <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/>
             </svg>
-            <span>{exportingDocx ? "Generating..." : "Download DOCX"}</span>
+            <span>{exportingDocx ? "Generating..." : "Share / Download DOCX"}</span>
           </button>
         </div>
 
