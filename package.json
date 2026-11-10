@@ -1,7 +1,7 @@
 {
   "name": "sjr-builders-timesheets",
   "private": true,
-  "version": "1.0.116",
+  "version": "1.0.117",
   "type": "module",
   "scripts": {
     "dev": "vite",
