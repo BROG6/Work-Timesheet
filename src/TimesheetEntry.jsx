@@ -191,7 +191,6 @@ function displayDate(dateStr) {
   return dateStr;
 }
 
-// Detect iPhone / iOS browser environment to route zip bundling
 const isIPhoneUser = () => {
   return /iPhone|iPad|iPod/i.test(navigator.userAgent) || 
          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -331,7 +330,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
   ]);
 
   const [loading, setLoading] = useState(false);
-  const [exportingDocx, setExportingDocx] = useState(false);
+  const [exportingAction, setExportingAction] = useState(null); // 'download' | 'share' | null
   const [fetchingDay, setFetchingDay] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
 
@@ -745,8 +744,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     }
   };
 
-  const handleExportDocx = async () => {
-    setExportingDocx(true);
+  const handleExport = async (actionType) => {
+    setExportingAction(actionType);
     try {
       const response = await fetch('/Blank Time Cards.docx');
       if (!response.ok) {
@@ -780,7 +779,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         alert("No submitted entries found for this week to export.");
         setStatusMessage({ type: 'error', text: "No submitted entries found for this week to export." });
         setTimeout(() => setStatusMessage(null), 4000);
-        setExportingDocx(false);
+        setExportingAction(null);
         return;
       }
 
@@ -798,7 +797,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       const generatedWebFiles = [];
 
       const isIOSWeb = !Capacitor.isNativePlatform() && isIPhoneUser();
-      const zipArchive = isIOSWeb ? new JSZip() : null;
+      const zipArchive = (isIOSWeb && actionType === 'download') ? new JSZip() : null;
 
       function setCellText(cell, text, xmlDoc) {
         const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -1140,8 +1139,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             mimeType: blobMime,
           });
 
-          if (isIOSWeb) {
-            // Add generated .docx file directly to master zip archive for iPhone web users
+          if (isIOSWeb && actionType === 'download') {
             zipArchive.file(fileName, blob);
           } else {
             const fileObj = new File([blob], fileName, { type: blobMime });
@@ -1150,7 +1148,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }
       }
 
-      // Universal Share & Download trigger for Native App & Web (iPhone Zip / Desktop DOCX)
       if (Capacitor.isNativePlatform()) {
         if (nativeFileUris.length > 0) {
           try {
@@ -1168,8 +1165,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         } else {
           throw new Error("Failed to resolve file paths for sharing.");
         }
-      } else if (isIOSWeb) {
-        // iPhone Web Browser: Download bundled Zip file
+      } else if (isIOSWeb && actionType === 'download') {
         const masterZipBlob = await zipArchive.generateAsync({ type: 'blob' });
         const masterZipName = `Time_Cards_${formattedDateStr}.zip`;
         
@@ -1182,12 +1178,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
 
-        setStatusMessage({ 
-          type: 'success', 
-          text: `Exported ${sitesToExport.length} site time card(s) as a .zip file!` 
-        });
-      } else {
-        // Desktop / Android Web Browsers
+        setStatusMessage({ type: 'success', text: `Downloaded ${sitesToExport.length} site time card(s) as .zip!` });
+      } else if (actionType === 'share') {
         let didShare = false;
         if (navigator.share && navigator.canShare && generatedWebFiles.length > 0) {
           try {
@@ -1204,24 +1196,26 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             if (shareErr.name === 'AbortError') {
               didShare = true;
             } else {
-              console.warn("Web share fallback to download:", shareErr);
+              console.warn("Web share warning:", shareErr);
             }
           }
         }
-
         if (!didShare) {
-          generatedWebFiles.forEach(({ blob, fileName }) => {
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-          });
+          alert("Web sharing of files is not fully supported on this browser/device. Try using the Download button instead.");
         }
-        setStatusMessage({ type: 'success', text: `Exported ${sitesToExport.length} site time card(s)!` });
+        setStatusMessage({ type: 'success', text: `Share action completed.` });
+      } else {
+        generatedWebFiles.forEach(({ blob, fileName }) => {
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        });
+        setStatusMessage({ type: 'success', text: `Downloaded ${sitesToExport.length} site time card(s)!` });
       }
 
       setTimeout(() => setStatusMessage(null), 4000);
@@ -1230,7 +1224,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       alert(`Export Failed: ${err?.message || JSON.stringify(err)}`);
       setStatusMessage({ type: 'error', text: `Export failed: ${err?.message || "Error generating document"}` });
     } finally {
-      setExportingDocx(false);
+      setExportingAction(null);
     }
   };
 
@@ -1289,18 +1283,35 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleExportDocx}
-            disabled={exportingDocx}
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-3 rounded-lg shadow transition-colors disabled:opacity-50 cursor-pointer"
-            title="Share or Download Time Card DOCX (One per Site)"
-          >
-            <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-              <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/>
-            </svg>
-            <span>{exportingDocx ? "Generating..." : "Share / Download DOCX"}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Download Button */}
+            <button
+              type="button"
+              onClick={() => handleExport('download')}
+              disabled={exportingAction !== null}
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-2.5 rounded-lg shadow transition-colors disabled:opacity-50 cursor-pointer"
+              title="Download Time Cards"
+            >
+              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+              </svg>
+              <span>{exportingAction === 'download' ? "Downloading..." : "Download"}</span>
+            </button>
+
+            {/* Share Button */}
+            <button
+              type="button"
+              onClick={() => handleExport('share')}
+              disabled={exportingAction !== null}
+              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 px-2.5 rounded-lg shadow transition-colors disabled:opacity-50 cursor-pointer"
+              title="Share Time Cards"
+            >
+              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/>
+              </svg>
+              <span>{exportingAction === 'share' ? "Sharing..." : "Share"}</span>
+            </button>
+          </div>
         </div>
 
         {/* 7-Day Navigation */}
