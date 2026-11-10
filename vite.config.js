@@ -1,17 +1,17 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { VitePWA } from 'vite-plugin-pwa';
 
-const isVercel = process.env.VERCEL === 'true';
+export default defineConfig(async ({ command, mode }) => {
+  const isVercel = process.env.VERCEL === 'true';
+  let pwaPlugin = null;
 
-export default defineConfig({
-  base: './', // CRITICAL for Capacitor WebViews
-  plugins: [
-    react(),
-    !isVercel && VitePWA({
+  // Only import and initialize VitePWA if NOT building on Vercel
+  if (!isVercel) {
+    const { VitePWA } = await import('vite-plugin-pwa');
+    pwaPlugin = VitePWA({
       registerType: 'autoUpdate',
       workbox: {
-        cleanupOutdatedCaches: true, // Automatically deletes old code and asset caches on update
+        cleanupOutdatedCaches: true,
       },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
@@ -34,6 +34,14 @@ export default defineConfig({
           }
         ]
       }
-    })
-  ].filter(Boolean)
+    });
+  }
+
+  return {
+    base: './', // CRITICAL for Capacitor WebViews
+    plugins: [
+      react(),
+      pwaPlugin
+    ].filter(Boolean)
+  };
 });
