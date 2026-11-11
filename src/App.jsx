@@ -25,13 +25,20 @@ export default function App() {
 
   // 1. App Launch Initialization (Version Check, Native APK, Capgo, and Notification Permissions)
   useEffect(() => {
-    // Force-bust stale local storage/caches on app version changes
+    // Force-bust stale local storage/caches on app version changes WITHOUT signing users out
     const CURRENT_APP_VERSION = "1.0.128"; // Increment this whenever you push major layout changes
     const savedVersion = localStorage.getItem('sjr_app_version');
     
     if (savedVersion !== CURRENT_APP_VERSION) {
-      console.log("New app version detected. Purging stale cache...");
-      localStorage.clear();
+      console.log("New app version detected. Purging stale UI cache...");
+      
+      // Selectively clear local UI/profile cache keys, leaving Firebase Auth intact
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith('sjr_') && key !== 'sjr_app_version') {
+          localStorage.removeItem(key);
+        }
+      });
+
       localStorage.setItem('sjr_app_version', CURRENT_APP_VERSION);
       window.location.reload();
       return;
