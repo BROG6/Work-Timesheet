@@ -809,7 +809,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             tNodes[i].textContent = "";
           }
         } else {
-          let pNodes = cell.getElementsByTagNameNS(ns, "p");
+          let pNodes = cell.getElementsByTagNameNS(ns, "w:p");
           let p = pNodes[0];
           if (!p) {
             p = xmlDoc.createElementNS(ns, "w:p");
@@ -1100,40 +1100,53 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
         const blobMime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
+        // --- NATIVE APP HANDLING (Capacitor) ---
         if (Capacitor.isNativePlatform()) {
-          const content = zip.generate({ type: 'uint8array' });
-          let binary = '';
-          const bytes = new Uint8Array(content);
-          const len = bytes.byteLength;
-          for (let i = 0; i < len; i++) {
-            binary += String.fromCharCode(bytes[i]);
-          }
-          const base64Data = window.btoa(binary);
+          if (actionType === 'share') {
+            const content = zip.generate({ type: 'uint8array' });
+            let binary = '';
+            const bytes = new Uint8Array(content);
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+              binary += String.fromCharCode(bytes[i]);
+            }
+            const base64Data = window.btoa(binary);
 
-          const writtenFile = await Filesystem.writeFile({
-            path: fileName,
-            data: base64Data,
-            directory: Directory.Cache,
-            recursive: true
-          });
+            const writtenFile = await Filesystem.writeFile({
+              path: fileName,
+              data: base64Data,
+              directory: Directory.Cache,
+              recursive: true
+            });
 
-          const uriResult = await Filesystem.getUri({
-            path: fileName,
-            directory: Directory.Cache,
-          });
+            const uriResult = await Filesystem.getUri({
+              path: fileName,
+              directory: Directory.Cache,
+            });
 
-          await Filesystem.writeFile({
-            path: fileName,
-            data: base64Data,
-            directory: Directory.Documents,
-            recursive: true
-          }).catch(() => null);
+            const finalUri = uriResult?.uri || writtenFile?.uri;
+            if (finalUri) {
+              nativeFileUris.push(finalUri);
+            }
+          } else {
+            const content = zip.generate({ type: 'uint8array' });
+            let binary = '';
+            const bytes = new Uint8Array(content);
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+              binary += String.fromCharCode(bytes[i]);
+            }
+            const base64Data = window.btoa(binary);
 
-          const finalUri = uriResult?.uri || writtenFile?.uri;
-          if (finalUri) {
-            nativeFileUris.push(finalUri);
+            await Filesystem.writeFile({
+              path: fileName,
+              data: base64Data,
+              directory: Directory.Documents,
+              recursive: true
+            });
           }
         } else {
+          // --- WEB BROWSER HANDLING (Vercel) ---
           const blob = zip.generate({
             type: 'blob',
             mimeType: blobMime,
@@ -1148,23 +1161,22 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }
       }
 
-      if (Capacitor.isNativePlatform()) {
+      if (Capacitor.isNativePlatform() && actionType === 'share') {
         if (nativeFileUris.length > 0) {
           try {
             await Share.share({
               files: nativeFileUris,
               dialogTitle: 'Export Time Cards',
             });
-            setStatusMessage({ type: 'success', text: `Exported ${sitesToExport.length} site time card(s)!` });
+            setStatusMessage({ type: 'success', text: `Shared ${sitesToExport.length} site time card(s)!` });
           } catch (shareErr) {
             if (!shareErr?.message?.includes('canceled') && !shareErr?.message?.includes('cancelled')) {
               console.warn("Share warning:", shareErr);
-              setStatusMessage({ type: 'success', text: `Saved to Documents folder on device.` });
             }
           }
-        } else {
-          throw new Error("Failed to resolve file paths for sharing.");
         }
+      } else if (Capacitor.isNativePlatform() && actionType === 'download') {
+        setStatusMessage({ type: 'success', text: `Downloaded ${sitesToExport.length} site time card(s) to device Documents!` });
       } else if (isIOSWeb && actionType === 'download') {
         const masterZipBlob = await zipArchive.generateAsync({ type: 'blob' });
         const masterZipName = `Time_Cards_${formattedDateStr}.zip`;
@@ -1200,10 +1212,22 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             }
           }
         }
+        
         if (!didShare) {
-          alert("Web sharing of files is not fully supported on this browser/device. Try using the Download button instead.");
+          generatedWebFiles.forEach(({ blob, fileName }) => {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+          });
+          setStatusMessage({ type: 'success', text: `Downloaded ${sitesToExport.length} site time card(s) (Share fallback)!` });
+        } else {
+          setStatusMessage({ type: 'success', text: `Share action completed.` });
         }
-        setStatusMessage({ type: 'success', text: `Share action completed.` });
       } else {
         generatedWebFiles.forEach(({ blob, fileName }) => {
           const url = URL.createObjectURL(blob);
