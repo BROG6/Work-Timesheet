@@ -23,8 +23,20 @@ export default function App() {
   
   const isOnline = useOnlineStatus();
 
-  // 1. App Launch Initialization (Native APK, Capgo, and Notification Permissions)
+  // 1. App Launch Initialization (Version Check, Native APK, Capgo, and Notification Permissions)
   useEffect(() => {
+    // Force-bust stale local storage/caches on app version changes
+    const CURRENT_APP_VERSION = "1.0.128"; // Increment this whenever you push major layout changes
+    const savedVersion = localStorage.getItem('sjr_app_version');
+    
+    if (savedVersion !== CURRENT_APP_VERSION) {
+      console.log("New app version detected. Purging stale cache...");
+      localStorage.clear();
+      localStorage.setItem('sjr_app_version', CURRENT_APP_VERSION);
+      window.location.reload();
+      return;
+    }
+
     if (Capacitor.isNativePlatform()) {
       // Confirm boot to Capgo (500ms)
       const capgoTimer = setTimeout(() => {
