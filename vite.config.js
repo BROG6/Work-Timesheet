@@ -5,5 +5,9 @@ export default defineConfig({
   base: './', // CRITICAL for Capacitor WebViews
   plugins: [
     react()
-  ]
+  ],
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true
+  }
 });
