@@ -1111,7 +1111,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           }
           const base64Data = window.btoa(binary);
 
-          // Write file to Cache directory so Share can read it safely if 'share' was clicked
+          // Write file to Cache directory so it can be opened/shared instantly via action sheet
           const writtenFile = await Filesystem.writeFile({
             path: fileName,
             data: base64Data,
@@ -1127,16 +1127,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           const finalUri = uriResult?.uri || writtenFile?.uri;
           if (finalUri) {
             nativeFileUris.push(finalUri);
-          }
-
-          // If Download was clicked in native app, ALSO write directly to public Download folder so it appears in device downloads
-          if (actionType === 'download') {
-            await Filesystem.writeFile({
-              path: fileName,
-              data: base64Data,
-              directory: Directory.Documents,
-              recursive: true
-            }).catch(() => null);
           }
         } else {
           // --- WEB BROWSER HANDLING (Vercel) ---
@@ -1154,24 +1144,20 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }
       }
 
-      // Execute native actions
+      // Execute actions
       if (Capacitor.isNativePlatform()) {
-        if (actionType === 'share') {
-          if (nativeFileUris.length > 0) {
-            try {
-              await Share.share({
-                files: nativeFileUris,
-                dialogTitle: 'Export Time Cards',
-              });
-              setStatusMessage({ type: 'success', text: `Shared ${sitesToExport.length} site time card(s)!` });
-            } catch (shareErr) {
-              if (!shareErr?.message?.includes('canceled') && !shareErr?.message?.includes('cancelled')) {
-                console.warn("Share warning:", shareErr);
-              }
+        if (nativeFileUris.length > 0) {
+          try {
+            await Share.share({
+              files: nativeFileUris,
+              dialogTitle: actionType === 'download' ? 'Download / Save Time Cards' : 'Share Time Cards',
+            });
+            setStatusMessage({ type: 'success', text: `Time cards ready!` });
+          } catch (shareErr) {
+            if (!shareErr?.message?.includes('canceled') && !shareErr?.message?.includes('cancelled')) {
+              console.warn("Native action warning:", shareErr);
             }
           }
-        } else {
-          setStatusMessage({ type: 'success', text: `Downloaded ${sitesToExport.length} site time card(s) to device!` });
         }
       } else if (isIOSWeb && actionType === 'download') {
         const masterZipBlob = await zipArchive.generateAsync({ type: 'blob' });
