@@ -1111,22 +1111,42 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           }
           const base64Data = window.btoa(binary);
 
-          // Write file securely to Cache directory first to avoid directory errors
-          const writtenFile = await Filesystem.writeFile({
-            path: fileName,
-            data: base64Data,
-            directory: Directory.Cache,
-            recursive: true
-          });
-
-          const uriResult = await Filesystem.getUri({
-            path: fileName,
-            directory: Directory.Cache,
-          });
-
-          const finalUri = uriResult?.uri || writtenFile?.uri;
-          if (finalUri) {
-            nativeFileUris.push(finalUri);
+          if (actionType === 'share') {
+            const writtenFile = await Filesystem.writeFile({
+              path: fileName,
+              data: base64Data,
+              directory: Directory.Cache,
+              recursive: true
+            });
+            const uriResult = await Filesystem.getUri({
+              path: fileName,
+              directory: Directory.Cache,
+            });
+            const finalUri = uriResult?.uri || writtenFile?.uri;
+            if (finalUri) {
+              nativeFileUris.push(finalUri);
+            }
+          } else {
+            // Direct Download for Native without share sheet
+            const writtenFile = await Filesystem.writeFile({
+              path: fileName,
+              data: base64Data,
+              directory: Directory.Cache,
+              recursive: true
+            });
+            const uriResult = await Filesystem.getUri({
+              path: fileName,
+              directory: Directory.Cache,
+            });
+            if (uriResult?.uri) {
+              const pathUrl = Capacitor.convertFileSrc(uriResult.uri);
+              const link = document.createElement("a");
+              link.href = pathUrl;
+              link.download = fileName;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }
           }
         } else {
           // --- WEB BROWSER HANDLING (Vercel) ---
@@ -1145,18 +1165,20 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       }
 
       if (Capacitor.isNativePlatform()) {
-        if (nativeFileUris.length > 0) {
+        if (actionType === 'share' && nativeFileUris.length > 0) {
           try {
             await Share.share({
               files: nativeFileUris,
-              dialogTitle: actionType === 'download' ? 'Save / Download Time Cards' : 'Share Time Cards',
+              dialogTitle: 'Share Time Cards',
             });
-            setStatusMessage({ type: 'success', text: `Time card(s) ready!` });
+            setStatusMessage({ type: 'success', text: `Shared ${sitesToExport.length} site time card(s)!` });
           } catch (shareErr) {
             if (!shareErr?.message?.includes('canceled') && !shareErr?.message?.includes('cancelled')) {
-              console.warn("Native action warning:", shareErr);
+              console.warn("Share warning:", shareErr);
             }
           }
+        } else if (actionType === 'download') {
+          setStatusMessage({ type: 'success', text: `Downloaded ${sitesToExport.length} time card(s)!` });
         }
       } else if (isIOSWeb && actionType === 'download') {
         const masterZipBlob = await zipArchive.generateAsync({ type: 'blob' });
