@@ -1127,26 +1127,13 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               nativeFileUris.push(finalUri);
             }
           } else {
-            // Direct Download for Native without share sheet
-            const writtenFile = await Filesystem.writeFile({
-              path: fileName,
-              data: base64Data,
-              directory: Directory.Cache,
-              recursive: true
-            });
-            const uriResult = await Filesystem.getUri({
-              path: fileName,
-              directory: Directory.Cache,
-            });
-            if (uriResult?.uri) {
-              const pathUrl = Capacitor.convertFileSrc(uriResult.uri);
-              const link = document.createElement("a");
-              link.href = pathUrl;
-              link.download = fileName;
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-            }
+            // Native Download: Bypass share sheet entirely via Base64 Data URI anchor trigger
+            const link = document.createElement("a");
+            link.href = `data:${blobMime};base64,${base64Data}`;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
           }
         } else {
           // --- WEB BROWSER HANDLING (Vercel) ---
