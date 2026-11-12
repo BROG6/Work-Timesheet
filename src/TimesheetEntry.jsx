@@ -8,6 +8,7 @@ import {
 
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 import PZip from 'pizzip';
 import JSZip from 'jszip';
@@ -792,10 +793,13 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       });
 
       const sitesToExport = Object.keys(siteMap);
+      const nativeFileUris = [];
       const generatedWebFiles = [];
 
       const isIOSWeb = !Capacitor.isNativePlatform() && isIPhoneUser();
-      const zipArchive = isIOSWeb ? new JSZip() : null;
+      // Only zip if iPhone web user AND there are multiple files
+      const shouldZipIOS = isIOSWeb && sitesToExport.length > 1;
+      const zipArchive = shouldZipIOS ? new JSZip() : null;
 
       function setCellText(cell, text, xmlDoc) {
         const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -1097,16 +1101,50 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         siteIndexCounter++;
 
         const blobMime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-        const blob = zip.generate({ type: 'blob', mimeType: blobMime });
 
-        if (isIOSWeb) {
-          zipArchive.file(fileName, blob);
+        // --- NATIVE APP HANDLING vs WEB HANDLING ---
+        if (Capacitor.isNativePlatform()) {
+          const content = zip.generate({ type: 'uint8array' });
+          let binary = '';
+          const bytes = new Uint8Array(content);
+          const len = bytes.byteLength;
+          for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          const base64Data = window.btoa(binary);
+
+          const writtenFile = await Filesystem.writeFile({
+            path: fileName,
+            data: base64Data,
+            directory: Directory.Cache,
+            recursive: true
+          });
+          const uriResult = await Filesystem.getUri({
+            path: fileName,
+            directory: Directory.Cache,
+          });
+          const finalUri = uriResult?.uri || writtenFile?.uri;
+          if (finalUri) {
+            nativeFileUris.push(finalUri);
+          }
         } else {
-          generatedWebFiles.push({ blob, fileName });
+          const blob = zip.generate({ type: 'blob', mimeType: blobMime });
+          if (shouldZipIOS) {
+            zipArchive.file(fileName, blob);
+          } else {
+            generatedWebFiles.push({ blob, fileName });
+          }
         }
       }
 
-      if (isIOSWeb) {
+      // --- EXECUTING THE DOWNLOAD / SHARE ACTIONS ---
+      if (Capacitor.isNativePlatform() && nativeFileUris.length > 0) {
+        await Share.share({
+          files: nativeFileUris,
+          dialogTitle: 'Save Time Cards',
+        });
+        setStatusMessage({ type: 'success', text: `Ready to save ${sitesToExport.length} time card(s)!` });
+      } else if (shouldZipIOS) {
         const masterZipBlob = await zipArchive.generateAsync({ type: 'blob' });
         const masterZipName = `Time_Cards_${formattedDateStr}.zip`;
         
@@ -1118,6 +1156,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
+
+        setStatusMessage({ type: 'success', text: `Downloaded time cards as .zip!` });
       } else {
         generatedWebFiles.forEach(({ blob, fileName }) => {
           const url = URL.createObjectURL(blob);
@@ -1129,9 +1169,9 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           document.body.removeChild(link);
           URL.revokeObjectURL(url);
         });
+        setStatusMessage({ type: 'success', text: `Downloaded time card(s) successfully!` });
       }
 
-      setStatusMessage({ type: 'success', text: `Downloaded ${sitesToExport.length} time card(s)!` });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
       console.error("DOCX export error:", err);
@@ -1198,7 +1238,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           </div>
 
           <div>
-            {/* Download Button Only */}
+            {/* Unified Download Button */}
             <button
               type="button"
               onClick={handleDownload}
@@ -1209,7 +1249,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
               <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                 <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
               </svg>
-              <span>{exporting ? "Downloading..." : "Download Time Cards"}</span>
+              <span>{exporting ? "Processing..." : "Download Time Cards"}</span>
             </button>
           </div>
         </div>
