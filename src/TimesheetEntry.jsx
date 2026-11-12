@@ -1,5 +1,4 @@
 // src/TimesheetEntry.jsx
-/* SJR Timesheet Portal - Stable */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from './firebaseConfig';
 import { 
@@ -111,8 +110,10 @@ const ALL_TEMPLATE_TASKS = [
   ""
 ];
 
+// Helper: Collision-proof unique ID generator
 const generateUniqueId = () => `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
+// Helper: Precise floating-point rounding for hours calculations
 const safeRound = (val) => Math.round((parseFloat(val) || 0) * 100) / 100;
 
 function parseLocalDate(dateInput) {
@@ -132,6 +133,11 @@ function isFriday(dateStr) {
   return d.getDay() === 5;
 }
 
+/**
+ * Calculates net decimal work hours from HH:mm start and finish strings.
+ * Standard Mon-Thu 07:00 to 16:30 (9.5 gross - 0.25 break) -> 9.25 hrs
+ * Standard Friday  07:00 to 15:30 (8.5 gross - 0.50 break) -> 8.00 hrs
+ */
 function calculateHoursFromTimes(startTime, timeFinished, dateStr) {
   if (!startTime || !timeFinished) {
     return isFriday(dateStr) ? 8 : 9.25;
@@ -150,6 +156,7 @@ function calculateHoursFromTimes(startTime, timeFinished, dateStr) {
   let diffMins = finishTotalMins - startTotalMins;
   if (diffMins <= 0) return 0;
 
+  // Deduct 30 mins on Friday, 15 mins on Monday-Thursday for shifts over 4 hours
   if (diffMins > 240) {
     diffMins -= isFriday(dateStr) ? 30 : 15;
   }
@@ -330,7 +337,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
   ]);
 
   const [loading, setLoading] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [exportingDocx, setExportingDocx] = useState(false);
   const [fetchingDay, setFetchingDay] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
 
@@ -744,8 +751,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
     }
   };
 
-  const handleDownload = async () => {
-    setExporting(true);
+  const handleExportDocx = async () => {
+    setExportingDocx(true);
     try {
       const response = await fetch('/Blank Time Cards.docx');
       if (!response.ok) {
@@ -779,7 +786,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         alert("No submitted entries found for this week to export.");
         setStatusMessage({ type: 'error', text: "No submitted entries found for this week to export." });
         setTimeout(() => setStatusMessage(null), 4000);
-        setExporting(false);
+        setExportingDocx(false);
         return;
       }
 
@@ -797,7 +804,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       const generatedWebFiles = [];
 
       const isIOSWeb = !Capacitor.isNativePlatform() && isIPhoneUser();
-      // Only zip if iPhone web user AND there are multiple files
       const shouldZipIOS = isIOSWeb && sitesToExport.length > 1;
       const zipArchive = shouldZipIOS ? new JSZip() : null;
 
@@ -811,7 +817,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             tNodes[i].textContent = "";
           }
         } else {
-          let pNodes = cell.getElementsByTagNameNS(ns, "w:p");
+          let pNodes = cell.getElementsByTagNameNS(ns, "p");
           let p = pNodes[0];
           if (!p) {
             p = xmlDoc.createElementNS(ns, "w:p");
@@ -954,6 +960,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           }
         }
 
+        // Map Other Work / Other Leave comments to the COMMENTS section template lines (with line break)
         let collectedComments = [];
         siteEntriesForExport.forEach(entry => {
           if (entry.tasks) {
@@ -973,6 +980,8 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         });
 
         if (collectedComments.length > 0) {
+          const commentString = `If Other - please detail what type of work you were undertaking:\n${collectedComments.join('\n')}`;
+          
           let foundCommentBlock = false;
           for (let p of paragraphs) {
             let fullPText = "";
@@ -981,28 +990,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
             if (fullPText.includes("If Other") || fullPText.includes("detail what type of work")) {
               if (tNodes.length > 0) {
-                tNodes[0].textContent = "If Other - please detail what type of work you were undertaking:";
+                tNodes[0].textContent = commentString;
                 tNodes[0].setAttribute("xml:space", "preserve");
-                
                 for (let i = 1; i < tNodes.length; i++) {
                   tNodes[i].textContent = "";
                 }
-
-                const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-                
-                collectedComments.forEach((commentTextStr) => {
-                  const newP = xmlDoc.createElementNS(ns, "w:p");
-                  const newRun = xmlDoc.createElementNS(ns, "w:r");
-                  const newT = xmlDoc.createElementNS(ns, "w:t");
-                  newT.textContent = `• ${commentTextStr}`;
-                  newT.setAttribute("xml:space", "preserve");
-                  
-                  newRun.appendChild(newT);
-                  newP.appendChild(newRun);
-
-                  p.parentNode.insertBefore(newP, p.nextSibling);
-                });
-
                 foundCommentBlock = true;
                 break;
               }
@@ -1019,28 +1011,11 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
                 if (fullCellText.includes("If Other") || fullCellText.includes("detail what type of work")) {
                   if (tNodes.length > 0) {
-                    tNodes[0].textContent = "If Other - please detail what type of work you were undertaking:";
+                    tNodes[0].textContent = commentString;
                     tNodes[0].setAttribute("xml:space", "preserve");
-                    
                     for (let i = 1; i < tNodes.length; i++) {
                       tNodes[i].textContent = "";
                     }
-
-                    const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-                    
-                    collectedComments.forEach((commentTextStr) => {
-                      const newP = xmlDoc.createElementNS(ns, "w:p");
-                      const newRun = xmlDoc.createElementNS(ns, "w:r");
-                      const newT = xmlDoc.createElementNS(ns, "w:t");
-                      newT.textContent = `• ${commentTextStr}`;
-                      newT.setAttribute("xml:space", "preserve");
-                      
-                      newRun.appendChild(newT);
-                      newP.appendChild(newRun);
-
-                      cell.appendChild(newP);
-                    });
-
                     foundCommentBlock = true;
                     break;
                   }
@@ -1102,7 +1077,6 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
 
         const blobMime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
-        // --- NATIVE APP HANDLING vs WEB HANDLING ---
         if (Capacitor.isNativePlatform()) {
           const content = zip.generate({ type: 'uint8array' });
           let binary = '';
@@ -1119,10 +1093,19 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             directory: Directory.Cache,
             recursive: true
           });
+
           const uriResult = await Filesystem.getUri({
             path: fileName,
             directory: Directory.Cache,
           });
+
+          await Filesystem.writeFile({
+            path: fileName,
+            data: base64Data,
+            directory: Directory.Documents,
+            recursive: true
+          }).catch(() => null);
+
           const finalUri = uriResult?.uri || writtenFile?.uri;
           if (finalUri) {
             nativeFileUris.push(finalUri);
@@ -1137,13 +1120,23 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
         }
       }
 
-      // --- EXECUTING THE DOWNLOAD / SHARE ACTIONS ---
-      if (Capacitor.isNativePlatform() && nativeFileUris.length > 0) {
-        await Share.share({
-          files: nativeFileUris,
-          dialogTitle: 'Save Time Cards',
-        });
-        setStatusMessage({ type: 'success', text: `Ready to save ${sitesToExport.length} time card(s)!` });
+      if (Capacitor.isNativePlatform()) {
+        if (nativeFileUris.length > 0) {
+          try {
+            await Share.share({
+              files: nativeFileUris,
+              dialogTitle: 'Export Time Cards',
+            });
+            setStatusMessage({ type: 'success', text: `Exported ${sitesToExport.length} site time card(s)!` });
+          } catch (shareErr) {
+            if (!shareErr?.message?.includes('canceled') && !shareErr?.message?.includes('cancelled')) {
+              console.warn("Share warning:", shareErr);
+              setStatusMessage({ type: 'success', text: `Saved to Documents folder on device.` });
+            }
+          }
+        } else {
+          throw new Error("Failed to resolve file paths for sharing.");
+        }
       } else if (shouldZipIOS) {
         const masterZipBlob = await zipArchive.generateAsync({ type: 'blob' });
         const masterZipName = `Time_Cards_${formattedDateStr}.zip`;
@@ -1178,7 +1171,7 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
       alert(`Export Failed: ${err?.message || JSON.stringify(err)}`);
       setStatusMessage({ type: 'error', text: `Export failed: ${err?.message || "Error generating document"}` });
     } finally {
-      setExporting(false);
+      setExportingDocx(false);
     }
   };
 
@@ -1237,21 +1230,18 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
             </div>
           </div>
 
-          <div>
-            {/* Unified Download Button */}
-            <button
-              type="button"
-              onClick={handleDownload}
-              disabled={exporting}
-              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 px-4 rounded-lg shadow transition-colors disabled:opacity-50 cursor-pointer"
-              title="Download Time Cards"
-            >
-              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-              </svg>
-              <span>{exporting ? "Processing..." : "Download Time Cards"}</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleExportDocx}
+            disabled={exportingDocx}
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-3 rounded-lg shadow transition-colors disabled:opacity-50 cursor-pointer"
+            title="Download Time Card DOCX (One per Site)"
+          >
+            <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6zm10-10.5l-4-4 1.41-1.41L16 6.67V10.5z" />
+            </svg>
+            <span>{exportingDocx ? "Generating..." : "Download DOCX"}</span>
+          </button>
         </div>
 
         {/* 7-Day Navigation */}
