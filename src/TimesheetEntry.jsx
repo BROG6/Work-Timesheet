@@ -960,20 +960,14 @@ export default function TimesheetEntry({ user, userProfile, profile }) {
           }
         }
 
-        // Map Other Work / Other Leave comments to the COMMENTS section template lines (with line break)
+        // Collect comments from ANY task that has text entered
         let collectedComments = [];
         siteEntriesForExport.forEach(entry => {
           if (entry.tasks) {
             entry.tasks.forEach(t => {
-              const tName = (t.taskName || '').toLowerCase();
-              const tGroup = (t.categoryGroup || '').toLowerCase();
-              
-              const isOtherWork = tName.includes("other work") || tGroup.includes("other work");
-              const isOtherLeave = tName.includes("other leave") || tGroup.includes("leave");
-
-              if ((isOtherWork || isOtherLeave) && t.comments && t.comments.trim() !== '') {
-                const label = isOtherLeave ? "Other Leave" : "Other Work";
-                collectedComments.push(`${displayDate(entry.date)} [${label}]: ${t.comments.trim()}`);
+              if (t.comments && t.comments.trim() !== '') {
+                const taskDisplay = t.taskName ? `[${t.taskName}]` : '';
+                collectedComments.push(`${displayDate(entry.date)} ${taskDisplay}: ${t.comments.trim()}`);
               }
             });
           }
