@@ -4,9 +4,12 @@ import { db } from './firebaseConfig';
 import {
   collection,
   getDocs,
+  setDoc,
   updateDoc,
   deleteDoc,
-  doc
+  doc,
+  query,
+  where
 } from 'firebase/firestore';
 
 import PizZip from 'pizzip';
@@ -217,6 +220,66 @@ export default function ManagerDashboard({ userProfile }) {
     }
   };
 
+  // --- SITE MANAGEMENT FUNCTIONS ---
+  const handleDeleteSiteName = async (siteNameToDelete) => {
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete ALL timesheet entries for site "${siteNameToDelete}"? This action cannot be undone.`
+    );
+    if (!confirmDelete) return;
+
+    setLoading(true);
+    try {
+      const q = query(
+        collection(db, 'timesheets'),
+        where('project', '==', siteNameToDelete)
+      );
+      const querySnapshot = await getDocs(q);
+
+      const deletePromises = querySnapshot.docs.map((docSnap) =>
+        deleteDoc(doc(db, 'timesheets', docSnap.id))
+      );
+      await Promise.all(deletePromises);
+
+      // Refresh local timesheets list
+      await fetchData();
+      alert(`Successfully deleted site "${siteNameToDelete}" and all associated entries.`);
+    } catch (err) {
+      console.error("Error deleting site name:", err);
+      alert("Failed to delete site. Check Firestore permissions.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRenameSite = async (oldSiteName) => {
+    const newSiteName = window.prompt(`Rename site "${oldSiteName}" to:`, oldSiteName);
+    if (!newSiteName || newSiteName.trim() === '' || newSiteName.trim() === oldSiteName) return;
+
+    const cleanNewName = newSiteName.trim();
+    setLoading(true);
+
+    try {
+      const q = query(
+        collection(db, 'timesheets'),
+        where('project', '==', oldSiteName)
+      );
+      const querySnapshot = await getDocs(q);
+
+      const updatePromises = querySnapshot.docs.map((docSnap) =>
+        setDoc(doc(db, 'timesheets', docSnap.id), { project: cleanNewName }, { merge: true })
+      );
+      await Promise.all(updatePromises);
+
+      await fetchData();
+      alert(`Renamed site "${oldSiteName}" to "${cleanNewName}".`);
+    } catch (err) {
+      console.error("Error renaming site:", err);
+      alert("Failed to rename site.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // --- TEMPLATE EXPORT LOGIC ---
   const handleExportFromTemplate = async () => {
     setIsExporting(true);
@@ -243,7 +306,6 @@ export default function ManagerDashboard({ userProfile }) {
         userMap[u.uid] = u.name || u.userName || u.displayName || u.email;
       });
 
-      // 1. Group active week entries by Staff Member first, then by Site
       const staffKeys = Array.from(
         new Set(activeWeekEntries.map((t) => t.userId || t.userName))
       );
@@ -257,7 +319,6 @@ export default function ManagerDashboard({ userProfile }) {
 
         const staffName = userMap[staffKey] || staffKey;
 
-        // Find all distinct sites this staff member worked on this week
         let sitesForStaff = [];
         if (filterProject === 'ALL') {
           sitesForStaff = Array.from(new Set(staffEntries.map((t) => t.project || 'General / Unassigned')));
@@ -280,7 +341,6 @@ export default function ManagerDashboard({ userProfile }) {
           const rows = xmlDoc.getElementsByTagName("w:tr");
           const paragraphs = xmlDoc.getElementsByTagName("w:p");
 
-          // Update Document Header Info (Staff Member + Site)
           for (let p of paragraphs) {
             const tNodes = p.getElementsByTagName("w:t");
             if (tNodes.length === 0) continue;
@@ -474,8 +534,8 @@ export default function ManagerDashboard({ userProfile }) {
   const projectList = Array.from(new Set(timesheets.map((t) => t.project).filter(Boolean)));
 
   return (
-    <div className="p-6 bg-slate-900 text-slate-100 min-h-screen">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+    <div className="p-6 bg-slate-900 text-slate-100 min-h-screen space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Manager Dashboard</h1>
           <p className="text-sm text-slate-400">Review worker timecards and export site summaries</p>
@@ -485,14 +545,14 @@ export default function ManagerDashboard({ userProfile }) {
           <button
             type="button"
             onClick={handlePrevWeek}
-            className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs font-semibold"
+            className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs font-semibold cursor-pointer"
           >
             &larr; Prev
           </button>
           <button
             type="button"
             onClick={handleCurrentWeek}
-            className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs font-semibold"
+            className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs font-semibold cursor-pointer"
           >
             Current Week
           </button>
@@ -502,14 +562,14 @@ export default function ManagerDashboard({ userProfile }) {
           <button
             type="button"
             onClick={handleNextWeek}
-            className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs font-semibold"
+            className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs font-semibold cursor-pointer"
           >
             Next &rarr;
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <div>
           <label className="block text-xs font-medium text-slate-400 mb-1">Filter Staff</label>
           <select
@@ -574,6 +634,49 @@ export default function ManagerDashboard({ userProfile }) {
         </div>
       </div>
 
+      {/* Manager Site Management Card */}
+      <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-sm">
+        <div className="border-b border-slate-700 pb-3 mb-4">
+          <h3 className="text-lg font-bold text-white">Manage Site Names</h3>
+          <p className="text-xs text-slate-400">
+            Fix spelling errors or delete duplicate site records across worker timesheets.
+          </p>
+        </div>
+
+        {projectList.length === 0 ? (
+          <p className="text-xs text-slate-400 italic">No recorded site names found.</p>
+        ) : (
+          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+            {projectList.map((siteName) => (
+              <div
+                key={siteName}
+                className="flex items-center justify-between p-3 bg-slate-900/60 border border-slate-700 rounded-lg text-sm"
+              >
+                <span className="font-semibold text-slate-200">{siteName}</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleRenameSite(siteName)}
+                    disabled={loading}
+                    className="px-2.5 py-1 text-xs font-semibold bg-amber-900/50 hover:bg-amber-900 text-amber-300 border border-amber-700 rounded transition-colors cursor-pointer"
+                  >
+                    Rename / Fix Typo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteSiteName(siteName)}
+                    disabled={loading}
+                    className="px-2.5 py-1 text-xs font-semibold bg-rose-900/40 hover:bg-rose-900/70 text-rose-300 border border-rose-800 rounded transition-colors cursor-pointer"
+                  >
+                    Delete Site
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow-lg">
         {loading ? (
           <div className="p-8 text-center text-slate-400">Loading timesheet records...</div>
@@ -616,14 +719,14 @@ export default function ManagerDashboard({ userProfile }) {
                       <button
                         type="button"
                         onClick={() => handleToggleStatus(item.id, item.status)}
-                        className="text-xs bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded transition-colors"
+                        className="text-xs bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded transition-colors cursor-pointer"
                       >
                         {item.status === 'Approved' ? 'Unapprove' : 'Approve'}
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDelete(item.id)}
-                        className="text-xs bg-rose-900/40 hover:bg-rose-800/60 text-rose-300 px-2.5 py-1 rounded transition-colors border border-rose-800"
+                        className="text-xs bg-rose-900/40 hover:bg-rose-800/60 text-rose-300 px-2.5 py-1 rounded transition-colors border border-rose-800 cursor-pointer"
                       >
                         Delete
                       </button>
