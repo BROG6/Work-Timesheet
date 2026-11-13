@@ -1,3 +1,4 @@
+// src/Auth.jsx
 import React, { useState } from 'react';
 import { auth, db } from './firebaseConfig';
 import { 
@@ -141,6 +142,35 @@ export default function Auth({ user, setUser, userProfile, setUserProfile }) {
       setError(err.message ? err.message.replace('Firebase: ', '') : 'Google Sign-In failed');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Enable Notifications for iPhone Web PWA Users
+  const handleEnableIosNotifications = async () => {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+    if (isIOS && !isInStandaloneMode) {
+      alert("To enable notifications on your iPhone, please tap the Share button in Safari and select 'Add to Home Screen', then open the app from your home screen icon.");
+      return;
+    }
+
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+      alert("Push notifications are not supported on this browser.");
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        await navigator.serviceWorker.ready;
+        alert('Notifications enabled successfully!');
+      } else {
+        alert('Notification permission was denied.');
+      }
+    } catch (err) {
+      console.error("Notification permission error:", err);
+      alert("Could not enable notifications.");
     }
   };
 
@@ -313,14 +343,27 @@ export default function Auth({ user, setUser, userProfile, setUserProfile }) {
         </button>
       </form>
 
-      <div className="mt-4 text-center border-t border-slate-100 pt-3">
+      {/* Bottom Footer Section (Side-by-side Layout) */}
+      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={handleEnableIosNotifications}
+          className="bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 text-[11px] font-bold py-2 px-2.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+          title="Enable Notifications for iPhone"
+        >
+          <svg className="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24">
+            <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+          </svg>
+          <span>Enable iPhone Notifications</span>
+        </button>
+
         <button
           type="button"
           onClick={() => {
             setIsRegistering(!isRegistering);
             setError('');
           }}
-          className="text-xs text-slate-600 hover:text-slate-900 font-semibold underline cursor-pointer"
+          className="text-xs text-slate-600 hover:text-slate-900 font-semibold underline text-right cursor-pointer"
         >
           {isRegistering ? "Already have an account? Sign In" : "Need an account? Register here"}
         </button>
