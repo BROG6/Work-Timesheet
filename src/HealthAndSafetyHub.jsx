@@ -211,11 +211,16 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       snapshot.forEach(docSnap => {
         const docId = docSnap.id;
         const docData = docSnap.data();
-        const inferredType =
-          docData.type ||
-          (docId.startsWith('toolbox_') || Array.isArray(docData.attendees)
-            ? TOOLBOX_TYPE
-            : INSPECTION_TYPE);
+
+        // Fallback detection for legacy records created before strict type stamping
+        let inferredType = docData.type;
+        if (!inferredType) {
+          if (docId.startsWith('toolbox_') || docData.attendees || docData.taskPlanning) {
+            inferredType = TOOLBOX_TYPE;
+          } else {
+            inferredType = INSPECTION_TYPE;
+          }
+        }
 
         reports.push({ id: docId, ...docData, type: inferredType });
         if (docData.site || docData.location) {
