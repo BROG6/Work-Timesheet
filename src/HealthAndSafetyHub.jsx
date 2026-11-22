@@ -807,7 +807,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   }
 
-  // Safely fills text after a label (e.g., "Site:", "Week Ending:") without deleting the label or colon
   const setValueAfterLabel = (pNode, labelText, valueText, xmlDoc) => {
     const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     const tNodes = Array.from(pNode.getElementsByTagName("w:t"));
@@ -831,7 +830,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const lowerLabelText = currentLabelText.toLowerCase();
       const idxInNode = lowerLabelText.lastIndexOf(targetLabel[targetLabel.length - 1]);
 
-      // If the label ends mid-node (e.g. "Site:______"), trim trailing underscores/spaces on that node
       if (idxInNode !== -1 && idxInNode < currentLabelText.length - 1) {
         const prefix = currentLabelText.slice(0, idxInNode + 1);
         const suffix = currentLabelText.slice(idxInNode + 1);
@@ -945,7 +943,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
     for (let i = 0; i < paragraphs.length; i++) {
       const p = paragraphs[i];
-      const tNodes = p.getElementsByTagName("w:t");
+      const tNodes = Array.from(p.getElementsByTagName("w:t"));
       if (tNodes.length === 0) continue;
 
       let pStr = "";
@@ -953,7 +951,41 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const cleanPStr = pStr.toLowerCase().trim();
 
       if (pStr.includes("Date and Time:")) {
-        setValueAfterLabel(p, "Date and Time:", ` ${toolboxData.date || ''} ${toolboxData.time || ''}    Location: ${toolboxData.location || ''}`, xmlDoc);
+        const locIdx = tNodes.findIndex(tn => (tn.textContent || "").includes("Location:"));
+        if (locIdx !== -1) {
+          const dtIdx = tNodes.findIndex(tn => (tn.textContent || "").includes("Date and Time:"));
+          if (dtIdx !== -1 && dtIdx + 1 < locIdx) {
+            tNodes[dtIdx + 1].textContent = ` ${toolboxData.date || ''} ${toolboxData.time || ''}  `;
+            tNodes[dtIdx + 1].setAttribute("xml:space", "preserve");
+            for (let k = dtIdx + 2; k < locIdx; k++) {
+              tNodes[k].textContent = "";
+            }
+          }
+          const locNode = tNodes[locIdx];
+          const locText = locNode.textContent || "";
+          const locColonPos = locText.indexOf("Location:");
+          if (locColonPos !== -1) {
+            locNode.textContent = locText.slice(0, locColonPos + "Location:".length);
+            locNode.setAttribute("xml:space", "preserve");
+          }
+          if (tNodes[locIdx + 1]) {
+            tNodes[locIdx + 1].textContent = ` ${toolboxData.location || ''}`;
+            tNodes[locIdx + 1].setAttribute("xml:space", "preserve");
+            for (let m = locIdx + 2; m < tNodes.length; m++) {
+              tNodes[m].textContent = "";
+            }
+          } else {
+            const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+            const r = xmlDoc.createElementNS(nsW, "w:r");
+            const t = xmlDoc.createElementNS(nsW, "w:t");
+            t.textContent = ` ${toolboxData.location || ''}`;
+            t.setAttribute("xml:space", "preserve");
+            r.appendChild(t);
+            p.appendChild(r);
+          }
+        } else {
+          setValueAfterLabel(p, "Date and Time:", ` ${toolboxData.date || ''} ${toolboxData.time || ''}    Location: ${toolboxData.location || ''}`, xmlDoc);
+        }
       } else if (pStr.includes("Meeting Closed:")) {
         setValueAfterLabel(p, "Meeting Closed:", ` ${toolboxData.time || ''}    Next Meeting: Next week`, xmlDoc);
       } else if (pStr.includes("Signed – Management:") || pStr.includes("Signed - Management:")) {
@@ -964,12 +996,20 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         } else {
           setValueAfterLabel(p, labelMatch, ` ________________    Dated: ____________`, xmlDoc);
         }
-      } else if (cleanPStr.includes("discussion about task planning and weekly goals") && toolboxData.taskPlanningDiscussion) {
+      } else if (
+        !cleanPStr.startsWith("6)") &&
+        cleanPStr.includes("discussion about task planning and weekly goals") &&
+        toolboxData.taskPlanningDiscussion
+      ) {
         const targetP = paragraphs[i + 1];
         if (targetP) {
           setParagraphText(targetP, toolboxData.taskPlanningDiscussion, xmlDoc);
         }
-      } else if (cleanPStr.includes("operational issues/other business") && toolboxData.operationalIssues) {
+      } else if (
+        !cleanPStr.startsWith("7)") &&
+        (cleanPStr === "operational issues/other business" || cleanPStr.includes("operational issues / other business")) &&
+        toolboxData.operationalIssues
+      ) {
         const targetP = paragraphs[i + 1];
         if (targetP) {
           setParagraphText(targetP, toolboxData.operationalIssues, xmlDoc);
