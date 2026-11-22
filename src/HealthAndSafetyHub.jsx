@@ -76,12 +76,87 @@ function SiteAutoCompleteInput({ value, onChange, existingSites }) {
   );
 }
 
+function WorkerAutoCompleteInput({ value, onChange, registeredWorkers }) {
+  const [suggestions, setSuggestions] = useState([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    if (!value || value.trim() === '') {
+      setSuggestions([]);
+      setIsOpen(false);
+      return;
+    }
+    const queryText = value.toLowerCase().trim();
+    const matches = registeredWorkers.filter((worker) =>
+      worker.toLowerCase().includes(queryText)
+    );
+    setSuggestions(matches);
+    setIsOpen(matches.length > 0);
+  }, [value, registeredWorkers]);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelect = (workerName) => {
+    onChange(workerName);
+    setIsOpen(false);
+  };
+
+  return (
+    <div ref={wrapperRef} className="relative w-full">
+      <input
+        type="text"
+        placeholder="Full Name (type to search staff)"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => {
+          if (value && value.trim() !== '') {
+            const queryText = value.toLowerCase().trim();
+            const matches = registeredWorkers.filter((worker) =>
+              worker.toLowerCase().includes(queryText)
+            );
+            setSuggestions(matches);
+            setIsOpen(matches.length > 0);
+          }
+        }}
+        className="w-full bg-white border border-slate-300 rounded p-2 text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+        required
+      />
+      {isOpen && (
+        <ul className="absolute z-50 left-0 right-0 mt-1 max-h-40 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-lg text-xs">
+          {suggestions.map((worker, index) => (
+            <li
+              key={index}
+              onClick={() => handleSelect(worker)}
+              className="px-3 py-2 hover:bg-emerald-50 cursor-pointer text-slate-800 border-b border-slate-100 last:border-none flex justify-between items-center transition-colors font-medium"
+            >
+              <span>{worker}</span>
+              <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded">
+                App Worker
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function HealthAndSafetyHub({ userId, userName }) {
   const [hsSubView, setHsSubView] = useState('inspection');
   const [loading, setLoading] = useState(false);
   const [exportingDocx, setExportingDocx] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
   const [savedSites, setSavedSites] = useState([]);
+  const [registeredWorkers, setRegisteredWorkers] = useState([]);
   const [autoFillContractor, setAutoFillContractor] = useState(true);
 
   // Week & Site Navigation State
@@ -145,6 +220,28 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   useEffect(() => {
     fetchAllReports();
   }, [userId]);
+
+  useEffect(() => {
+    const fetchWorkers = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, 'users'));
+        const workersSet = new Set();
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          const fullName = (data.name || data.userName || data.displayName || '').trim();
+          if (fullName) workersSet.add(fullName);
+        });
+        if (userName && userName.trim()) {
+          workersSet.add(userName.trim());
+        }
+        setRegisteredWorkers(Array.from(workersSet));
+      } catch (err) {
+        console.warn("Could not fetch workers list:", err);
+      }
+    };
+
+    fetchWorkers();
+  }, [userName]);
 
   const handleShiftWeek = (direction) => {
     const d = new Date(currentWeek);
@@ -747,18 +844,30 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           } else {
             updateParagraphValue(p, ` ________________    Dated: ____________`);
           }
-        } else if (pStr.toLowerCase().startsWith("discussion about task planning")) {
-          let nextSibling = p.parentNode && p.parentNode.nodeName === 'w:tc' ? p.parentNode.parentNode.nextElementSibling : p.nextElementSibling;
-          if (nextSibling && toolboxData.taskPlanningDiscussion) {
-            const targetCell = nextSibling.getElementsByTagName ? nextSibling.getElementsByTagName("w:tc")[0] : null;
-            if (targetCell) setCellText(targetCell, toolboxData.taskPlanningDiscussion, xmlDoc);
-          }
-        } else if (pStr.toLowerCase().startsWith("operational issues/other business")) {
-          let nextSibling = p.parentNode && p.parentNode.nodeName === 'w:tc' ? p.parentNode.parentNode.nextElementSibling : p.nextElementSibling;
-          if (nextSibling && toolboxData.operationalIssues) {
-            const targetCell = nextSibling.getElementsByTagName ? nextSibling.getElementsByTagName("w:tc")[0] : null;
-            if (targetCell) setCellText(targetCell, toolboxData.operationalIssues, xmlDoc);
-          }
+        }
+      }
+    }
+
+    // Explicitly update discussion text blocks across table rows and structural cells
+    const allCells = xmlDoc.getElementsByTagName("w:tc");
+    for (let cell of allCells) {
+      const cellText = getCellText(cell).toLowerCase();
+      if (cellText.includes("discussion about task planning") && toolboxData.taskPlanningDiscussion) {
+        let parentRow = cell.parentNode;
+        while (parentRow && parentRow.nodeName !== 'w:tr') parentRow = parentRow.parentNode;
+        const nextRow = parentRow ? parentRow.nextElementSibling : null;
+        if (nextRow) {
+          const targetCell = nextRow.getElementsByTagName("w:tc")[0];
+          if (targetCell) setCellText(targetCell, toolboxData.taskPlanningDiscussion, xmlDoc);
+        }
+      }
+      if (cellText.includes("operational issues") && toolboxData.operationalIssues) {
+        let parentRow = cell.parentNode;
+        while (parentRow && parentRow.nodeName !== 'w:tr') parentRow = parentRow.parentNode;
+        const nextRow = parentRow ? parentRow.nextElementSibling : null;
+        if (nextRow) {
+          const targetCell = nextRow.getElementsByTagName("w:tc")[0];
+          if (targetCell) setCellText(targetCell, toolboxData.operationalIssues, xmlDoc);
         }
       }
     }
@@ -1050,13 +1159,17 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const cleanSite = siteVal.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
       const docId = selectedReportId || `inspection_${cleanSite}_${inspectionData.weekEnding}`;
       
-      await setDoc(doc(db, 'health_safety', docId), {
+      const payload = {
         userId,
         userName,
+        site: siteVal,
+        weekEnding: inspectionData.weekEnding,
         type: 'Site Safety Inspection Report',
         createdAt: serverTimestamp(),
         ...inspectionData
-      }, { merge: true });
+      };
+
+      await setDoc(doc(db, 'health_safety', docId), payload, { merge: true });
 
       setSelectedReportId(docId);
       await fetchAllReports();
@@ -1083,13 +1196,17 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const cleanLoc = locVal.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
       const docId = selectedReportId || `toolbox_${cleanLoc}_${toolboxData.date}`;
 
-      await setDoc(doc(db, 'health_safety', docId), {
+      const payload = {
         userId,
         userName,
+        location: locVal,
+        date: toolboxData.date,
         type: 'H&S and Tool Box Meeting Worksheet',
         createdAt: serverTimestamp(),
         ...toolboxData
-      }, { merge: true });
+      };
+
+      await setDoc(doc(db, 'health_safety', docId), payload, { merge: true });
 
       setSelectedReportId(docId);
       await fetchAllReports();
@@ -1965,17 +2082,14 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                     )}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
+                    <WorkerAutoCompleteInput
                       value={attendee.name}
-                      onChange={(e) => {
+                      onChange={(val) => {
                         const updated = [...toolboxData.attendees];
-                        updated[idx].name = e.target.value;
+                        updated[idx].name = val;
                         setToolboxData({ ...toolboxData, attendees: updated });
                       }}
-                      placeholder="Full Name"
-                      className="bg-white border border-slate-300 rounded p-2 text-slate-800"
-                      required
+                      registeredWorkers={registeredWorkers}
                     />
                     <input
                       type="text"
