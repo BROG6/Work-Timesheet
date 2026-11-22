@@ -807,17 +807,61 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   }
 
-  const updateParagraphValue = (pNode, valueText) => {
-    const tNodes = pNode.getElementsByTagName("w:t");
-    if (tNodes.length > 1) {
+  // Safely fills text after a label (e.g., "Site:", "Week Ending:") without deleting the label or colon
+  const setValueAfterLabel = (pNode, labelText, valueText, xmlDoc) => {
+    const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    const tNodes = Array.from(pNode.getElementsByTagName("w:t"));
+    if (tNodes.length === 0) return;
+
+    const targetLabel = labelText.toLowerCase();
+    let runningText = "";
+    let labelEndNodeIndex = -1;
+
+    for (let i = 0; i < tNodes.length; i++) {
+      runningText += tNodes[i].textContent || "";
+      if (runningText.toLowerCase().includes(targetLabel)) {
+        labelEndNodeIndex = i;
+        break;
+      }
+    }
+
+    if (labelEndNodeIndex !== -1) {
+      const labelNode = tNodes[labelEndNodeIndex];
+      const currentLabelText = labelNode.textContent || "";
+      const lowerLabelText = currentLabelText.toLowerCase();
+      const idxInNode = lowerLabelText.lastIndexOf(targetLabel[targetLabel.length - 1]);
+
+      // If the label ends mid-node (e.g. "Site:______"), trim trailing underscores/spaces on that node
+      if (idxInNode !== -1 && idxInNode < currentLabelText.length - 1) {
+        const prefix = currentLabelText.slice(0, idxInNode + 1);
+        const suffix = currentLabelText.slice(idxInNode + 1);
+        if (/^[_\s]+$/.test(suffix)) {
+          labelNode.textContent = prefix;
+          labelNode.setAttribute("xml:space", "preserve");
+        }
+      }
+
+      const nextNode = tNodes[labelEndNodeIndex + 1];
+      if (nextNode) {
+        nextNode.textContent = valueText;
+        nextNode.setAttribute("xml:space", "preserve");
+        for (let j = labelEndNodeIndex + 2; j < tNodes.length; j++) {
+          tNodes[j].textContent = "";
+        }
+      } else {
+        const r = xmlDoc.createElementNS(nsW, "w:r");
+        const t = xmlDoc.createElementNS(nsW, "w:t");
+        t.textContent = valueText;
+        t.setAttribute("xml:space", "preserve");
+        r.appendChild(t);
+        pNode.appendChild(r);
+      }
+    } else if (tNodes.length > 1) {
       tNodes[1].textContent = valueText;
       tNodes[1].setAttribute("xml:space", "preserve");
       for (let i = 2; i < tNodes.length; i++) {
         tNodes[i].textContent = "";
       }
-    } else if (tNodes.length === 1) {
-      tNodes[0].textContent = valueText;
-      tNodes[0].setAttribute("xml:space", "preserve");
     }
   };
 
@@ -844,17 +888,17 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           for (let tn of tNodes) pStr += tn.textContent;
 
           if (pStr.includes("Site:")) {
-            updateParagraphValue(p, ` ${inspectionData.site || ''}`);
+            setValueAfterLabel(p, "Site:", ` ${inspectionData.site || ''}`, xmlDoc);
           } else if (pStr.includes("Week Ending:")) {
-            updateParagraphValue(p, ` ${inspectionData.weekEnding || ''}      Time: ${inspectionData.time || ''}`);
+            setValueAfterLabel(p, "Week Ending:", ` ${inspectionData.weekEnding || ''}      Time: ${inspectionData.time || ''}`, xmlDoc);
           } else if (pStr.includes("Inspected By:")) {
-            updateParagraphValue(p, ` ${inspectionData.inspectedBy || ''}`);
+            setValueAfterLabel(p, "Inspected By:", ` ${inspectionData.inspectedBy || ''}`, xmlDoc);
           } else if (pStr.includes("Signed:")) {
             const formattedDate = formatDateShort(inspectionData.dateSigned || inspectionData.weekEnding);
             if (inspectionData.signature) {
               insertSignatureWithParagraph(p, inspectionData.signature, formattedDate, zip, xmlDoc);
             } else {
-              updateParagraphValue(p, ` ________________      Dated: ${formattedDate}`);
+              setValueAfterLabel(p, "Signed:", ` ________________      Dated: ${formattedDate}`, xmlDoc);
             }
           }
         }
@@ -909,15 +953,16 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const cleanPStr = pStr.toLowerCase().trim();
 
       if (pStr.includes("Date and Time:")) {
-        updateParagraphValue(p, ` ${toolboxData.date || ''} ${toolboxData.time || ''}    Location: ${toolboxData.location || ''}`);
+        setValueAfterLabel(p, "Date and Time:", ` ${toolboxData.date || ''} ${toolboxData.time || ''}    Location: ${toolboxData.location || ''}`, xmlDoc);
       } else if (pStr.includes("Meeting Closed:")) {
-        updateParagraphValue(p, ` ${toolboxData.time || ''}    Next Meeting: Next week`);
+        setValueAfterLabel(p, "Meeting Closed:", ` ${toolboxData.time || ''}    Next Meeting: Next week`, xmlDoc);
       } else if (pStr.includes("Signed – Management:") || pStr.includes("Signed - Management:")) {
+        const labelMatch = pStr.includes("Signed – Management:") ? "Signed – Management:" : "Signed - Management:";
         if (toolboxData.managementSignature) {
           const dateVal = formatDateShort(toolboxData.managementDate || toolboxData.date);
-          updateParagraphValue(p, ` Signed (${dateVal})    Dated: ${dateVal}`);
+          setValueAfterLabel(p, labelMatch, ` Signed (${dateVal})    Dated: ${dateVal}`, xmlDoc);
         } else {
-          updateParagraphValue(p, ` ________________    Dated: ____________`);
+          setValueAfterLabel(p, labelMatch, ` ________________    Dated: ____________`, xmlDoc);
         }
       } else if (cleanPStr.includes("discussion about task planning and weekly goals") && toolboxData.taskPlanningDiscussion) {
         const targetP = paragraphs[i + 1];
