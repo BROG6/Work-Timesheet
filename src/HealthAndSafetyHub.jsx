@@ -4,6 +4,7 @@ import { db } from './firebaseConfig';
 import { collection, doc, setDoc, serverTimestamp, getDocs, getDoc } from 'firebase/firestore';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
+import { Capacitor } from '@capacitor/core';
 import PZip from 'pizzip';
 import SignaturePadModal from './components/SignaturePadModal';
 import sjrLogo from './assets/logo.jpg';
@@ -150,6 +151,18 @@ function WorkerAutoCompleteInput({ value, onChange, registeredWorkers }) {
   );
 }
 
+const INSPECTION_TYPE = 'Site Safety Inspection Report';
+const TOOLBOX_TYPE = 'H&S and Tool Box Meeting Worksheet';
+
+const sanitizeSlug = (val) =>
+  (val || '').trim().replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
+
+const buildInspectionDocId = (site, weekEnding) =>
+  `inspection_${sanitizeSlug(site)}_${weekEnding}`;
+
+const buildToolboxDocId = (location, date) =>
+  `toolbox_${sanitizeSlug(location)}_${date}`;
+
 export default function HealthAndSafetyHub({ userId, userName }) {
   const [hsSubView, setHsSubView] = useState('inspection');
   const [loading, setLoading] = useState(false);
@@ -198,7 +211,13 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       snapshot.forEach(docSnap => {
         const docId = docSnap.id;
         const docData = docSnap.data();
-        reports.push({ id: docId, ...docData });
+        const inferredType =
+          docData.type ||
+          (docId.startsWith('toolbox_') || Array.isArray(docData.attendees)
+            ? TOOLBOX_TYPE
+            : INSPECTION_TYPE);
+
+        reports.push({ id: docId, ...docData, type: inferredType });
         if (docData.site || docData.location) {
           sitesSet.add((docData.site || docData.location).trim());
         }
@@ -242,6 +261,11 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
     fetchWorkers();
   }, [userName]);
+
+  const handleSwitchSubView = (nextView) => {
+    setHsSubView(nextView);
+    setSelectedReportId('');
+  };
 
   const handleShiftWeek = (direction) => {
     const d = new Date(currentWeek);
@@ -420,9 +444,11 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     managementDate: currentWeek
   });
 
+  const targetFormType = hsSubView === 'inspection' ? INSPECTION_TYPE : TOOLBOX_TYPE;
+
   const reportsForCurrentWeek = allExistingReports.filter(rep => {
     const repWeek = rep.weekEnding || rep.date;
-    return repWeek === currentWeek;
+    return repWeek === currentWeek && rep.type === targetFormType;
   });
 
   const handleSelectReportById = (reportId) => {
@@ -430,39 +456,37 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     if (!reportId) return;
 
     const found = allExistingReports.find(r => r.id === reportId);
-    if (found) {
-      if (found.type === 'Site Safety Inspection Report' || found.sections) {
-        setHsSubView('inspection');
-        setInspectionData({
-          site: found.site || '',
-          weekEnding: found.weekEnding || currentWeek,
-          time: found.time || getCurrentTimeString(),
-          inspectedBy: found.inspectedBy || found.userName || userName || '',
-          signature: found.signature || '',
-          dateSigned: found.dateSigned || currentWeek,
-          sections: found.sections || defaultInspectionSections
-        });
-      } else {
-        setHsSubView('toolbox');
-        setToolboxData({
-          date: found.date || currentWeek,
-          time: found.time || getCurrentTimeString(),
-          location: found.location || '',
-          previousActions: found.previousActions || toolboxData.previousActions,
-          siteSafetyReview: found.siteSafetyReview || toolboxData.siteSafetyReview,
-          workerTraining: found.workerTraining || toolboxData.workerTraining,
-          eventInvestigations: found.eventInvestigations || toolboxData.eventInvestigations,
-          hazards: found.hazards || toolboxData.hazards,
-          hazardBoard: found.hazardBoard || toolboxData.hazardBoard,
-          plantEquipment: found.plantEquipment || toolboxData.plantEquipment,
-          taskPlanning: found.taskPlanning || toolboxData.taskPlanning,
-          taskPlanningDiscussion: found.taskPlanningDiscussion || '',
-          operationalIssues: found.operationalIssues || '',
-          attendees: found.attendees || toolboxData.attendees,
-          managementSignature: found.managementSignature || '',
-          managementDate: found.managementDate || found.date || currentWeek
-        });
-      }
+    if (!found) return;
+
+    if (hsSubView === 'inspection' && found.type === INSPECTION_TYPE) {
+      setInspectionData({
+        site: found.site || '',
+        weekEnding: found.weekEnding || currentWeek,
+        time: found.time || getCurrentTimeString(),
+        inspectedBy: found.inspectedBy || found.userName || userName || '',
+        signature: found.signature || '',
+        dateSigned: found.dateSigned || currentWeek,
+        sections: found.sections || defaultInspectionSections
+      });
+    } else if (hsSubView === 'toolbox' && found.type === TOOLBOX_TYPE) {
+      setToolboxData(prev => ({
+        date: found.date || currentWeek,
+        time: found.time || getCurrentTimeString(),
+        location: found.location || '',
+        previousActions: found.previousActions || prev.previousActions,
+        siteSafetyReview: found.siteSafetyReview || prev.siteSafetyReview,
+        workerTraining: found.workerTraining || prev.workerTraining,
+        eventInvestigations: found.eventInvestigations || prev.eventInvestigations,
+        hazards: found.hazards || prev.hazards,
+        hazardBoard: found.hazardBoard || prev.hazardBoard,
+        plantEquipment: found.plantEquipment || prev.plantEquipment,
+        taskPlanning: found.taskPlanning || prev.taskPlanning,
+        taskPlanningDiscussion: found.taskPlanningDiscussion || '',
+        operationalIssues: found.operationalIssues || '',
+        attendees: found.attendees || prev.attendees,
+        managementSignature: found.managementSignature || '',
+        managementDate: found.managementDate || found.date || currentWeek
+      }));
     }
   };
 
@@ -506,7 +530,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         managementDate: currentWeek
       });
     }
-    setStatusMessage({ type: 'success', text: `Started a fresh form for week ending ${currentWeek}.` });
+    setStatusMessage({ type: 'success', text: `Started a fresh ${targetFormType} for ${currentWeek}.` });
     setTimeout(() => setStatusMessage(null), 3000);
   };
 
@@ -514,8 +538,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     setInspectionData(prev => ({ ...prev, site: newSite, weekEnding: newWeek }));
     if (!newSite || !newSite.trim() || !newWeek) return;
 
-    const cleanSite = newSite.trim().replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
-    const docId = `inspection_${cleanSite}_${newWeek}`;
+    const docId = buildInspectionDocId(newSite, newWeek);
 
     try {
       const docSnap = await getDoc(doc(db, 'health_safety', docId));
@@ -527,11 +550,38 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           ...found,
           inspectedBy: found.inspectedBy || found.userName || prev.inspectedBy
         }));
-        setStatusMessage({ type: 'success', text: `Loaded existing live form for ${newSite} (${newWeek}).` });
+        setStatusMessage({ type: 'success', text: `Loaded existing inspection for ${newSite} (${newWeek}).` });
         setTimeout(() => setStatusMessage(null), 4000);
+      } else {
+        setSelectedReportId('');
       }
     } catch (err) {
-      console.warn("Error checking existing collaboration doc:", err);
+      console.warn("Error checking existing inspection doc:", err);
+    }
+  };
+
+  const handleToolboxLocationOrDateChange = async (newLoc, newDate) => {
+    setToolboxData(prev => ({ ...prev, location: newLoc, date: newDate }));
+    if (!newLoc || !newLoc.trim() || !newDate) return;
+
+    const docId = buildToolboxDocId(newLoc, newDate);
+
+    try {
+      const docSnap = await getDoc(doc(db, 'health_safety', docId));
+      if (docSnap.exists()) {
+        const found = docSnap.data();
+        setSelectedReportId(docId);
+        setToolboxData(prev => ({
+          ...prev,
+          ...found
+        }));
+        setStatusMessage({ type: 'success', text: `Loaded existing toolbox meeting for ${newLoc} (${newDate}).` });
+        setTimeout(() => setStatusMessage(null), 4000);
+      } else {
+        setSelectedReportId('');
+      }
+    } catch (err) {
+      console.warn("Error checking existing toolbox doc:", err);
     }
   };
 
@@ -752,7 +802,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   }
 
-  // Helper to safely update paragraph text while keeping run-level color styling intact
   const updateParagraphValue = (pNode, valueText) => {
     const tNodes = pNode.getElementsByTagName("w:t");
     if (tNodes.length > 1) {
@@ -1005,7 +1054,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const inspectionFileName = `Site Safety Inspection - ${siteNameClean} (${inspectionData.weekEnding}).docx`;
       filesToShare.push(await writeBufferToCache(inspectionUint8, inspectionFileName));
 
-      const toolboxDocId = `toolbox_${siteName.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase()}_${inspectionData.weekEnding}`;
+      const toolboxDocId = buildToolboxDocId(siteName, inspectionData.weekEnding);
       const toolboxSnap = await getDoc(doc(db, 'health_safety', toolboxDocId));
 
       let toolboxIncluded = false;
@@ -1070,7 +1119,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const toolboxFileName = `Toolbox Meeting - ${locNameClean} (${toolboxData.date}).docx`;
       filesToShare.push(await writeBufferToCache(toolboxUint8, toolboxFileName));
 
-      const inspectionDocId = `inspection_${locName.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase()}_${toolboxData.date}`;
+      const inspectionDocId = buildInspectionDocId(locName, toolboxData.date);
       const inspectionSnap = await getDoc(doc(db, 'health_safety', inspectionDocId));
 
       let inspectionIncluded = false;
@@ -1162,24 +1211,22 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
     setLoading(true);
     try {
-      const cleanSite = siteVal.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
-      const docId = selectedReportId || `inspection_${cleanSite}_${inspectionData.weekEnding}`;
+      const docId = buildInspectionDocId(siteVal, inspectionData.weekEnding);
 
       const payload = {
         userId,
         userName,
+        ...inspectionData,
         site: siteVal,
-        weekEnding: inspectionData.weekEnding,
-        type: 'Site Safety Inspection Report',
-        createdAt: serverTimestamp(),
-        ...inspectionData
+        type: INSPECTION_TYPE,
+        updatedAt: serverTimestamp()
       };
 
       await setDoc(doc(db, 'health_safety', docId), payload, { merge: true });
 
       setSelectedReportId(docId);
       await fetchAllReports();
-      setStatusMessage({ type: 'success', text: "Site Safety Inspection Report saved and synced for collaboration!" });
+      setStatusMessage({ type: 'success', text: "Site Safety Inspection Report saved separately!" });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
       console.error("Error saving inspection:", err);
@@ -1199,24 +1246,22 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
     setLoading(true);
     try {
-      const cleanLoc = locVal.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
-      const docId = selectedReportId || `toolbox_${cleanLoc}_${toolboxData.date}`;
+      const docId = buildToolboxDocId(locVal, toolboxData.date);
 
       const payload = {
         userId,
         userName,
+        ...toolboxData,
         location: locVal,
-        date: toolboxData.date,
-        type: 'H&S and Tool Box Meeting Worksheet',
-        createdAt: serverTimestamp(),
-        ...toolboxData
+        type: TOOLBOX_TYPE,
+        updatedAt: serverTimestamp()
       };
 
       await setDoc(doc(db, 'health_safety', docId), payload, { merge: true });
 
       setSelectedReportId(docId);
       await fetchAllReports();
-      setStatusMessage({ type: 'success', text: "Toolbox Meeting Worksheet saved and synced for collaboration!" });
+      setStatusMessage({ type: 'success', text: "Toolbox Meeting Worksheet saved separately!" });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
       console.error("Error saving toolbox meeting:", err);
@@ -1231,7 +1276,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       <div className="flex bg-slate-200 p-1 rounded-xl shadow-inner gap-1">
         <button
           type="button"
-          onClick={() => setHsSubView('inspection')}
+          onClick={() => handleSwitchSubView('inspection')}
           className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
             hsSubView === 'inspection' ? 'bg-slate-900 text-white shadow' : 'text-slate-700 hover:text-slate-900'
           }`}
@@ -1240,7 +1285,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         </button>
         <button
           type="button"
-          onClick={() => setHsSubView('toolbox')}
+          onClick={() => handleSwitchSubView('toolbox')}
           className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
             hsSubView === 'toolbox' ? 'bg-slate-900 text-white shadow' : 'text-slate-700 hover:text-slate-900'
           }`}
@@ -1283,17 +1328,23 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="w-full sm:w-auto flex-1">
             <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">
-              Sites with forms entered for this week ({reportsForCurrentWeek.length})
+              {hsSubView === 'inspection'
+                ? `Submitted Inspections for this week (${reportsForCurrentWeek.length})`
+                : `Submitted Toolbox Meetings for this week (${reportsForCurrentWeek.length})`}
             </label>
             <select
               value={selectedReportId}
               onChange={(e) => handleSelectReportById(e.target.value)}
               className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-semibold text-slate-800"
             >
-              <option value="">-- Choose site for this week or click Add Site --</option>
+              <option value="">
+                {hsSubView === 'inspection'
+                  ? '-- Choose submitted inspection or click Add Site --'
+                  : '-- Choose submitted toolbox meeting or click Add Site --'}
+              </option>
               {reportsForCurrentWeek.map(rep => (
                 <option key={rep.id} value={rep.id}>
-                  {rep.type} - {rep.site || rep.location || 'Unknown Site'}
+                  {rep.site || rep.location || 'Unknown Site'}
                 </option>
               ))}
             </select>
@@ -1530,7 +1581,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                   onChange={(e) => {
                     const newDt = e.target.value;
                     setCurrentWeek(newDt);
-                    setToolboxData({ ...toolboxData, date: newDt });
+                    handleToolboxLocationOrDateChange(toolboxData.location, newDt);
                   }}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800"
                   required
@@ -1549,7 +1600,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Location / Site</label>
                 <SiteAutoCompleteInput
                   value={toolboxData.location}
-                  onChange={(val) => setToolboxData({ ...toolboxData, location: val })}
+                  onChange={(val) => handleToolboxLocationOrDateChange(val, toolboxData.date)}
                   existingSites={savedSites}
                 />
               </div>
