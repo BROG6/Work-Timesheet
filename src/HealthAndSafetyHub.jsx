@@ -252,7 +252,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     d.setDate(d.getDate() + (direction * 7));
     const newWeekStr = d.toISOString().split('T')[0];
     setCurrentWeek(newWeekStr);
-    
+
     if (hsSubView === 'inspection') {
       setInspectionData(prev => ({ ...prev, weekEnding: newWeekStr }));
     } else {
@@ -635,6 +635,25 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   }
 
+  function setParagraphText(pNode, text, xmlDoc) {
+    const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    const tNodes = pNode.getElementsByTagNameNS(nsW, "t");
+    if (tNodes.length > 0) {
+      tNodes[0].textContent = text;
+      tNodes[0].setAttribute("xml:space", "preserve");
+      for (let i = 1; i < tNodes.length; i++) {
+        tNodes[i].textContent = "";
+      }
+    } else {
+      const r = xmlDoc.createElementNS(nsW, "w:r");
+      const t = xmlDoc.createElementNS(nsW, "w:t");
+      t.textContent = text;
+      t.setAttribute("xml:space", "preserve");
+      r.appendChild(t);
+      pNode.appendChild(r);
+    }
+  }
+
   function getCellText(cell) {
     const tNodes = cell.getElementsByTagName("w:t");
     let str = "";
@@ -769,7 +788,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         if (tNodes.length > 0) {
           let pStr = "";
           for (let tn of tNodes) pStr += tn.textContent;
-          
+
           if (pStr.includes("Site:")) {
             updateParagraphValue(p, ` ${inspectionData.site || ''}`);
           } else if (pStr.includes("Week Ending:")) {
@@ -829,45 +848,32 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     for (let i = 0; i < paragraphs.length; i++) {
       const p = paragraphs[i];
       const tNodes = p.getElementsByTagName("w:t");
-      if (tNodes.length > 0) {
-        let pStr = "";
-        for (let tn of tNodes) pStr += tn.textContent;
+      if (tNodes.length === 0) continue;
 
-        if (pStr.includes("Date and Time:")) {
-          updateParagraphValue(p, ` ${toolboxData.date || ''} ${toolboxData.time || ''}    Location: ${toolboxData.location || ''}`);
-        } else if (pStr.includes("Meeting Closed:")) {
-          updateParagraphValue(p, ` ${toolboxData.time || ''}    Next Meeting: Next week`);
-        } else if (pStr.includes("Signed – Management:")) {
-          if (toolboxData.managementSignature) {
-            const dateVal = formatDateShort(toolboxData.managementDate || toolboxData.date);
-            updateParagraphValue(p, ` Signed (${dateVal})    Dated: ${dateVal}`);
-          } else {
-            updateParagraphValue(p, ` ________________    Dated: ____________`);
-          }
-        }
-      }
-    }
+      let pStr = "";
+      for (let tn of tNodes) pStr += tn.textContent;
+      const cleanPStr = pStr.toLowerCase().trim();
 
-    // Explicitly update discussion text blocks across table rows and structural cells
-    const allCells = xmlDoc.getElementsByTagName("w:tc");
-    for (let cell of allCells) {
-      const cellText = getCellText(cell).toLowerCase();
-      if (cellText.includes("discussion about task planning") && toolboxData.taskPlanningDiscussion) {
-        let parentRow = cell.parentNode;
-        while (parentRow && parentRow.nodeName !== 'w:tr') parentRow = parentRow.parentNode;
-        const nextRow = parentRow ? parentRow.nextElementSibling : null;
-        if (nextRow) {
-          const targetCell = nextRow.getElementsByTagName("w:tc")[0];
-          if (targetCell) setCellText(targetCell, toolboxData.taskPlanningDiscussion, xmlDoc);
+      if (pStr.includes("Date and Time:")) {
+        updateParagraphValue(p, ` ${toolboxData.date || ''} ${toolboxData.time || ''}    Location: ${toolboxData.location || ''}`);
+      } else if (pStr.includes("Meeting Closed:")) {
+        updateParagraphValue(p, ` ${toolboxData.time || ''}    Next Meeting: Next week`);
+      } else if (pStr.includes("Signed – Management:") || pStr.includes("Signed - Management:")) {
+        if (toolboxData.managementSignature) {
+          const dateVal = formatDateShort(toolboxData.managementDate || toolboxData.date);
+          updateParagraphValue(p, ` Signed (${dateVal})    Dated: ${dateVal}`);
+        } else {
+          updateParagraphValue(p, ` ________________    Dated: ____________`);
         }
-      }
-      if (cellText.includes("operational issues") && toolboxData.operationalIssues) {
-        let parentRow = cell.parentNode;
-        while (parentRow && parentRow.nodeName !== 'w:tr') parentRow = parentRow.parentNode;
-        const nextRow = parentRow ? parentRow.nextElementSibling : null;
-        if (nextRow) {
-          const targetCell = nextRow.getElementsByTagName("w:tc")[0];
-          if (targetCell) setCellText(targetCell, toolboxData.operationalIssues, xmlDoc);
+      } else if (cleanPStr.includes("discussion about task planning and weekly goals") && toolboxData.taskPlanningDiscussion) {
+        const targetP = paragraphs[i + 1];
+        if (targetP) {
+          setParagraphText(targetP, toolboxData.taskPlanningDiscussion, xmlDoc);
+        }
+      } else if (cleanPStr.includes("operational issues/other business") && toolboxData.operationalIssues) {
+        const targetP = paragraphs[i + 1];
+        if (targetP) {
+          setParagraphText(targetP, toolboxData.operationalIssues, xmlDoc);
         }
       }
     }
@@ -1001,7 +1007,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
       const toolboxDocId = `toolbox_${siteName.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase()}_${inspectionData.weekEnding}`;
       const toolboxSnap = await getDoc(doc(db, 'health_safety', toolboxDocId));
-      
+
       let toolboxIncluded = false;
       if (toolboxSnap.exists()) {
         const tData = toolboxSnap.data();
@@ -1034,9 +1040,9 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       }
 
       await shareOrDownloadFiles(filesToShare);
-      setStatusMessage({ 
-        type: 'success', 
-        text: toolboxIncluded ? `Exported Inspection Report & Toolbox Meeting simultaneously!` : `Successfully generated inspection report!` 
+      setStatusMessage({
+        type: 'success',
+        text: toolboxIncluded ? `Exported Inspection Report & Toolbox Meeting simultaneously!` : `Successfully generated inspection report!`
       });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
@@ -1090,9 +1096,9 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       }
 
       await shareOrDownloadFiles(filesToShare);
-      setStatusMessage({ 
-        type: 'success', 
-        text: inspectionIncluded ? `Exported Toolbox Meeting & Inspection Report simultaneously!` : `Successfully generated toolbox meeting!` 
+      setStatusMessage({
+        type: 'success',
+        text: inspectionIncluded ? `Exported Toolbox Meeting & Inspection Report simultaneously!` : `Successfully generated toolbox meeting!`
       });
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err) {
@@ -1158,7 +1164,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     try {
       const cleanSite = siteVal.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
       const docId = selectedReportId || `inspection_${cleanSite}_${inspectionData.weekEnding}`;
-      
+
       const payload = {
         userId,
         userName,
