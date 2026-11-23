@@ -675,12 +675,26 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }));
   };
 
+  function cleanRunFormatting(rNode) {
+    if (!rNode || !rNode.getElementsByTagName) return;
+    const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    const rPrList = rNode.getElementsByTagNameNS(nsW, "rPr");
+    for (let i = 0; i < rPrList.length; i++) {
+      const rPr = rPrList[i];
+      ['highlight', 'shd', 'color'].forEach((tag) => {
+        const badNodes = Array.from(rPr.getElementsByTagNameNS(nsW, tag));
+        badNodes.forEach((bn) => rPr.removeChild(bn));
+      });
+    }
+  }
+
   function setCellText(cell, text, xmlDoc) {
     const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     const tNodes = cell.getElementsByTagNameNS(ns, "t");
     if (tNodes.length > 0) {
       tNodes[0].textContent = text;
       tNodes[0].setAttribute("xml:space", "preserve");
+      if (tNodes[0].parentNode) cleanRunFormatting(tNodes[0].parentNode);
       for (let i = 1; i < tNodes.length; i++) {
         tNodes[i].textContent = "";
       }
@@ -706,6 +720,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     if (tNodes.length > 0) {
       tNodes[0].textContent = text;
       tNodes[0].setAttribute("xml:space", "preserve");
+      if (tNodes[0].parentNode) cleanRunFormatting(tNodes[0].parentNode);
       for (let i = 1; i < tNodes.length; i++) {
         tNodes[i].textContent = "";
       }
@@ -853,6 +868,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       if (nextNode) {
         nextNode.textContent = valueText;
         nextNode.setAttribute("xml:space", "preserve");
+        if (nextNode.parentNode) cleanRunFormatting(nextNode.parentNode);
         for (let j = labelEndNodeIndex + 2; j < tNodes.length; j++) {
           tNodes[j].textContent = "";
         }
@@ -867,6 +883,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     } else if (tNodes.length > 1) {
       tNodes[1].textContent = valueText;
       tNodes[1].setAttribute("xml:space", "preserve");
+      if (tNodes[1].parentNode) cleanRunFormatting(tNodes[1].parentNode);
       for (let i = 2; i < tNodes.length; i++) {
         tNodes[i].textContent = "";
       }
@@ -967,6 +984,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           if (dtIdx !== -1 && dtIdx + 1 < locIdx) {
             tNodes[dtIdx + 1].textContent = ` ${toolboxData.date || ''} ${toolboxData.time || ''}  `;
             tNodes[dtIdx + 1].setAttribute("xml:space", "preserve");
+            if (tNodes[dtIdx + 1].parentNode) cleanRunFormatting(tNodes[dtIdx + 1].parentNode);
             for (let k = dtIdx + 2; k < locIdx; k++) {
               tNodes[k].textContent = "";
             }
@@ -981,6 +999,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           if (tNodes[locIdx + 1]) {
             tNodes[locIdx + 1].textContent = ` ${toolboxData.location || ''}`;
             tNodes[locIdx + 1].setAttribute("xml:space", "preserve");
+            if (tNodes[locIdx + 1].parentNode) cleanRunFormatting(tNodes[locIdx + 1].parentNode);
             for (let m = locIdx + 2; m < tNodes.length; m++) {
               tNodes[m].textContent = "";
             }
