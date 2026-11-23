@@ -747,6 +747,15 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     return str.replace(/\s+/g, ' ').trim();
   }
 
+  function cleanUnderscoreRuns(xmlDoc) {
+    const tNodes = xmlDoc.getElementsByTagName("w:t");
+    for (let tn of tNodes) {
+      if (tn.textContent && /_{3,}/.test(tn.textContent)) {
+        tn.textContent = tn.textContent.replace(/_{3,}/g, "");
+      }
+    }
+  }
+
   function insertSignatureWithParagraph(pNodeContainer, dataUrl, dateStr, zip, xmlDoc) {
     if (!dataUrl || !dataUrl.startsWith("data:image")) return;
 
@@ -1186,6 +1195,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       }
     }
 
+    cleanUnderscoreRuns(xmlDoc);
     const serializer = new XMLSerializer();
     zip.file("word/document.xml", serializer.serializeToString(xmlDoc));
     return zip.generate({ type: 'uint8array' });
@@ -1396,6 +1406,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       }
     }
 
+    cleanUnderscoreRuns(xmlDoc);
     const serializer = new XMLSerializer();
     zip.file("word/document.xml", serializer.serializeToString(xmlDoc));
     return zip.generate({ type: 'uint8array' });
