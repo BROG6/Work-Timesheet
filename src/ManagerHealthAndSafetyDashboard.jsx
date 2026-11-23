@@ -388,6 +388,74 @@ export default function ManagerHealthAndSafetyDashboard() {
     });
   };
 
+  const removeHorizontalLineShapesNearNode = (pNode) => {
+    if (!pNode || !pNode.parentNode) return;
+
+    const candidates = [];
+    const collectLineNodes = (container) => {
+      if (!container || !container.getElementsByTagName) return;
+      ["v:line", "line", "w:pict", "pict"].forEach((tag) => {
+        Array.from(container.getElementsByTagName(tag)).forEach((el) => {
+          const isPicture =
+            el.getElementsByTagName("v:imagedata").length > 0 ||
+            el.getElementsByTagName("imagedata").length > 0 ||
+            el.getElementsByTagName("a:blip").length > 0 ||
+            el.getElementsByTagName("blip").length > 0;
+          if (!isPicture) {
+            candidates.push(el);
+          }
+        });
+      });
+    };
+
+    collectLineNodes(pNode);
+
+    let sibling = pNode.nextSibling;
+    let steps = 0;
+    while (sibling && steps < 4) {
+      if (sibling.nodeType === 1) {
+        const tagName = (sibling.nodeName || "").toLowerCase();
+        if (tagName.endsWith("tbl")) break;
+        const sibText = getCellText(sibling).toLowerCase();
+        if (sibText.includes("agenda items")) break;
+
+        collectLineNodes(sibling);
+
+        const hasImage =
+          sibling.getElementsByTagName("a:blip").length > 0 ||
+          sibling.getElementsByTagName("blip").length > 0 ||
+          sibling.getElementsByTagName("v:imagedata").length > 0 ||
+          sibling.getElementsByTagName("imagedata").length > 0;
+
+        if (!hasImage && (tagName.endsWith(":p") || tagName === "p")) {
+          const hasVmlOrDrawing =
+            sibling.getElementsByTagName("w:drawing").length > 0 ||
+            sibling.getElementsByTagName("drawing").length > 0 ||
+            sibling.getElementsByTagName("w:pict").length > 0 ||
+            sibling.getElementsByTagName("pict").length > 0 ||
+            sibling.getElementsByTagName("v:line").length > 0 ||
+            sibling.getElementsByTagName("line").length > 0;
+
+          if (hasVmlOrDrawing && sibText === "") {
+            const toRemove = sibling;
+            sibling = sibling.nextSibling;
+            toRemove.parentNode.removeChild(toRemove);
+            steps++;
+            continue;
+          }
+        }
+      }
+      sibling = sibling.nextSibling;
+      steps++;
+    }
+
+    candidates.forEach((el) => {
+      if (el && el.parentNode) {
+        el.parentNode.removeChild(el);
+      }
+    });
+  };
+
   const flattenSpacerParagraph = (pNode, xmlDoc) => {
     if (!pNode) return;
     const hasDrawing = pNode.getElementsByTagName("w:drawing").length > 0;
@@ -624,6 +692,7 @@ export default function ManagerHealthAndSafetyDashboard() {
               "    "
             );
             stripBottomBordersFromNode(p);
+            removeHorizontalLineShapesNearNode(p);
             if (paragraphs[i + 1]) {
               flattenSpacerParagraph(paragraphs[i + 1], xmlDoc);
             }
