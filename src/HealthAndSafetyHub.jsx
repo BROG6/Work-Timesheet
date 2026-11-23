@@ -838,50 +838,97 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   }
 
-  const findExactMarkerNodeIndex = (tNodes, markerText) => {
-    const target = markerText.toLowerCase();
+  const forceBlackTextOnRun = (runNode, xmlDoc) => {
+    if (!runNode || runNode.nodeName !== "w:r") return;
+    const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    let rPr = runNode.getElementsByTagNameNS(nsW, "rPr")[0] || runNode.getElementsByTagName("w:rPr")[0];
+    if (!rPr) {
+      rPr = xmlDoc.createElementNS(nsW, "w:rPr");
+      runNode.insertBefore(rPr, runNode.firstChild);
+    }
+
+    ["highlight", "shd", "color"].forEach((tag) => {
+      const nsEls = Array.from(rPr.getElementsByTagNameNS(nsW, tag));
+      const plainEls = Array.from(rPr.getElementsByTagName(tag));
+      [...nsEls, ...plainEls].forEach((el) => {
+        if (el.parentNode) el.parentNode.removeChild(el);
+      });
+    });
+
+    const colorEl = xmlDoc.createElementNS(nsW, "w:color");
+    colorEl.setAttribute("w:val", "000000");
+    rPr.appendChild(colorEl);
+  };
+
+  const findMarkerEndNodeIndex = (tNodes, markerText) => {
+    const target = markerText.toLowerCase().replace(/\s+/g, " ").trim();
+    if (!target) return -1;
+
+    let combined = "";
+    const ranges = [];
+
     for (let i = 0; i < tNodes.length; i++) {
-      const txt = (tNodes[i].textContent || "").toLowerCase();
-      if (txt.includes(target)) {
-        return i;
+      const raw = (tNodes[i].textContent || "").toLowerCase();
+      const start = combined.length;
+      combined += raw;
+      ranges.push({ index: i, start, end: combined.length });
+    }
+
+    const normalizedCombined = combined.replace(/\s+/g, " ");
+    const matchPos = normalizedCombined.indexOf(target);
+    if (matchPos !== -1) {
+      const matchEnd = matchPos + target.length;
+      for (let r of ranges) {
+        if (matchEnd <= r.end + 2) {
+          return r.index;
+        }
+      }
+      return ranges[ranges.length - 1].index;
+    }
+
+    const corePhrase = target.replace(/[:–-]/g, "").trim();
+    if (corePhrase.length >= 4) {
+      const fallbackPos = normalizedCombined.indexOf(corePhrase);
+      if (fallbackPos !== -1) {
+        const fallbackEnd = fallbackPos + corePhrase.length;
+        for (let r of ranges) {
+          if (fallbackEnd <= r.end + 3) {
+            return r.index;
+          }
+        }
       }
     }
+
     return -1;
   };
 
-  const stripTrailingPlaceholdersOnNode = (node) => {
-    if (!node) return;
-    const raw = node.textContent || "";
-    const trimmedSuffix = raw.replace(/[_\s]+$/, "");
-    if (trimmedSuffix !== raw) {
-      node.textContent = trimmedSuffix;
-      node.setAttribute("xml:space", "preserve");
-    }
-  };
-
-  // Writes value into the first placeholder-only run after markerIndex if present,
-  // or inserts a new <w:r> right after markerIndex's <w:r> without deleting text/formatting.
   const insertValueAfterMarkerNode = (pNode, tNodes, markerIndex, valueText, xmlDoc) => {
     const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    const cleanValue = valueText.trim();
+    if (!cleanValue) return;
+
     const anchorRun = tNodes[markerIndex]?.parentNode;
 
     for (let i = markerIndex + 1; i < tNodes.length; i++) {
       const val = tNodes[i].textContent || "";
-      if (/^[_\s]+$/.test(val)) {
-        tNodes[i].textContent = valueText;
+      const trimmed = val.trim();
+      if (trimmed === "" || /^[_\s–-]+$/.test(trimmed)) {
+        tNodes[i].textContent = ` ${cleanValue}`;
         tNodes[i].setAttribute("xml:space", "preserve");
+        forceBlackTextOnRun(tNodes[i].parentNode, xmlDoc);
         return;
       }
-      if (val.trim() !== "") {
+      if (/[a-zA-Z0-9]/.test(trimmed) && !/^[_\s–-]+$/.test(trimmed)) {
         break;
       }
     }
 
     const r = xmlDoc.createElementNS(nsW, "w:r");
     const t = xmlDoc.createElementNS(nsW, "w:t");
-    t.textContent = valueText;
+    t.textContent = ` ${cleanValue}`;
     t.setAttribute("xml:space", "preserve");
     r.appendChild(t);
+    forceBlackTextOnRun(r, xmlDoc);
 
     if (anchorRun && anchorRun.parentNode === pNode) {
       pNode.insertBefore(r, anchorRun.nextSibling);
@@ -894,9 +941,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     const tNodes = Array.from(pNode.getElementsByTagName("w:t"));
     if (tNodes.length === 0) return;
 
-    const markerIdx = findExactMarkerNodeIndex(tNodes, markerText);
+    const markerIdx = findMarkerEndNodeIndex(tNodes, markerText);
     if (markerIdx !== -1) {
-      stripTrailingPlaceholdersOnNode(tNodes[markerIdx]);
       insertValueAfterMarkerNode(pNode, tNodes, markerIdx, valueText, xmlDoc);
     }
   };
@@ -905,23 +951,20 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     const tNodes = Array.from(pNode.getElementsByTagName("w:t"));
     if (tNodes.length === 0) return;
 
-    const idx1 = findExactMarkerNodeIndex(tNodes, marker1);
+    const idx1 = findMarkerEndNodeIndex(tNodes, marker1);
     if (idx1 !== -1) {
-      stripTrailingPlaceholdersOnNode(tNodes[idx1]);
       insertValueAfterMarkerNode(pNode, tNodes, idx1, value1, xmlDoc);
     }
 
     if (marker2) {
       const freshTNodes = Array.from(pNode.getElementsByTagName("w:t"));
-      const idx2 = findExactMarkerNodeIndex(freshTNodes, marker2);
+      const idx2 = findMarkerEndNodeIndex(freshTNodes, marker2);
       if (idx2 !== -1) {
-        stripTrailingPlaceholdersOnNode(freshTNodes[idx2]);
         insertValueAfterMarkerNode(pNode, freshTNodes, idx2, value2, xmlDoc);
       }
     }
   };
 
-  // Handles both inline paragraph labels AND table rows where label is in cell 0 and blank is in cell 1
   const fillInspectionHeaderField = (pNode, labelMarker, valueText, xmlDoc) => {
     setValueAfterLabel(pNode, labelMarker, valueText, xmlDoc);
     const parentCell = pNode.parentNode;
@@ -932,7 +975,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         const cellIdx = cells.indexOf(parentCell);
         if (cellIdx !== -1 && cells[cellIdx + 1]) {
           const nextCellText = getCellText(cells[cellIdx + 1]);
-          if (!nextCellText || /^[_\s]+$/.test(nextCellText)) {
+          if (!nextCellText || /^[_\s–-]+$/.test(nextCellText)) {
             setCellText(cells[cellIdx + 1], valueText.trim(), xmlDoc);
           }
         }
@@ -964,20 +1007,20 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         lower.includes("signed:")
       ) {
         if (lower.includes("site:")) {
-          fillInspectionHeaderField(p, "ite:", ` ${inspectionData.site || ''}`, xmlDoc);
+          fillInspectionHeaderField(p, "site:", inspectionData.site || '', xmlDoc);
         }
         if (lower.includes("week ending:")) {
           setTwoValuesInParagraph(
             p,
             "week ending:",
-            ` ${inspectionData.weekEnding || ''}      `,
-            "ime:",
-            ` ${inspectionData.time || ''}`,
+            inspectionData.weekEnding || '',
+            "time:",
+            inspectionData.time || '',
             xmlDoc
           );
         }
         if (lower.includes("inspected by:")) {
-          fillInspectionHeaderField(p, "nspected by:", ` ${inspectionData.inspectedBy || ''}`, xmlDoc);
+          fillInspectionHeaderField(p, "inspected by:", inspectionData.inspectedBy || '', xmlDoc);
         }
         if (lower.includes("signed:")) {
           const formattedDate = formatDateShort(inspectionData.dateSigned || inspectionData.weekEnding);
@@ -987,9 +1030,9 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             setTwoValuesInParagraph(
               p,
               "signed:",
-              ` ________________      `,
+              "________________",
               "dated:",
-              ` ${formattedDate}`,
+              formattedDate,
               xmlDoc
             );
           }
@@ -1045,22 +1088,22 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const cleanPStr = pStr.toLowerCase().trim();
 
       if (cleanPStr.includes("date and time:")) {
-        const dtCombined = ` ${toolboxData.date || ''} ${toolboxData.time || ''}`.trim();
+        const dtCombined = `${toolboxData.date || ''} ${toolboxData.time || ''}`.trim();
         setTwoValuesInParagraph(
           p,
           "date and time:",
-          ` ${dtCombined}    `,
-          "ocation:",
-          ` ${toolboxData.location || ''}`,
+          dtCombined,
+          "location:",
+          toolboxData.location || '',
           xmlDoc
         );
       } else if (cleanPStr.includes("meeting closed:")) {
         setTwoValuesInParagraph(
           p,
           "meeting closed:",
-          ` ${toolboxData.time || ''}    `,
-          "eeting:",
-          " Next week",
+          toolboxData.time || '',
+          "next meeting:",
+          "Next week",
           xmlDoc
         );
       } else if (cleanPStr.includes("signed – management:") || cleanPStr.includes("signed - management:")) {
@@ -1070,18 +1113,18 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           setTwoValuesInParagraph(
             p,
             labelMatch,
-            ` Signed (${dateVal})    `,
+            `Signed (${dateVal})`,
             "dated:",
-            ` ${dateVal}`,
+            dateVal,
             xmlDoc
           );
         } else {
           setTwoValuesInParagraph(
             p,
             labelMatch,
-            ` ________________    `,
+            "________________",
             "dated:",
-            " ____________",
+            "____________",
             xmlDoc
           );
         }
