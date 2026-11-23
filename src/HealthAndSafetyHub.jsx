@@ -860,8 +860,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     rPr.appendChild(colorEl);
   };
 
-  // Finds the <w:t> node index where `markerText` ends when reading across runs in `pNode`.
-  // Strictly requires the full marker phrase (including colon if present) to avoid splitting words.
   const findMarkerEndNodeIndex = (tNodes, markerText) => {
     const target = markerText.toLowerCase().replace(/\s+/g, " ").trim();
     if (!target) return -1;
@@ -955,20 +953,34 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   };
 
-  const collapseEmptyUnderlineParagraph = (pNode, xmlDoc) => {
+  // Keeps the paragraph node intact to preserve page breaks while hiding border/underline & shrinking height
+  const flattenSpacerParagraph = (pNode, xmlDoc) => {
     if (!pNode) return;
     const text = getCellText(pNode).trim();
-    if (text === "" || /^[_\s–-]+$/.test(text)) {
+    const hasDrawing = pNode.getElementsByTagName("w:drawing").length > 0;
+    const hasTable = pNode.getElementsByTagName("w:tbl").length > 0;
+
+    if (!hasDrawing && !hasTable && (text === "" || /^[_\s–—-]+$/.test(text))) {
       const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
       const tNodes = pNode.getElementsByTagName("w:t");
       for (let tn of tNodes) {
         tn.textContent = "";
       }
+
       let pPr = pNode.getElementsByTagNameNS(nsW, "pPr")[0] || pNode.getElementsByTagName("w:pPr")[0];
       if (!pPr) {
         pPr = xmlDoc.createElementNS(nsW, "w:pPr");
         pNode.insertBefore(pPr, pNode.firstChild);
       }
+
+      const pBdrs = [
+        ...Array.from(pPr.getElementsByTagNameNS(nsW, "pBdr")),
+        ...Array.from(pPr.getElementsByTagName("w:pBdr")),
+      ];
+      pBdrs.forEach((bdr) => {
+        if (bdr.parentNode) bdr.parentNode.removeChild(bdr);
+      });
+
       let spacing = pPr.getElementsByTagNameNS(nsW, "spacing")[0] || pPr.getElementsByTagName("w:spacing")[0];
       if (!spacing) {
         spacing = xmlDoc.createElementNS(nsW, "w:spacing");
@@ -978,6 +990,28 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       spacing.setAttribute("w:after", "0");
       spacing.setAttribute("w:line", "20");
       spacing.setAttribute("w:lineRule", "auto");
+
+      const runs = Array.from(pNode.getElementsByTagName("w:r"));
+      runs.forEach((r) => {
+        let rPr = r.getElementsByTagNameNS(nsW, "rPr")[0] || r.getElementsByTagName("w:rPr")[0];
+        if (!rPr) {
+          rPr = xmlDoc.createElementNS(nsW, "w:rPr");
+          r.insertBefore(rPr, r.firstChild);
+        }
+        let sz = rPr.getElementsByTagNameNS(nsW, "sz")[0] || rPr.getElementsByTagName("w:sz")[0];
+        if (!sz) {
+          sz = xmlDoc.createElementNS(nsW, "w:sz");
+          rPr.appendChild(sz);
+        }
+        sz.setAttribute("w:val", "4");
+
+        let szCs = rPr.getElementsByTagNameNS(nsW, "szCs")[0] || rPr.getElementsByTagName("w:szCs")[0];
+        if (!szCs) {
+          szCs = xmlDoc.createElementNS(nsW, "w:szCs");
+          rPr.appendChild(szCs);
+        }
+        szCs.setAttribute("w:val", "4");
+      });
     }
   };
 
@@ -1117,7 +1151,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           "    "
         );
         if (paragraphs[i + 1]) {
-          collapseEmptyUnderlineParagraph(paragraphs[i + 1], xmlDoc);
+          flattenSpacerParagraph(paragraphs[i + 1], xmlDoc);
         }
       } else if (cleanPStr.includes("meeting closed:")) {
         setTwoValuesInParagraph(
