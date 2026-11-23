@@ -283,8 +283,11 @@ export default function ManagerHealthAndSafetyDashboard() {
     for (let i = markerIndex + 1; i < tNodes.length; i++) {
       const val = tNodes[i].textContent || "";
       if (/^[_\s]+$/.test(val)) {
-        tNodes[i].textContent = "";
-      } else {
+        tNodes[i].textContent = valueText;
+        tNodes[i].setAttribute("xml:space", "preserve");
+        return;
+      }
+      if (val.trim() !== "") {
         break;
       }
     }
@@ -329,6 +332,24 @@ export default function ManagerHealthAndSafetyDashboard() {
       if (idx2 !== -1) {
         stripTrailingPlaceholdersOnNode(freshTNodes[idx2]);
         insertValueAfterMarkerNode(pNode, freshTNodes, idx2, value2, xmlDoc);
+      }
+    }
+  };
+
+  const fillInspectionHeaderField = (pNode, labelMarker, valueText, xmlDoc) => {
+    setValueAfterLabel(pNode, labelMarker, valueText, xmlDoc);
+    const parentCell = pNode.parentNode;
+    if (parentCell && parentCell.nodeName === "w:tc") {
+      const parentRow = parentCell.parentNode;
+      if (parentRow && parentRow.nodeName === "w:tr") {
+        const cells = Array.from(parentRow.getElementsByTagName("w:tc"));
+        const cellIdx = cells.indexOf(parentCell);
+        if (cellIdx !== -1 && cells[cellIdx + 1]) {
+          const nextCellText = getCellText(cells[cellIdx + 1]);
+          if (!nextCellText || /^[_\s]+$/.test(nextCellText)) {
+            setCellText(cells[cellIdx + 1], valueText.trim(), xmlDoc);
+          }
+        }
       }
     }
   };
@@ -400,33 +421,39 @@ export default function ManagerHealthAndSafetyDashboard() {
 
         for (let p of paragraphs) {
           const text = getCellText(p);
-          if (text.includes("Site:") || text.includes("Week Ending:") || text.includes("Inspected By:") || text.includes("Signed:")) {
-            if (text.includes("Site:")) {
-              setValueAfterLabel(p, "Site:", ` ${record.site || record.location || ''}`, xmlDoc);
+          const lower = text.toLowerCase();
+          if (
+            lower.includes("site:") ||
+            lower.includes("week ending:") ||
+            lower.includes("inspected by:") ||
+            lower.includes("signed:")
+          ) {
+            if (lower.includes("site:")) {
+              fillInspectionHeaderField(p, "ite:", ` ${record.site || record.location || ''}`, xmlDoc);
             }
-            if (text.includes("Week Ending:")) {
+            if (lower.includes("week ending:")) {
               setTwoValuesInParagraph(
                 p,
-                "Week Ending:",
+                "week ending:",
                 ` ${record.weekEnding || record.date || ''}      `,
                 "ime:",
                 ` ${record.time || ''}`,
                 xmlDoc
               );
             }
-            if (text.includes("Inspected By:")) {
-              setValueAfterLabel(p, "Inspected By:", ` ${record.inspectedBy || record.userName || ''}`, xmlDoc);
+            if (lower.includes("inspected by:")) {
+              fillInspectionHeaderField(p, "nspected by:", ` ${record.inspectedBy || record.userName || ''}`, xmlDoc);
             }
-            if (text.includes("Signed:")) {
+            if (lower.includes("signed:")) {
               const formattedDate = formatDateShort(record.dateSigned || record.weekEnding || record.date);
               if (record.signature) {
                 insertSignatureWithParagraph(p, record.signature, formattedDate, zip, xmlDoc);
               } else {
                 setTwoValuesInParagraph(
                   p,
-                  "Signed:",
+                  "signed:",
                   ` ________________      `,
-                  "Dated:",
+                  "dated:",
                   ` ${formattedDate}`,
                   xmlDoc
                 );
@@ -479,33 +506,34 @@ export default function ManagerHealthAndSafetyDashboard() {
             for (let tn of tNodes) pStr += tn.textContent;
             const cleanPStr = pStr.toLowerCase().trim();
 
-            if (pStr.includes("Date and Time:")) {
+            if (cleanPStr.includes("date and time:")) {
+              const dtCombined = ` ${record.date || record.weekEnding || ''} ${record.time || ''}`.trim();
               setTwoValuesInParagraph(
                 p,
-                "Date and Time:",
-                ` ${record.date || record.weekEnding || ''} ${record.time || ''}    `,
+                "date and time:",
+                ` ${dtCombined}    `,
                 "ocation:",
                 ` ${record.location || record.site || ''}`,
                 xmlDoc
               );
-            } else if (pStr.includes("Meeting Closed:")) {
+            } else if (cleanPStr.includes("meeting closed:")) {
               setTwoValuesInParagraph(
                 p,
-                "Meeting Closed:",
+                "meeting closed:",
                 ` ${record.time || ''}    `,
                 "eeting:",
                 " Next week",
                 xmlDoc
               );
-            } else if (pStr.includes("Signed – Management:") || pStr.includes("Signed - Management:")) {
-              const labelMatch = pStr.includes("Signed – Management:") ? "Signed – Management:" : "Signed - Management:";
+            } else if (cleanPStr.includes("signed – management:") || cleanPStr.includes("signed - management:")) {
+              const labelMatch = cleanPStr.includes("signed – management:") ? "signed – management:" : "signed - management:";
               if (record.managementSignature) {
                 const dateVal = formatDateShort(record.managementDate || record.date);
                 setTwoValuesInParagraph(
                   p,
                   labelMatch,
                   ` Signed (${dateVal})    `,
-                  "Dated:",
+                  "dated:",
                   ` ${dateVal}`,
                   xmlDoc
                 );
@@ -514,7 +542,7 @@ export default function ManagerHealthAndSafetyDashboard() {
                   p,
                   labelMatch,
                   ` ________________    `,
-                  "Dated:",
+                  "dated:",
                   " ____________",
                   xmlDoc
                 );
