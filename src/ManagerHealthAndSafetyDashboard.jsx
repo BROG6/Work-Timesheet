@@ -1,7 +1,7 @@
 // src/ManagerHealthAndSafetyDashboard.jsx
 import React, { useState, useEffect } from 'react';
 import { db } from './firebaseConfig';
-import { collection, query, orderBy, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
@@ -19,18 +19,25 @@ export default function ManagerHealthAndSafetyDashboard() {
   const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [statusMessage, setStatusMessage] = useState(null);
 
-  // Real-time live listener for submissions
+  // Real-time live listener without dropping docs missing createdAt
   useEffect(() => {
     setLoading(true);
-    const q = query(collection(db, 'health_safety'), orderBy('createdAt', 'desc'));
+    const colRef = collection(db, 'health_safety');
 
     const unsubscribe = onSnapshot(
-      q,
+      colRef,
       (snapshot) => {
         const list = [];
         snapshot.forEach((docSnap) => {
           list.push({ id: docSnap.id, ...docSnap.data() });
         });
+
+        list.sort((a, b) => {
+          const aTime = a.updatedAt?.toMillis?.() || a.createdAt?.toMillis?.() || 0;
+          const bTime = b.updatedAt?.toMillis?.() || b.createdAt?.toMillis?.() || 0;
+          return bTime - aTime;
+        });
+
         setSubmissions(list);
         setLoading(false);
       },
@@ -43,9 +50,22 @@ export default function ManagerHealthAndSafetyDashboard() {
     return () => unsubscribe();
   }, []);
 
+  const isInspectionRecord = (item) => {
+    if (!item) return false;
+    if (item.type === INSPECTION_TYPE) return true;
+    if (item.type === TOOLBOX_TYPE) return false;
+    if (typeof item.id === 'string') {
+      if (item.id.startsWith('inspection_')) return true;
+      if (item.id.startsWith('toolbox_')) return false;
+    }
+    if (Array.isArray(item.attendees) || Array.isArray(item.taskPlanning)) return false;
+    return true;
+  };
+
   const handleDeleteSubmission = async (record) => {
+    const label = record.type || (isInspectionRecord(record) ? INSPECTION_TYPE : TOOLBOX_TYPE);
     const confirmDelete = window.confirm(
-      `Are you sure you want to delete this ${record.type || 'entry'} for ${record.site || record.location}? This action cannot be undone.`
+      `Are you sure you want to delete this ${label} for ${record.site || record.location}? This action cannot be undone.`
     );
     if (!confirmDelete) return;
 
@@ -66,7 +86,7 @@ export default function ManagerHealthAndSafetyDashboard() {
     }
   };
 
-  // Group submissions by site name & robustly classify Document Types
+  // Group submissions by site name & classify strictly
   const siteMap = {};
   submissions.forEach((item) => {
     const rawSite = item.site || item.location || item.project || "General / Unassigned";
@@ -76,17 +96,10 @@ export default function ManagerHealthAndSafetyDashboard() {
       siteMap[siteName] = { inspections: [], toolboxes: [] };
     }
 
-    // Explicit type check & structural fallback
-    const isToolbox =
-      item.type === TOOLBOX_TYPE ||
-      item.id.startsWith('toolbox_') ||
-      Array.isArray(item.attendees) ||
-      Array.isArray(item.taskPlanning);
-
-    if (isToolbox) {
-      siteMap[siteName].toolboxes.push(item);
-    } else {
+    if (isInspectionRecord(item)) {
       siteMap[siteName].inspections.push(item);
+    } else {
+      siteMap[siteName].toolboxes.push(item);
     }
   });
 
@@ -101,12 +114,26 @@ export default function ManagerHealthAndSafetyDashboard() {
   };
 
   // --- DOM PARSER & IMAGE INJECTION HELPER FUNCTIONS ---
+  function cleanRunFormatting(rNode) {
+    if (!rNode || !rNode.getElementsByTagName) return;
+    const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    const rPrList = rNode.getElementsByTagNameNS(nsW, "rPr");
+    for (let i = 0; i < rPrList.length; i++) {
+      const rPr = rPrList[i];
+      ['highlight', 'shd', 'color'].forEach((tag) => {
+        const badNodes = Array.from(rPr.getElementsByTagNameNS(nsW, tag));
+        badNodes.forEach((bn) => rPr.removeChild(bn));
+      });
+    }
+  }
+
   function setCellText(cell, text, xmlDoc) {
     const ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     const tNodes = cell.getElementsByTagNameNS(ns, "t");
     if (tNodes.length > 0) {
       tNodes[0].textContent = text;
       tNodes[0].setAttribute("xml:space", "preserve");
+      if (tNodes[0].parentNode) cleanRunFormatting(tNodes[0].parentNode);
       for (let i = 1; i < tNodes.length; i++) {
         tNodes[i].textContent = "";
       }
@@ -269,9 +296,7 @@ export default function ManagerHealthAndSafetyDashboard() {
   const exportDocxForRecord = async (record) => {
     setExportingId(record.id);
     try {
-      const isInspection =
-        record.type === INSPECTION_TYPE ||
-        (!record.type && !record.id.startsWith('toolbox_') && !record.attendees);
+      const isInspection = isInspectionRecord(record);
       const templateFileName = isInspection
         ? 'Site Safety Inspection Report.docx'
         : 'H&S and Toolbox Meeting Worksheet.docx';
@@ -294,24 +319,27 @@ export default function ManagerHealthAndSafetyDashboard() {
         for (let p of paragraphs) {
           const text = getCellText(p);
           if (text.includes("Site:") || text.includes("Week Ending:") || text.includes("Inspected By:") || text.includes("Signed:")) {
-            const tNodes = p.getElementsByTagName("w:t");
+            const tNodes = Array.from(p.getElementsByTagName("w:t"));
             if (tNodes.length > 0) {
               let pStr = "";
               for (let tn of tNodes) pStr += tn.textContent;
-              
+
               if (pStr.includes("Site:")) {
-                pStr = `Site: ${record.site || record.location || ''}`;
-                tNodes[0].textContent = pStr;
+                tNodes[0].textContent = `Site: ${record.site || record.location || ''}`;
+                tNodes[0].setAttribute("xml:space", "preserve");
+                if (tNodes[0].parentNode) cleanRunFormatting(tNodes[0].parentNode);
                 for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
               }
               if (pStr.includes("Week Ending:")) {
-                pStr = `Week Ending: ${record.weekEnding || record.date || ''}      Time: ${record.time || ''}`;
-                tNodes[0].textContent = pStr;
+                tNodes[0].textContent = `Week Ending: ${record.weekEnding || record.date || ''}      Time: ${record.time || ''}`;
+                tNodes[0].setAttribute("xml:space", "preserve");
+                if (tNodes[0].parentNode) cleanRunFormatting(tNodes[0].parentNode);
                 for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
               }
               if (pStr.includes("Inspected By:")) {
-                pStr = `Inspected By: ${record.inspectedBy || record.userName || ''}`;
-                tNodes[0].textContent = pStr;
+                tNodes[0].textContent = `Inspected By: ${record.inspectedBy || record.userName || ''}`;
+                tNodes[0].setAttribute("xml:space", "preserve");
+                if (tNodes[0].parentNode) cleanRunFormatting(tNodes[0].parentNode);
                 for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
               }
               if (pStr.includes("Signed:")) {
@@ -319,8 +347,9 @@ export default function ManagerHealthAndSafetyDashboard() {
                 if (record.signature) {
                   insertSignatureWithParagraph(p, record.signature, formattedDate, zip, xmlDoc);
                 } else {
-                  pStr = `Signed: ________________      Dated: ${formattedDate}`;
-                  tNodes[0].textContent = pStr;
+                  tNodes[0].textContent = `Signed: ________________      Dated: ${formattedDate}`;
+                  tNodes[0].setAttribute("xml:space", "preserve");
+                  if (tNodes[0].parentNode) cleanRunFormatting(tNodes[0].parentNode);
                   for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
                 }
               }
@@ -366,32 +395,37 @@ export default function ManagerHealthAndSafetyDashboard() {
 
         for (let i = 0; i < paragraphs.length; i++) {
           const p = paragraphs[i];
-          const tNodes = p.getElementsByTagName("w:t");
+          const tNodes = Array.from(p.getElementsByTagName("w:t"));
           if (tNodes.length > 0) {
             let pStr = "";
             for (let tn of tNodes) pStr += tn.textContent;
 
             if (pStr.includes("Date and Time:")) {
-              pStr = `Date and Time: ${record.date || record.weekEnding || ''} ${record.time || ''}    Location: ${record.location || record.site || ''}`;
-              tNodes[0].textContent = pStr;
+              tNodes[0].textContent = `Date and Time: ${record.date || record.weekEnding || ''} ${record.time || ''}    Location: ${record.location || record.site || ''}`;
+              tNodes[0].setAttribute("xml:space", "preserve");
+              if (tNodes[0].parentNode) cleanRunFormatting(tNodes[0].parentNode);
               for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
             } else if (pStr.includes("Meeting Closed:")) {
-              pStr = `Meeting Closed: ${record.time || ''}    Next Meeting: Next week`;
-              tNodes[0].textContent = pStr;
+              tNodes[0].textContent = `Meeting Closed: ${record.time || ''}    Next Meeting: Next week`;
+              tNodes[0].setAttribute("xml:space", "preserve");
+              if (tNodes[0].parentNode) cleanRunFormatting(tNodes[0].parentNode);
               for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
             } else if (pStr.includes("Signed – Management:") || pStr.includes("Signed - Management:")) {
               if (record.managementSignature) {
                 const dateVal = formatDateShort(record.managementDate || record.date);
-                pStr = `Signed – Management: Signed (${dateVal})    Dated: ${dateVal}`;
-                tNodes[0].textContent = pStr;
+                tNodes[0].textContent = `Signed – Management: Signed (${dateVal})    Dated: ${dateVal}`;
+                tNodes[0].setAttribute("xml:space", "preserve");
+                if (tNodes[0].parentNode) cleanRunFormatting(tNodes[0].parentNode);
                 for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
               } else {
-                pStr = `Signed – Management: ________________    Dated: ____________`;
-                tNodes[0].textContent = pStr;
+                tNodes[0].textContent = `Signed – Management: ________________    Dated: ____________`;
+                tNodes[0].setAttribute("xml:space", "preserve");
+                if (tNodes[0].parentNode) cleanRunFormatting(tNodes[0].parentNode);
                 for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
               }
             } else if (pStr.toLowerCase().includes("discussion about task planning")) {
               tNodes[0].textContent = "Discussion About Task Planning and Weekly Goals:";
+              tNodes[0].setAttribute("xml:space", "preserve");
               for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
 
               let nextSibling = p.parentNode && p.parentNode.nodeName === 'w:tc' ? p.parentNode.parentNode.nextElementSibling : p.nextElementSibling;
@@ -403,6 +437,7 @@ export default function ManagerHealthAndSafetyDashboard() {
               }
             } else if (pStr.toLowerCase().includes("operational issues/other business") || pStr.toLowerCase().includes("operational issues / other business")) {
               tNodes[0].textContent = "Operational Issues/other Business:";
+              tNodes[0].setAttribute("xml:space", "preserve");
               for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
 
               let nextSibling = p.parentNode && p.parentNode.nodeName === 'w:tc' ? p.parentNode.parentNode.nextElementSibling : p.nextElementSibling;
@@ -681,7 +716,7 @@ export default function ManagerHealthAndSafetyDashboard() {
           <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4 border border-slate-200 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
-                {selectedSubmission.type || (selectedSubmission.id.startsWith('toolbox_') ? TOOLBOX_TYPE : INSPECTION_TYPE)}
+                {selectedSubmission.type || (isInspectionRecord(selectedSubmission) ? INSPECTION_TYPE : TOOLBOX_TYPE)}
               </h3>
               <button
                 type="button"
