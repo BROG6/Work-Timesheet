@@ -168,6 +168,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   const [loading, setLoading] = useState(false);
   const [exportingDocx, setExportingDocx] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
+  const [reportsError, setReportsError] = useState(null);
   const [savedSites, setSavedSites] = useState([]);
   const [registeredWorkers, setRegisteredWorkers] = useState([]);
   const [autoFillContractor, setAutoFillContractor] = useState(true);
@@ -203,6 +204,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   };
 
   const fetchAllReports = async () => {
+    setReportsError(null);
     try {
       const snapshot = await getDocs(collection(db, 'health_safety'));
       const reports = [];
@@ -212,7 +214,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         const docId = docSnap.id;
         const docData = docSnap.data();
 
-        // Fallback detection for legacy records created before strict type stamping
         let inferredType = docData.type;
         if (!inferredType) {
           if (docId.startsWith('toolbox_') || docData.attendees || docData.taskPlanning) {
@@ -223,8 +224,9 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         }
 
         reports.push({ id: docId, ...docData, type: inferredType });
-        if (docData.site || docData.location) {
-          sitesSet.add((docData.site || docData.location).trim());
+        const siteLabel = (docData.site || docData.location || '').trim();
+        if (siteLabel) {
+          sitesSet.add(siteLabel);
         }
       });
 
@@ -238,6 +240,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       setAllExistingReports(reports);
     } catch (err) {
       console.warn("Could not fetch H&S reports:", err);
+      setReportsError(err.message || "Unable to load H&S reports from Firestore.");
     }
   };
 
@@ -456,6 +459,11 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     return repWeek === currentWeek && rep.type === targetFormType;
   });
 
+  const otherDateReportsForType = allExistingReports.filter(rep => {
+    const repWeek = rep.weekEnding || rep.date;
+    return rep.type === targetFormType && repWeek !== currentWeek;
+  });
+
   const handleSelectReportById = (reportId) => {
     setSelectedReportId(reportId);
     if (!reportId) return;
@@ -464,8 +472,9 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     if (!found) return;
 
     if (hsSubView === 'inspection' && found.type === INSPECTION_TYPE) {
+      if (found.weekEnding) setCurrentWeek(found.weekEnding);
       setInspectionData({
-        site: found.site || '',
+        site: found.site || found.location || '',
         weekEnding: found.weekEnding || currentWeek,
         time: found.time || getCurrentTimeString(),
         inspectedBy: found.inspectedBy || found.userName || userName || '',
@@ -474,10 +483,11 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         sections: found.sections || defaultInspectionSections
       });
     } else if (hsSubView === 'toolbox' && found.type === TOOLBOX_TYPE) {
+      if (found.date) setCurrentWeek(found.date);
       setToolboxData(prev => ({
         date: found.date || currentWeek,
         time: found.time || getCurrentTimeString(),
-        location: found.location || '',
+        location: found.location || found.site || '',
         previousActions: found.previousActions || prev.previousActions,
         siteSafetyReview: found.siteSafetyReview || prev.siteSafetyReview,
         workerTraining: found.workerTraining || prev.workerTraining,
@@ -1154,7 +1164,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         setToolboxData({
           date: tData.date || inspectionData.weekEnding,
           time: tData.time || '10:00',
-          location: tData.location || siteName,
+          location: tData.location || tData.site || siteName,
           previousActions: tData.previousActions || toolboxData.previousActions,
           siteSafetyReview: tData.siteSafetyReview || toolboxData.siteSafetyReview,
           workerTraining: tData.workerTraining || toolboxData.workerTraining,
@@ -1217,7 +1227,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         const iData = inspectionSnap.data();
         const originalInspectionState = { ...inspectionData };
         setInspectionData({
-          site: iData.site || locName,
+          site: iData.site || iData.location || locName,
           weekEnding: iData.weekEnding || toolboxData.date,
           time: iData.time || '10:00',
           inspectedBy: iData.inspectedBy || userName || '',
@@ -1308,6 +1318,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         userName,
         ...inspectionData,
         site: siteVal,
+        location: siteVal,
         type: INSPECTION_TYPE,
         updatedAt: serverTimestamp()
       };
@@ -1343,6 +1354,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         userName,
         ...toolboxData,
         location: locVal,
+        site: locVal,
         type: TOOLBOX_TYPE,
         updatedAt: serverTimestamp()
       };
@@ -1419,9 +1431,16 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           <div className="w-full sm:w-auto flex-1">
             <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">
               {hsSubView === 'inspection'
-                ? `Submitted Inspections for this week (${reportsForCurrentWeek.length})`
-                : `Submitted Toolbox Meetings for this week (${reportsForCurrentWeek.length})`}
+                ? `Submitted Inspections (${reportsForCurrentWeek.length} this week)`
+                : `Submitted Toolbox Meetings (${reportsForCurrentWeek.length} this week)`}
             </label>
+
+            {reportsError && (
+              <p className="text-[11px] font-semibold text-rose-600 mb-1.5">
+                ⚠️ {reportsError}
+              </p>
+            )}
+
             <select
               value={selectedReportId}
               onChange={(e) => handleSelectReportById(e.target.value)}
@@ -1434,9 +1453,18 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               </option>
               {reportsForCurrentWeek.map(rep => (
                 <option key={rep.id} value={rep.id}>
-                  {rep.site || rep.location || 'Unknown Site'}
+                  {(rep.site || rep.location || 'Unknown Site')} ({rep.weekEnding || rep.date || 'No Date'})
                 </option>
               ))}
+              {otherDateReportsForType.length > 0 && (
+                <optgroup label="Other Dates (Same Form Type)">
+                  {otherDateReportsForType.map(rep => (
+                    <option key={rep.id} value={rep.id}>
+                      {(rep.site || rep.location || 'Unknown Site')} — {rep.weekEnding || rep.date || 'No Date'}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
           <button
