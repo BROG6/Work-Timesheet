@@ -675,6 +675,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }));
   };
 
+  // Scrubs highlight/shading/color ONLY on populated value runs (never on template labels)
   function cleanRunFormatting(node) {
     if (!node || !node.getElementsByTagName) return;
     const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -841,14 +842,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
   const setValueAfterLabel = (pNode, labelText, valueText, xmlDoc) => {
     const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-    cleanRunFormatting(pNode);
-
     const tNodes = Array.from(pNode.getElementsByTagName("w:t"));
     if (tNodes.length === 0) return;
-
-    tNodes.forEach((tn) => {
-      if (tn.parentNode) cleanRunFormatting(tn.parentNode);
-    });
 
     const targetLabel = labelText.toLowerCase();
     let runningText = "";
@@ -1008,7 +1003,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           if (locColonPos !== -1) {
             locNode.textContent = locText.slice(0, locColonPos + "Location:".length);
             locNode.setAttribute("xml:space", "preserve");
-            if (locNode.parentNode) cleanRunFormatting(locNode.parentNode);
           }
           if (tNodes[locIdx + 1]) {
             tNodes[locIdx + 1].textContent = ` ${toolboxData.location || ''}`;
