@@ -838,7 +838,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   }
 
-  // Finds the index of the specific <w:t> node that contains `markerText` (such as "ocation:", "ime:", or "eeting:")
   const findExactMarkerNodeIndex = (tNodes, markerText) => {
     const target = markerText.toLowerCase();
     for (let i = 0; i < tNodes.length; i++) {
@@ -850,7 +849,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     return -1;
   };
 
-  // Trims only trailing underscore/space placeholders on `node` without altering any label characters or run colors
   const stripTrailingPlaceholdersOnNode = (node) => {
     if (!node) return;
     const raw = node.textContent || "";
@@ -861,17 +859,20 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   };
 
-  // Inserts a new value <w:r> immediately after `tNodes[markerIndex]`'s parent <w:r>, preserving all earlier/later runs
+  // Writes value into the first placeholder-only run after markerIndex if present,
+  // or inserts a new <w:r> right after markerIndex's <w:r> without deleting text/formatting.
   const insertValueAfterMarkerNode = (pNode, tNodes, markerIndex, valueText, xmlDoc) => {
     const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     const anchorRun = tNodes[markerIndex]?.parentNode;
 
-    // Clear only placeholder-only runs immediately following the marker before the next label
     for (let i = markerIndex + 1; i < tNodes.length; i++) {
       const val = tNodes[i].textContent || "";
       if (/^[_\s]+$/.test(val)) {
-        tNodes[i].textContent = "";
-      } else {
+        tNodes[i].textContent = valueText;
+        tNodes[i].setAttribute("xml:space", "preserve");
+        return;
+      }
+      if (val.trim() !== "") {
         break;
       }
     }
@@ -920,6 +921,25 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   };
 
+  // Handles both inline paragraph labels AND table rows where label is in cell 0 and blank is in cell 1
+  const fillInspectionHeaderField = (pNode, labelMarker, valueText, xmlDoc) => {
+    setValueAfterLabel(pNode, labelMarker, valueText, xmlDoc);
+    const parentCell = pNode.parentNode;
+    if (parentCell && parentCell.nodeName === "w:tc") {
+      const parentRow = parentCell.parentNode;
+      if (parentRow && parentRow.nodeName === "w:tr") {
+        const cells = Array.from(parentRow.getElementsByTagName("w:tc"));
+        const cellIdx = cells.indexOf(parentCell);
+        if (cellIdx !== -1 && cells[cellIdx + 1]) {
+          const nextCellText = getCellText(cells[cellIdx + 1]);
+          if (!nextCellText || /^[_\s]+$/.test(nextCellText)) {
+            setCellText(cells[cellIdx + 1], valueText.trim(), xmlDoc);
+          }
+        }
+      }
+    }
+  };
+
   const generateInspectionZipBuffer = async () => {
     const templateFileName = 'Site Safety Inspection Report.docx';
     const response = await fetch(`/${templateFileName}`);
@@ -936,33 +956,39 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
     for (let p of paragraphs) {
       const text = getCellText(p);
-      if (text.includes("Site:") || text.includes("Week Ending:") || text.includes("Inspected By:") || text.includes("Signed:")) {
-        if (text.includes("Site:")) {
-          setValueAfterLabel(p, "Site:", ` ${inspectionData.site || ''}`, xmlDoc);
+      const lower = text.toLowerCase();
+      if (
+        lower.includes("site:") ||
+        lower.includes("week ending:") ||
+        lower.includes("inspected by:") ||
+        lower.includes("signed:")
+      ) {
+        if (lower.includes("site:")) {
+          fillInspectionHeaderField(p, "ite:", ` ${inspectionData.site || ''}`, xmlDoc);
         }
-        if (text.includes("Week Ending:")) {
+        if (lower.includes("week ending:")) {
           setTwoValuesInParagraph(
             p,
-            "Week Ending:",
+            "week ending:",
             ` ${inspectionData.weekEnding || ''}      `,
             "ime:",
             ` ${inspectionData.time || ''}`,
             xmlDoc
           );
         }
-        if (text.includes("Inspected By:")) {
-          setValueAfterLabel(p, "Inspected By:", ` ${inspectionData.inspectedBy || ''}`, xmlDoc);
+        if (lower.includes("inspected by:")) {
+          fillInspectionHeaderField(p, "nspected by:", ` ${inspectionData.inspectedBy || ''}`, xmlDoc);
         }
-        if (text.includes("Signed:")) {
+        if (lower.includes("signed:")) {
           const formattedDate = formatDateShort(inspectionData.dateSigned || inspectionData.weekEnding);
           if (inspectionData.signature) {
             insertSignatureWithParagraph(p, inspectionData.signature, formattedDate, zip, xmlDoc);
           } else {
             setTwoValuesInParagraph(
               p,
-              "Signed:",
+              "signed:",
               ` ________________      `,
-              "Dated:",
+              "dated:",
               ` ${formattedDate}`,
               xmlDoc
             );
@@ -1018,33 +1044,34 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       for (let tn of tNodes) pStr += tn.textContent;
       const cleanPStr = pStr.toLowerCase().trim();
 
-      if (pStr.includes("Date and Time:")) {
+      if (cleanPStr.includes("date and time:")) {
+        const dtCombined = ` ${toolboxData.date || ''} ${toolboxData.time || ''}`.trim();
         setTwoValuesInParagraph(
           p,
-          "Date and Time:",
-          ` ${toolboxData.date || ''} ${toolboxData.time || ''}    `,
+          "date and time:",
+          ` ${dtCombined}    `,
           "ocation:",
           ` ${toolboxData.location || ''}`,
           xmlDoc
         );
-      } else if (pStr.includes("Meeting Closed:")) {
+      } else if (cleanPStr.includes("meeting closed:")) {
         setTwoValuesInParagraph(
           p,
-          "Meeting Closed:",
+          "meeting closed:",
           ` ${toolboxData.time || ''}    `,
           "eeting:",
           " Next week",
           xmlDoc
         );
-      } else if (pStr.includes("Signed – Management:") || pStr.includes("Signed - Management:")) {
-        const labelMatch = pStr.includes("Signed – Management:") ? "Signed – Management:" : "Signed - Management:";
+      } else if (cleanPStr.includes("signed – management:") || cleanPStr.includes("signed - management:")) {
+        const labelMatch = cleanPStr.includes("signed – management:") ? "signed – management:" : "signed - management:";
         if (toolboxData.managementSignature) {
           const dateVal = formatDateShort(toolboxData.managementDate || toolboxData.date);
           setTwoValuesInParagraph(
             p,
             labelMatch,
             ` Signed (${dateVal})    `,
-            "Dated:",
+            "dated:",
             ` ${dateVal}`,
             xmlDoc
           );
@@ -1053,7 +1080,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             p,
             labelMatch,
             ` ________________    `,
-            "Dated:",
+            "dated:",
             " ____________",
             xmlDoc
           );
@@ -1075,7 +1102,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       ) {
         const targetP = paragraphs[i + 1];
         const targetText = targetP ? getCellText(targetP).toLowerCase() : "";
-        // Guard so Agenda item 8) Other is never overwritten
         if (targetP && !targetText.startsWith("8)") && targetText !== "other") {
           setParagraphText(targetP, toolboxData.operationalIssues, xmlDoc);
         }
