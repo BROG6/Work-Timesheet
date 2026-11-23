@@ -154,16 +154,45 @@ function WorkerAutoCompleteInput({ value, onChange, registeredWorkers }) {
 const INSPECTION_TYPE = 'Site Safety Inspection Report';
 const TOOLBOX_TYPE = 'H&S and Tool Box Meeting Worksheet';
 
+const parseLocalDate = (dateStr) => {
+  if (!dateStr) return new Date();
+  const parts = String(dateStr).split('-').map(Number);
+  if (parts.length === 3 && !parts.some(isNaN)) {
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+  }
+  const fallback = new Date(dateStr);
+  return isNaN(fallback.getTime()) ? new Date() : fallback;
+};
+
+const formatLocalISO = (d) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+// Returns the Monday (YYYY-MM-DD) of the week containing dateInput
+const getMondayOfWeek = (dateInput = new Date()) => {
+  const d = typeof dateInput === 'string' ? parseLocalDate(dateInput) : new Date(dateInput);
+  if (isNaN(d.getTime())) return formatLocalISO(new Date());
+  const dayOfWeek = d.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
+  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diffToMonday);
+  return formatLocalISO(monday);
+};
+
 const sanitizeSlug = (val) =>
   (val || '').trim().replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
 
-const buildInspectionDocId = (site, weekEnding) =>
-  `inspection_${sanitizeSlug(site)}_${weekEnding}`;
+const buildInspectionDocId = (site, weekStart) =>
+  `inspection_${sanitizeSlug(site)}_${getMondayOfWeek(weekStart)}`;
 
 const buildToolboxDocId = (location, date) =>
-  `toolbox_${sanitizeSlug(location)}_${date}`;
+  `toolbox_${sanitizeSlug(location)}_${getMondayOfWeek(date)}`;
 
 export default function HealthAndSafetyHub({ userId, userName }) {
+  const initialMonday = getMondayOfWeek(new Date());
+
   const [hsSubView, setHsSubView] = useState('inspection');
   const [loading, setLoading] = useState(false);
   const [exportingDocx, setExportingDocx] = useState(false);
@@ -173,7 +202,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   const [registeredWorkers, setRegisteredWorkers] = useState([]);
   const [autoFillContractor, setAutoFillContractor] = useState(true);
 
-  const [currentWeek, setCurrentWeek] = useState(new Date().toISOString().split('T')[0]);
+  // Stores the Monday (YYYY-MM-DD) of the selected week
+  const [currentWeek, setCurrentWeek] = useState(initialMonday);
   const [allExistingReports, setAllExistingReports] = useState([]);
   const [selectedReportId, setSelectedReportId] = useState('');
 
@@ -189,7 +219,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
   const formatDateShort = (dateStr) => {
     if (!dateStr) return '';
-    const d = new Date(dateStr);
+    const d = parseLocalDate(dateStr);
     if (isNaN(d.getTime())) return dateStr;
     const day = String(d.getDate()).padStart(2, '0');
     const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -200,6 +230,11 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   const handleAutoResize = (e) => {
     e.target.style.height = 'auto';
     e.target.style.height = `${e.target.scrollHeight}px`;
+  };
+
+  const getReportMonday = (rep) => {
+    const rawDate = rep.weekStarting || rep.weekEnding || rep.date;
+    return rawDate ? getMondayOfWeek(rawDate) : '';
   };
 
   const fetchAllReports = async () => {
@@ -269,36 +304,115 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     fetchWorkers();
   }, [userName]);
 
-  const handleSwitchSubView = (nextView) => {
+  const handleSwitchSubView = async (nextView) => {
     setHsSubView(nextView);
-    setSelectedReportId('');
+
+    const activeSite = (
+      hsSubView === 'inspection' ? inspectionData.site : toolboxData.location
+    ).trim();
+    const activeMonday = getMondayOfWeek(currentWeek);
+
+    if (!activeSite) {
+      setSelectedReportId('');
+      return;
+    }
+
+    const counterpartId =
+      nextView === 'inspection'
+        ? buildInspectionDocId(activeSite, activeMonday)
+        : buildToolboxDocId(activeSite, activeMonday);
+
+    if (nextView === 'inspection') {
+      setInspectionData(prev => ({
+        ...prev,
+        site: activeSite,
+        weekEnding: activeMonday,
+        dateSigned: prev.dateSigned || activeMonday
+      }));
+    } else {
+      setToolboxData(prev => ({
+        ...prev,
+        location: activeSite,
+        date: activeMonday,
+        managementDate: prev.managementDate || activeMonday
+      }));
+    }
+
+    const existingLocal = allExistingReports.find(r => r.id === counterpartId);
+    if (existingLocal) {
+      setSelectedReportId(counterpartId);
+      if (nextView === 'inspection') {
+        setInspectionData(prev => ({
+          ...prev,
+          ...existingLocal,
+          site: existingLocal.site || activeSite,
+          weekEnding: existingLocal.weekEnding || activeMonday,
+          inspectedBy: existingLocal.inspectedBy || existingLocal.userName || prev.inspectedBy,
+          sections: existingLocal.sections || prev.sections
+        }));
+      } else {
+        setToolboxData(prev => ({
+          ...prev,
+          ...existingLocal,
+          location: existingLocal.location || existingLocal.site || activeSite,
+          date: existingLocal.date || activeMonday
+        }));
+      }
+      return;
+    }
+
+    try {
+      const docSnap = await getDoc(doc(db, 'health_safety', counterpartId));
+      if (docSnap.exists()) {
+        const found = docSnap.data();
+        setSelectedReportId(counterpartId);
+        if (nextView === 'inspection') {
+          setInspectionData(prev => ({
+            ...prev,
+            ...found,
+            site: found.site || activeSite,
+            weekEnding: found.weekEnding || activeMonday,
+            inspectedBy: found.inspectedBy || found.userName || prev.inspectedBy,
+            sections: found.sections || prev.sections
+          }));
+        } else {
+          setToolboxData(prev => ({
+            ...prev,
+            ...found,
+            location: found.location || found.site || activeSite,
+            date: found.date || activeMonday
+          }));
+        }
+      } else {
+        setSelectedReportId('');
+      }
+    } catch (err) {
+      console.warn("Could not sync counterpart H&S report:", err);
+      setSelectedReportId('');
+    }
   };
 
   const handleShiftWeek = (direction) => {
-    const d = new Date(currentWeek);
-    if (isNaN(d.getTime())) {
-      setCurrentWeek(new Date().toISOString().split('T')[0]);
-      return;
-    }
-    d.setDate(d.getDate() + (direction * 7));
-    const newWeekStr = d.toISOString().split('T')[0];
-    setCurrentWeek(newWeekStr);
+    const baseMonday = parseLocalDate(getMondayOfWeek(currentWeek));
+    baseMonday.setDate(baseMonday.getDate() + (direction * 7));
+    const newMondayStr = formatLocalISO(baseMonday);
+    setCurrentWeek(newMondayStr);
 
     if (hsSubView === 'inspection') {
-      setInspectionData(prev => ({ ...prev, weekEnding: newWeekStr }));
+      setInspectionData(prev => ({ ...prev, weekEnding: newMondayStr, dateSigned: newMondayStr }));
     } else {
-      setToolboxData(prev => ({ ...prev, date: newWeekStr }));
+      setToolboxData(prev => ({ ...prev, date: newMondayStr, managementDate: newMondayStr }));
     }
     setSelectedReportId('');
   };
 
   const handleThisWeek = () => {
-    const todayStr = new Date().toISOString().split('T')[0];
-    setCurrentWeek(todayStr);
+    const mondayStr = getMondayOfWeek(new Date());
+    setCurrentWeek(mondayStr);
     if (hsSubView === 'inspection') {
-      setInspectionData(prev => ({ ...prev, weekEnding: todayStr }));
+      setInspectionData(prev => ({ ...prev, weekEnding: mondayStr, dateSigned: mondayStr }));
     } else {
-      setToolboxData(prev => ({ ...prev, date: todayStr }));
+      setToolboxData(prev => ({ ...prev, date: mondayStr, managementDate: mondayStr }));
     }
     setSelectedReportId('');
   };
@@ -452,15 +566,23 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   });
 
   const targetFormType = hsSubView === 'inspection' ? INSPECTION_TYPE : TOOLBOX_TYPE;
+  const activeMonday = getMondayOfWeek(currentWeek);
 
-  const reportsForCurrentWeek = allExistingReports.filter(rep => {
-    const repWeek = rep.weekEnding || rep.date;
-    return repWeek === currentWeek && rep.type === targetFormType;
+  const reportsForThisWeek = allExistingReports.filter(rep => {
+    return rep.type === targetFormType && getReportMonday(rep) === activeMonday;
   });
 
-  const otherDateReportsForType = allExistingReports.filter(rep => {
-    const repWeek = rep.weekEnding || rep.date;
-    return rep.type === targetFormType && repWeek !== currentWeek;
+  // Only show reports from the past 2 weeks (14 days prior to activeMonday up to day before activeMonday)
+  const previousTwoWeeksReports = allExistingReports.filter(rep => {
+    if (rep.type !== targetFormType) return false;
+    const repMondayStr = getReportMonday(rep);
+    if (!repMondayStr || repMondayStr === activeMonday) return false;
+
+    const currentMondayDate = parseLocalDate(activeMonday);
+    const repMondayDate = parseLocalDate(repMondayStr);
+    const diffDays = Math.round((currentMondayDate - repMondayDate) / (1000 * 60 * 60 * 24));
+
+    return diffDays > 0 && diffDays <= 14;
   });
 
   const handleSelectReportById = (reportId) => {
@@ -470,21 +592,23 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     const found = allExistingReports.find(r => r.id === reportId);
     if (!found) return;
 
+    const repMonday = getReportMonday(found) || activeMonday;
+
     if (hsSubView === 'inspection' && found.type === INSPECTION_TYPE) {
-      if (found.weekEnding) setCurrentWeek(found.weekEnding);
+      setCurrentWeek(repMonday);
       setInspectionData({
         site: found.site || found.location || '',
-        weekEnding: found.weekEnding || currentWeek,
+        weekEnding: found.weekEnding || repMonday,
         time: found.time || getCurrentTimeString(),
         inspectedBy: found.inspectedBy || found.userName || userName || '',
         signature: found.signature || '',
-        dateSigned: found.dateSigned || currentWeek,
+        dateSigned: found.dateSigned || found.weekEnding || repMonday,
         sections: found.sections || defaultInspectionSections
       });
     } else if (hsSubView === 'toolbox' && found.type === TOOLBOX_TYPE) {
-      if (found.date) setCurrentWeek(found.date);
+      setCurrentWeek(repMonday);
       setToolboxData(prev => ({
-        date: found.date || currentWeek,
+        date: found.date || repMonday,
         time: found.time || getCurrentTimeString(),
         location: found.location || found.site || '',
         previousActions: found.previousActions || prev.previousActions,
@@ -499,7 +623,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         operationalIssues: found.operationalIssues || '',
         attendees: found.attendees || prev.attendees,
         managementSignature: found.managementSignature || '',
-        managementDate: found.managementDate || found.date || currentWeek
+        managementDate: found.managementDate || found.date || repMonday
       }));
     }
   };
@@ -509,16 +633,16 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     if (hsSubView === 'inspection') {
       setInspectionData({
         site: '',
-        weekEnding: currentWeek,
+        weekEnding: activeMonday,
         time: getCurrentTimeString(),
         inspectedBy: userName || '',
         signature: '',
-        dateSigned: currentWeek,
+        dateSigned: activeMonday,
         sections: defaultInspectionSections
       });
     } else {
       setToolboxData({
-        date: currentWeek,
+        date: activeMonday,
         time: getCurrentTimeString(),
         location: '',
         previousActions: [
@@ -539,20 +663,26 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         taskPlanning: [{ task: "", ppe: "", timeframe: "", whoWhen: "" }],
         taskPlanningDiscussion: "",
         operationalIssues: "",
-        attendees: [{ name: userName || '', company: 'SJR Builders', signature: '', date: currentWeek }],
+        attendees: [{ name: userName || '', company: 'SJR Builders', signature: '', date: activeMonday }],
         managementSignature: '',
-        managementDate: currentWeek
+        managementDate: activeMonday
       });
     }
-    setStatusMessage({ type: 'success', text: `Started a fresh ${targetFormType} for ${currentWeek}.` });
+    setStatusMessage({ type: 'success', text: `Started a fresh ${targetFormType} for week starting ${activeMonday}.` });
     setTimeout(() => setStatusMessage(null), 3000);
   };
 
-  const handleSiteOrWeekChange = async (newSite, newWeek) => {
-    setInspectionData(prev => ({ ...prev, site: newSite, weekEnding: newWeek }));
-    if (!newSite || !newSite.trim() || !newWeek) return;
+  const handleSiteOrWeekChange = async (newSite, newDate) => {
+    const mondayStr = getMondayOfWeek(newDate || currentWeek);
+    setCurrentWeek(mondayStr);
+    setInspectionData(prev => ({ ...prev, site: newSite, weekEnding: newDate }));
 
-    const docId = buildInspectionDocId(newSite, newWeek);
+    if (!newSite || !newSite.trim() || !mondayStr) {
+      setSelectedReportId('');
+      return;
+    }
+
+    const docId = buildInspectionDocId(newSite, mondayStr);
 
     try {
       const docSnap = await getDoc(doc(db, 'health_safety', docId));
@@ -562,9 +692,11 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         setInspectionData(prev => ({
           ...prev,
           ...found,
+          site: found.site || newSite,
+          weekEnding: found.weekEnding || newDate,
           inspectedBy: found.inspectedBy || found.userName || prev.inspectedBy
         }));
-        setStatusMessage({ type: 'success', text: `Loaded existing inspection for ${newSite} (${newWeek}).` });
+        setStatusMessage({ type: 'success', text: `Loaded existing inspection for ${newSite} (Mon ${mondayStr}).` });
         setTimeout(() => setStatusMessage(null), 4000);
       } else {
         setSelectedReportId('');
@@ -575,10 +707,16 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   };
 
   const handleToolboxLocationOrDateChange = async (newLoc, newDate) => {
+    const mondayStr = getMondayOfWeek(newDate || currentWeek);
+    setCurrentWeek(mondayStr);
     setToolboxData(prev => ({ ...prev, location: newLoc, date: newDate }));
-    if (!newLoc || !newLoc.trim() || !newDate) return;
 
-    const docId = buildToolboxDocId(newLoc, newDate);
+    if (!newLoc || !newLoc.trim() || !mondayStr) {
+      setSelectedReportId('');
+      return;
+    }
+
+    const docId = buildToolboxDocId(newLoc, mondayStr);
 
     try {
       const docSnap = await getDoc(doc(db, 'health_safety', docId));
@@ -587,9 +725,11 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         setSelectedReportId(docId);
         setToolboxData(prev => ({
           ...prev,
-          ...found
+          ...found,
+          location: found.location || newLoc,
+          date: found.date || newDate
         }));
-        setStatusMessage({ type: 'success', text: `Loaded existing toolbox meeting for ${newLoc} (${newDate}).` });
+        setStatusMessage({ type: 'success', text: `Loaded existing toolbox meeting for ${newLoc} (Mon ${mondayStr}).` });
         setTimeout(() => setStatusMessage(null), 4000);
       } else {
         setSelectedReportId('');
@@ -663,7 +803,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   const addAttendeeRow = () => {
     setToolboxData(prev => ({
       ...prev,
-      attendees: [...prev.attendees, { name: '', company: 'SJR Builders', signature: '', date: currentWeek }]
+      attendees: [...prev.attendees, { name: '', company: 'SJR Builders', signature: '', date: activeMonday }]
     }));
   };
 
@@ -1585,7 +1725,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
     setLoading(true);
     try {
-      const docId = buildInspectionDocId(siteVal, inspectionData.weekEnding);
+      const mondayStr = getMondayOfWeek(inspectionData.weekEnding || currentWeek);
+      const docId = buildInspectionDocId(siteVal, mondayStr);
 
       const payload = {
         userId,
@@ -1593,6 +1734,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         ...inspectionData,
         site: siteVal,
         location: siteVal,
+        weekStarting: mondayStr,
         type: INSPECTION_TYPE,
         updatedAt: serverTimestamp()
       };
@@ -1621,7 +1763,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
     setLoading(true);
     try {
-      const docId = buildToolboxDocId(locVal, toolboxData.date);
+      const mondayStr = getMondayOfWeek(toolboxData.date || currentWeek);
+      const docId = buildToolboxDocId(locVal, mondayStr);
 
       const payload = {
         userId,
@@ -1629,6 +1772,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         ...toolboxData,
         location: locVal,
         site: locVal,
+        weekStarting: mondayStr,
         type: TOOLBOX_TYPE,
         updatedAt: serverTimestamp()
       };
@@ -1646,6 +1790,17 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       setLoading(false);
     }
   };
+
+  const currentFormSite = (
+    hsSubView === 'inspection' ? inspectionData.site : toolboxData.location
+  ).trim();
+  const currentFormDate =
+    hsSubView === 'inspection' ? inspectionData.weekEnding : toolboxData.date;
+
+  const isSelectedIdInOptions =
+    selectedReportId &&
+    (reportsForThisWeek.some(r => r.id === selectedReportId) ||
+      previousTwoWeeksReports.some(r => r.id === selectedReportId));
 
   return (
     <div className="max-w-xl mx-auto space-y-4 my-4 pb-12">
@@ -1696,7 +1851,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             </button>
           </div>
           <div className="text-xs font-bold text-slate-700 text-center sm:text-right">
-            Selected Week Ending: <span className="text-emerald-700">{currentWeek}</span>
+            Week Starting (Mon): <span className="text-emerald-700">{activeMonday}</span>
           </div>
         </div>
 
@@ -1704,8 +1859,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           <div className="w-full sm:w-auto flex-1">
             <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">
               {hsSubView === 'inspection'
-                ? `Submitted Inspections (${reportsForCurrentWeek.length} this week)`
-                : `Submitted Toolbox Meetings (${reportsForCurrentWeek.length} this week)`}
+                ? `Submitted Inspections (${reportsForThisWeek.length} this week)`
+                : `Submitted Toolbox Meetings (${reportsForThisWeek.length} this week)`}
             </label>
 
             {reportsError && (
@@ -1715,8 +1870,11 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             )}
 
             <select
-              value={selectedReportId}
-              onChange={(e) => handleSelectReportById(e.target.value)}
+              value={isSelectedIdInOptions ? selectedReportId : (currentFormSite ? '__ACTIVE_DRAFT__' : '')}
+              onChange={(e) => {
+                if (e.target.value === '__ACTIVE_DRAFT__') return;
+                handleSelectReportById(e.target.value);
+              }}
               className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-semibold text-slate-800"
             >
               <option value="">
@@ -1724,16 +1882,32 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                   ? '-- Choose submitted inspection or click Add Site --'
                   : '-- Choose submitted toolbox meeting or click Add Site --'}
               </option>
-              {reportsForCurrentWeek.map(rep => (
-                <option key={rep.id} value={rep.id}>
-                  {(rep.site || rep.location || 'Unknown Site')} ({rep.weekEnding || rep.date || 'No Date'})
+
+              {!isSelectedIdInOptions && currentFormSite && (
+                <option value="__ACTIVE_DRAFT__">
+                  {currentFormSite} ({currentFormDate || activeMonday})
                 </option>
-              ))}
-              {otherDateReportsForType.length > 0 && (
-                <optgroup label="Other Dates (Same Form Type)">
-                  {otherDateReportsForType.map(rep => (
+              )}
+
+              <optgroup label={`This Week (Mon ${activeMonday})`}>
+                {reportsForThisWeek.length > 0 ? (
+                  reportsForThisWeek.map(rep => (
                     <option key={rep.id} value={rep.id}>
-                      {(rep.site || rep.location || 'Unknown Site')} — {rep.weekEnding || rep.date || 'No Date'}
+                      {(rep.site || rep.location || 'Unknown Site')} ({rep.weekEnding || rep.date || activeMonday})
+                    </option>
+                  ))
+                ) : (
+                  <option value="" disabled>
+                    No sites submitted for this week yet
+                  </option>
+                )}
+              </optgroup>
+
+              {previousTwoWeeksReports.length > 0 && (
+                <optgroup label="Previous 2 Weeks">
+                  {previousTwoWeeksReports.map(rep => (
+                    <option key={rep.id} value={rep.id}>
+                      {(rep.site || rep.location || 'Unknown Site')} — {rep.weekEnding || rep.date || getReportMonday(rep)}
                     </option>
                   ))}
                 </optgroup>
@@ -1804,13 +1978,12 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Week Ending</label>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Week Starting (Mon)</label>
                 <input
                   type="date"
                   value={inspectionData.weekEnding}
                   onChange={(e) => {
                     const newWk = e.target.value;
-                    setCurrentWeek(newWk);
                     handleSiteOrWeekChange(inspectionData.site, newWk);
                   }}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800"
@@ -1969,7 +2142,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
                   value={toolboxData.date}
                   onChange={(e) => {
                     const newDt = e.target.value;
-                    setCurrentWeek(newDt);
                     handleToolboxLocationOrDateChange(toolboxData.location, newDt);
                   }}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium text-slate-800"
