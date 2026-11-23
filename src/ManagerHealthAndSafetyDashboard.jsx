@@ -258,6 +258,64 @@ export default function ManagerHealthAndSafetyDashboard() {
     }
   }
 
+  const setValueAfterLabel = (pNode, labelText, valueText, xmlDoc) => {
+    const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    const tNodes = Array.from(pNode.getElementsByTagName("w:t"));
+    if (tNodes.length === 0) return;
+
+    const targetLabel = labelText.toLowerCase();
+    let runningText = "";
+    let labelEndNodeIndex = -1;
+
+    for (let i = 0; i < tNodes.length; i++) {
+      runningText += tNodes[i].textContent || "";
+      if (runningText.toLowerCase().includes(targetLabel)) {
+        labelEndNodeIndex = i;
+        break;
+      }
+    }
+
+    if (labelEndNodeIndex !== -1) {
+      const labelNode = tNodes[labelEndNodeIndex];
+      const currentLabelText = labelNode.textContent || "";
+      const lowerLabelText = currentLabelText.toLowerCase();
+      const idxInNode = lowerLabelText.lastIndexOf(targetLabel[targetLabel.length - 1]);
+
+      if (idxInNode !== -1 && idxInNode < currentLabelText.length - 1) {
+        const prefix = currentLabelText.slice(0, idxInNode + 1);
+        const suffix = currentLabelText.slice(idxInNode + 1);
+        if (/^[_\s]+$/.test(suffix)) {
+          labelNode.textContent = prefix;
+          labelNode.setAttribute("xml:space", "preserve");
+        }
+      }
+
+      const nextNode = tNodes[labelEndNodeIndex + 1];
+      if (nextNode) {
+        nextNode.textContent = valueText;
+        nextNode.setAttribute("xml:space", "preserve");
+        if (nextNode.parentNode) cleanRunFormatting(nextNode.parentNode);
+        for (let j = labelEndNodeIndex + 2; j < tNodes.length; j++) {
+          tNodes[j].textContent = "";
+        }
+      } else {
+        const r = xmlDoc.createElementNS(nsW, "w:r");
+        const t = xmlDoc.createElementNS(nsW, "w:t");
+        t.textContent = valueText;
+        t.setAttribute("xml:space", "preserve");
+        r.appendChild(t);
+        pNode.appendChild(r);
+      }
+    } else if (tNodes.length > 1) {
+      tNodes[1].textContent = valueText;
+      tNodes[1].setAttribute("xml:space", "preserve");
+      if (tNodes[1].parentNode) cleanRunFormatting(tNodes[1].parentNode);
+      for (let i = 2; i < tNodes.length; i++) {
+        tNodes[i].textContent = "";
+      }
+    }
+  };
+
   const saveAndShareFile = async (zip, outputFileName) => {
     if (Capacitor.isNativePlatform()) {
       const content = zip.generate({ type: 'uint8array' });
@@ -326,39 +384,21 @@ export default function ManagerHealthAndSafetyDashboard() {
         for (let p of paragraphs) {
           const text = getCellText(p);
           if (text.includes("Site:") || text.includes("Week Ending:") || text.includes("Inspected By:") || text.includes("Signed:")) {
-            const tNodes = Array.from(p.getElementsByTagName("w:t"));
-            if (tNodes.length > 0) {
-              let pStr = "";
-              for (let tn of tNodes) pStr += tn.textContent;
-
-              if (pStr.includes("Site:")) {
-                tNodes[0].textContent = `Site: ${record.site || record.location || ''}`;
-                tNodes[0].setAttribute("xml:space", "preserve");
-                if (tNodes[0].parentNode) cleanRunFormatting(tNodes[0].parentNode);
-                for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
-              }
-              if (pStr.includes("Week Ending:")) {
-                tNodes[0].textContent = `Week Ending: ${record.weekEnding || record.date || ''}      Time: ${record.time || ''}`;
-                tNodes[0].setAttribute("xml:space", "preserve");
-                if (tNodes[0].parentNode) cleanRunFormatting(tNodes[0].parentNode);
-                for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
-              }
-              if (pStr.includes("Inspected By:")) {
-                tNodes[0].textContent = `Inspected By: ${record.inspectedBy || record.userName || ''}`;
-                tNodes[0].setAttribute("xml:space", "preserve");
-                if (tNodes[0].parentNode) cleanRunFormatting(tNodes[0].parentNode);
-                for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
-              }
-              if (pStr.includes("Signed:")) {
-                const formattedDate = formatDateShort(record.dateSigned || record.weekEnding || record.date);
-                if (record.signature) {
-                  insertSignatureWithParagraph(p, record.signature, formattedDate, zip, xmlDoc);
-                } else {
-                  tNodes[0].textContent = `Signed: ________________      Dated: ${formattedDate}`;
-                  tNodes[0].setAttribute("xml:space", "preserve");
-                  if (tNodes[0].parentNode) cleanRunFormatting(tNodes[0].parentNode);
-                  for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
-                }
+            if (text.includes("Site:")) {
+              setValueAfterLabel(p, "Site:", ` ${record.site || record.location || ''}`, xmlDoc);
+            }
+            if (text.includes("Week Ending:")) {
+              setValueAfterLabel(p, "Week Ending:", ` ${record.weekEnding || record.date || ''}      Time: ${record.time || ''}`, xmlDoc);
+            }
+            if (text.includes("Inspected By:")) {
+              setValueAfterLabel(p, "Inspected By:", ` ${record.inspectedBy || record.userName || ''}`, xmlDoc);
+            }
+            if (text.includes("Signed:")) {
+              const formattedDate = formatDateShort(record.dateSigned || record.weekEnding || record.date);
+              if (record.signature) {
+                insertSignatureWithParagraph(p, record.signature, formattedDate, zip, xmlDoc);
+              } else {
+                setValueAfterLabel(p, "Signed:", ` ________________      Dated: ${formattedDate}`, xmlDoc);
               }
             }
           }
@@ -408,33 +448,18 @@ export default function ManagerHealthAndSafetyDashboard() {
             for (let tn of tNodes) pStr += tn.textContent;
 
             if (pStr.includes("Date and Time:")) {
-              tNodes[0].textContent = `Date and Time: ${record.date || record.weekEnding || ''} ${record.time || ''}    Location: ${record.location || record.site || ''}`;
-              tNodes[0].setAttribute("xml:space", "preserve");
-              if (tNodes[0].parentNode) cleanRunFormatting(tNodes[0].parentNode);
-              for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+              setValueAfterLabel(p, "Date and Time:", ` ${record.date || record.weekEnding || ''} ${record.time || ''}    Location: ${record.location || record.site || ''}`, xmlDoc);
             } else if (pStr.includes("Meeting Closed:")) {
-              tNodes[0].textContent = `Meeting Closed: ${record.time || ''}    Next Meeting: Next week`;
-              tNodes[0].setAttribute("xml:space", "preserve");
-              if (tNodes[0].parentNode) cleanRunFormatting(tNodes[0].parentNode);
-              for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+              setValueAfterLabel(p, "Meeting Closed:", ` ${record.time || ''}    Next Meeting: Next week`, xmlDoc);
             } else if (pStr.includes("Signed – Management:") || pStr.includes("Signed - Management:")) {
+              const labelMatch = pStr.includes("Signed – Management:") ? "Signed – Management:" : "Signed - Management:";
               if (record.managementSignature) {
                 const dateVal = formatDateShort(record.managementDate || record.date);
-                tNodes[0].textContent = `Signed – Management: Signed (${dateVal})    Dated: ${dateVal}`;
-                tNodes[0].setAttribute("xml:space", "preserve");
-                if (tNodes[0].parentNode) cleanRunFormatting(tNodes[0].parentNode);
-                for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+                setValueAfterLabel(p, labelMatch, ` Signed (${dateVal})    Dated: ${dateVal}`, xmlDoc);
               } else {
-                tNodes[0].textContent = `Signed – Management: ________________    Dated: ____________`;
-                tNodes[0].setAttribute("xml:space", "preserve");
-                if (tNodes[0].parentNode) cleanRunFormatting(tNodes[0].parentNode);
-                for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
+                setValueAfterLabel(p, labelMatch, ` ________________    Dated: ____________`, xmlDoc);
               }
             } else if (pStr.toLowerCase().includes("discussion about task planning")) {
-              tNodes[0].textContent = "Discussion About Task Planning and Weekly Goals:";
-              tNodes[0].setAttribute("xml:space", "preserve");
-              for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
-
               let nextSibling = p.parentNode && p.parentNode.nodeName === 'w:tc' ? p.parentNode.parentNode.nextElementSibling : p.nextElementSibling;
               if (nextSibling && record.taskPlanningDiscussion) {
                 const targetCell = nextSibling.getElementsByTagName ? nextSibling.getElementsByTagName("w:tc")[0] : null;
@@ -443,10 +468,6 @@ export default function ManagerHealthAndSafetyDashboard() {
                 }
               }
             } else if (pStr.toLowerCase().includes("operational issues/other business") || pStr.toLowerCase().includes("operational issues / other business")) {
-              tNodes[0].textContent = "Operational Issues/other Business:";
-              tNodes[0].setAttribute("xml:space", "preserve");
-              for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
-
               let nextSibling = p.parentNode && p.parentNode.nodeName === 'w:tc' ? p.parentNode.parentNode.nextElementSibling : p.nextElementSibling;
               if (nextSibling && record.operationalIssues) {
                 const targetCell = nextSibling.getElementsByTagName ? nextSibling.getElementsByTagName("w:tc")[0] : null;
