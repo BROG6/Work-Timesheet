@@ -838,45 +838,42 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   }
 
-  // Finds the <w:t> index where `labelText` finishes across split runs (e.g. N [yellow] + ext [blue] + M [yellow] + eeting: [blue])
-  const findLabelEndNodeIndex = (tNodes, labelText) => {
-    const target = labelText.toLowerCase();
-    let running = "";
+  // Finds the index of the specific <w:t> node that contains `markerText` (such as "ocation:", "ime:", or "eeting:")
+  const findExactMarkerNodeIndex = (tNodes, markerText) => {
+    const target = markerText.toLowerCase();
     for (let i = 0; i < tNodes.length; i++) {
-      running += tNodes[i].textContent || "";
-      if (running.toLowerCase().includes(target)) {
+      const txt = (tNodes[i].textContent || "").toLowerCase();
+      if (txt.includes(target)) {
         return i;
       }
     }
     return -1;
   };
 
-  // Trims only trailing underscore/space placeholders on the run ending the label, keeping yellow/blue label runs untouched
-  const stripTrailingPlaceholdersOnNode = (node, labelText) => {
+  // Trims only trailing underscore/space placeholders on `node` without altering any label characters or run colors
+  const stripTrailingPlaceholdersOnNode = (node) => {
     if (!node) return;
     const raw = node.textContent || "";
-    const lower = raw.toLowerCase();
-    const targetLower = labelText.toLowerCase();
-    const lastChar = targetLower[targetLower.length - 1];
-    const idx = lower.lastIndexOf(lastChar);
-    if (idx !== -1 && idx < raw.length - 1) {
-      const suffix = raw.slice(idx + 1);
-      if (/^[_\s]+$/.test(suffix)) {
-        node.textContent = raw.slice(0, idx + 1);
-        node.setAttribute("xml:space", "preserve");
-      }
+    const trimmedSuffix = raw.replace(/[_\s]+$/, "");
+    if (trimmedSuffix !== raw) {
+      node.textContent = trimmedSuffix;
+      node.setAttribute("xml:space", "preserve");
     }
   };
 
-  // Inserts a dedicated value <w:r> right after the run containing `tNodes[afterNodeIndex]`, preserving all earlier split-color runs
-  const insertValueAfterRun = (pNode, tNodes, afterNodeIndex, valueText, stopBeforeIndex, xmlDoc) => {
+  // Inserts a new value <w:r> immediately after `tNodes[markerIndex]`'s parent <w:r>, preserving all earlier/later runs
+  const insertValueAfterMarkerNode = (pNode, tNodes, markerIndex, valueText, xmlDoc) => {
     const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-    const endLimit = typeof stopBeforeIndex === "number" && stopBeforeIndex > afterNodeIndex
-      ? stopBeforeIndex
-      : tNodes.length;
+    const anchorRun = tNodes[markerIndex]?.parentNode;
 
-    for (let i = afterNodeIndex + 1; i < endLimit; i++) {
-      tNodes[i].textContent = "";
+    // Clear only placeholder-only runs immediately following the marker before the next label
+    for (let i = markerIndex + 1; i < tNodes.length; i++) {
+      const val = tNodes[i].textContent || "";
+      if (/^[_\s]+$/.test(val)) {
+        tNodes[i].textContent = "";
+      } else {
+        break;
+      }
     }
 
     const r = xmlDoc.createElementNS(nsW, "w:r");
@@ -885,7 +882,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     t.setAttribute("xml:space", "preserve");
     r.appendChild(t);
 
-    const anchorRun = tNodes[afterNodeIndex]?.parentNode;
     if (anchorRun && anchorRun.parentNode === pNode) {
       pNode.insertBefore(r, anchorRun.nextSibling);
     } else {
@@ -893,36 +889,33 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   };
 
-  const setValueAfterLabel = (pNode, labelText, valueText, xmlDoc) => {
+  const setValueAfterLabel = (pNode, markerText, valueText, xmlDoc) => {
     const tNodes = Array.from(pNode.getElementsByTagName("w:t"));
     if (tNodes.length === 0) return;
 
-    const labelIdx = findLabelEndNodeIndex(tNodes, labelText);
-    if (labelIdx !== -1) {
-      stripTrailingPlaceholdersOnNode(tNodes[labelIdx], labelText);
-      insertValueAfterRun(pNode, tNodes, labelIdx, valueText, tNodes.length, xmlDoc);
+    const markerIdx = findExactMarkerNodeIndex(tNodes, markerText);
+    if (markerIdx !== -1) {
+      stripTrailingPlaceholdersOnNode(tNodes[markerIdx]);
+      insertValueAfterMarkerNode(pNode, tNodes, markerIdx, valueText, xmlDoc);
     }
   };
 
-  const setTwoValuesInParagraph = (pNode, label1, value1, label2, value2, xmlDoc) => {
+  const setTwoValuesInParagraph = (pNode, marker1, value1, marker2, value2, xmlDoc) => {
     const tNodes = Array.from(pNode.getElementsByTagName("w:t"));
     if (tNodes.length === 0) return;
 
-    const idx1 = findLabelEndNodeIndex(tNodes, label1);
-    const idx2 = label2 ? findLabelEndNodeIndex(tNodes, label2) : -1;
-
+    const idx1 = findExactMarkerNodeIndex(tNodes, marker1);
     if (idx1 !== -1) {
-      stripTrailingPlaceholdersOnNode(tNodes[idx1], label1);
-      const stopBefore1 = idx2 > idx1 ? idx2 : tNodes.length;
-      insertValueAfterRun(pNode, tNodes, idx1, value1, stopBefore1, xmlDoc);
+      stripTrailingPlaceholdersOnNode(tNodes[idx1]);
+      insertValueAfterMarkerNode(pNode, tNodes, idx1, value1, xmlDoc);
     }
 
-    if (idx2 !== -1) {
+    if (marker2) {
       const freshTNodes = Array.from(pNode.getElementsByTagName("w:t"));
-      const freshIdx2 = findLabelEndNodeIndex(freshTNodes, label2);
-      if (freshIdx2 !== -1) {
-        stripTrailingPlaceholdersOnNode(freshTNodes[freshIdx2], label2);
-        insertValueAfterRun(pNode, freshTNodes, freshIdx2, value2, freshTNodes.length, xmlDoc);
+      const idx2 = findExactMarkerNodeIndex(freshTNodes, marker2);
+      if (idx2 !== -1) {
+        stripTrailingPlaceholdersOnNode(freshTNodes[idx2]);
+        insertValueAfterMarkerNode(pNode, freshTNodes, idx2, value2, xmlDoc);
       }
     }
   };
@@ -952,7 +945,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
             p,
             "Week Ending:",
             ` ${inspectionData.weekEnding || ''}      `,
-            "Time:",
+            "ime:",
             ` ${inspectionData.time || ''}`,
             xmlDoc
           );
@@ -1030,12 +1023,11 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           p,
           "Date and Time:",
           ` ${toolboxData.date || ''} ${toolboxData.time || ''}    `,
-          "Location:",
+          "ocation:",
           ` ${toolboxData.location || ''}`,
           xmlDoc
         );
       } else if (pStr.includes("Meeting Closed:")) {
-        // N [yellow] + ext [blue] + M [yellow] + eeting: [blue] stay intact; value is inserted right after eeting:
         setTwoValuesInParagraph(
           p,
           "Meeting Closed:",
@@ -1081,9 +1073,10 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           cleanPStr === "operational issues / other business") &&
         toolboxData.operationalIssues
       ) {
-        // Targets only the Operational Issues/other Business section heading (never Agenda item 8) Other)
         const targetP = paragraphs[i + 1];
-        if (targetP) {
+        const targetText = targetP ? getCellText(targetP).toLowerCase() : "";
+        // Guard so Agenda item 8) Other is never overwritten
+        if (targetP && !targetText.startsWith("8)") && targetText !== "other") {
           setParagraphText(targetP, toolboxData.operationalIssues, xmlDoc);
         }
       }
