@@ -370,13 +370,34 @@ export default function ManagerHealthAndSafetyDashboard() {
     }
   };
 
+  const stripBottomBordersFromNode = (node) => {
+    if (!node || !node.getElementsByTagName) return;
+    const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    const pBdrs = [
+      ...Array.from(node.getElementsByTagNameNS(nsW, "pBdr")),
+      ...Array.from(node.getElementsByTagName("w:pBdr")),
+    ];
+    pBdrs.forEach((pBdr) => {
+      const bottoms = [
+        ...Array.from(pBdr.getElementsByTagNameNS(nsW, "bottom")),
+        ...Array.from(pBdr.getElementsByTagName("w:bottom")),
+      ];
+      bottoms.forEach((b) => {
+        if (b.parentNode) b.parentNode.removeChild(b);
+      });
+    });
+  };
+
   const flattenSpacerParagraph = (pNode, xmlDoc) => {
     if (!pNode) return;
-    const text = getCellText(pNode).trim();
     const hasDrawing = pNode.getElementsByTagName("w:drawing").length > 0;
     const hasTable = pNode.getElementsByTagName("w:tbl").length > 0;
+    if (hasDrawing || hasTable) return;
 
-    if (!hasDrawing && !hasTable && (text === "" || /^[_\s–—-]+$/.test(text))) {
+    stripBottomBordersFromNode(pNode);
+
+    const text = getCellText(pNode).trim();
+    if (text === "" || /^[_\s–—-]+$/.test(text)) {
       const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
       const tNodes = pNode.getElementsByTagName("w:t");
       for (let tn of tNodes) {
@@ -389,14 +410,6 @@ export default function ManagerHealthAndSafetyDashboard() {
         pNode.insertBefore(pPr, pNode.firstChild);
       }
 
-      const pBdrs = [
-        ...Array.from(pPr.getElementsByTagNameNS(nsW, "pBdr")),
-        ...Array.from(pPr.getElementsByTagName("w:pBdr")),
-      ];
-      pBdrs.forEach((bdr) => {
-        if (bdr.parentNode) bdr.parentNode.removeChild(bdr);
-      });
-
       let spacing = pPr.getElementsByTagNameNS(nsW, "spacing")[0] || pPr.getElementsByTagName("w:spacing")[0];
       if (!spacing) {
         spacing = xmlDoc.createElementNS(nsW, "w:spacing");
@@ -404,8 +417,8 @@ export default function ManagerHealthAndSafetyDashboard() {
       }
       spacing.setAttribute("w:before", "0");
       spacing.setAttribute("w:after", "0");
-      spacing.setAttribute("w:line", "20");
-      spacing.setAttribute("w:lineRule", "auto");
+      spacing.setAttribute("w:line", "1");
+      spacing.setAttribute("w:lineRule", "exact");
 
       const runs = Array.from(pNode.getElementsByTagName("w:r"));
       runs.forEach((r) => {
@@ -414,19 +427,14 @@ export default function ManagerHealthAndSafetyDashboard() {
           rPr = xmlDoc.createElementNS(nsW, "w:rPr");
           r.insertBefore(rPr, r.firstChild);
         }
-        let sz = rPr.getElementsByTagNameNS(nsW, "sz")[0] || rPr.getElementsByTagName("w:sz")[0];
-        if (!sz) {
-          sz = xmlDoc.createElementNS(nsW, "w:sz");
-          rPr.appendChild(sz);
-        }
-        sz.setAttribute("w:val", "4");
-
-        let szCs = rPr.getElementsByTagNameNS(nsW, "szCs")[0] || rPr.getElementsByTagName("w:szCs")[0];
-        if (!szCs) {
-          szCs = xmlDoc.createElementNS(nsW, "w:szCs");
-          rPr.appendChild(szCs);
-        }
-        szCs.setAttribute("w:val", "4");
+        ["sz", "szCs"].forEach((szTag) => {
+          let szEl = rPr.getElementsByTagNameNS(nsW, szTag)[0] || rPr.getElementsByTagName(szTag)[0];
+          if (!szEl) {
+            szEl = xmlDoc.createElementNS(nsW, `w:${szTag}`);
+            rPr.appendChild(szEl);
+          }
+          szEl.setAttribute("w:val", "2");
+        });
       });
     }
   };
@@ -615,8 +623,12 @@ export default function ManagerHealthAndSafetyDashboard() {
               xmlDoc,
               "    "
             );
+            stripBottomBordersFromNode(p);
             if (paragraphs[i + 1]) {
               flattenSpacerParagraph(paragraphs[i + 1], xmlDoc);
+            }
+            if (paragraphs[i + 2]) {
+              flattenSpacerParagraph(paragraphs[i + 2], xmlDoc);
             }
           } else if (cleanPStr.includes("meeting closed:")) {
             setTwoValuesInParagraph(
