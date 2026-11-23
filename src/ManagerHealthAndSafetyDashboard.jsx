@@ -8,6 +8,9 @@ import { Share } from '@capacitor/share';
 import PZip from 'pizzip';
 import sjrLogo from './assets/logo.jpg';
 
+const INSPECTION_TYPE = 'Site Safety Inspection Report';
+const TOOLBOX_TYPE = 'H&S and Tool Box Meeting Worksheet';
+
 export default function ManagerHealthAndSafetyDashboard() {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +45,7 @@ export default function ManagerHealthAndSafetyDashboard() {
 
   const handleDeleteSubmission = async (record) => {
     const confirmDelete = window.confirm(
-      `Are you sure you want to delete this ${record.type} for ${record.site || record.location}? This action cannot be undone.`
+      `Are you sure you want to delete this ${record.type || 'entry'} for ${record.site || record.location}? This action cannot be undone.`
     );
     if (!confirmDelete) return;
 
@@ -63,17 +66,27 @@ export default function ManagerHealthAndSafetyDashboard() {
     }
   };
 
-  // Group submissions by site name
+  // Group submissions by site name & robustly classify Document Types
   const siteMap = {};
   submissions.forEach((item) => {
-    const siteName = item.site || item.location || item.project || "General / Unassigned";
+    const rawSite = item.site || item.location || item.project || "General / Unassigned";
+    const siteName = rawSite.trim();
+
     if (!siteMap[siteName]) {
       siteMap[siteName] = { inspections: [], toolboxes: [] };
     }
-    if (item.type === 'Site Safety Inspection Report' || item.sections) {
-      siteMap[siteName].inspections.push(item);
-    } else {
+
+    // Explicit type check & structural fallback
+    const isToolbox =
+      item.type === TOOLBOX_TYPE ||
+      item.id.startsWith('toolbox_') ||
+      Array.isArray(item.attendees) ||
+      Array.isArray(item.taskPlanning);
+
+    if (isToolbox) {
       siteMap[siteName].toolboxes.push(item);
+    } else {
+      siteMap[siteName].inspections.push(item);
     }
   });
 
@@ -256,7 +269,9 @@ export default function ManagerHealthAndSafetyDashboard() {
   const exportDocxForRecord = async (record) => {
     setExportingId(record.id);
     try {
-      const isInspection = record.type === 'Site Safety Inspection Report' || record.sections;
+      const isInspection =
+        record.type === INSPECTION_TYPE ||
+        (!record.type && !record.id.startsWith('toolbox_') && !record.attendees);
       const templateFileName = isInspection
         ? 'Site Safety Inspection Report.docx'
         : 'H&S and Toolbox Meeting Worksheet.docx';
@@ -285,12 +300,12 @@ export default function ManagerHealthAndSafetyDashboard() {
               for (let tn of tNodes) pStr += tn.textContent;
               
               if (pStr.includes("Site:")) {
-                pStr = `Site: ${record.site || ''}`;
+                pStr = `Site: ${record.site || record.location || ''}`;
                 tNodes[0].textContent = pStr;
                 for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
               }
               if (pStr.includes("Week Ending:")) {
-                pStr = `Week Ending: ${record.weekEnding || ''}      Time: ${record.time || ''}`;
+                pStr = `Week Ending: ${record.weekEnding || record.date || ''}      Time: ${record.time || ''}`;
                 tNodes[0].textContent = pStr;
                 for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
               }
@@ -300,7 +315,7 @@ export default function ManagerHealthAndSafetyDashboard() {
                 for (let i = 1; i < tNodes.length; i++) tNodes[i].textContent = "";
               }
               if (pStr.includes("Signed:")) {
-                const formattedDate = formatDateShort(record.dateSigned || record.weekEnding);
+                const formattedDate = formatDateShort(record.dateSigned || record.weekEnding || record.date);
                 if (record.signature) {
                   insertSignatureWithParagraph(p, record.signature, formattedDate, zip, xmlDoc);
                 } else {
@@ -341,8 +356,8 @@ export default function ManagerHealthAndSafetyDashboard() {
         const serializer = new XMLSerializer();
         zip.file("word/document.xml", serializer.serializeToString(xmlDoc));
 
-        const siteNameClean = (record.site || 'Site').replace(/[^a-zA-Z0-9_\-]/g, '_');
-        const outputFileName = `Site Safety Inspection - ${siteNameClean} (${record.weekEnding}).docx`;
+        const siteNameClean = (record.site || record.location || 'Site').replace(/[^a-zA-Z0-9_\-]/g, '_');
+        const outputFileName = `Site Safety Inspection - ${siteNameClean} (${record.weekEnding || record.date}).docx`;
         await saveAndShareFile(zip, outputFileName);
 
       } else {
@@ -357,14 +372,14 @@ export default function ManagerHealthAndSafetyDashboard() {
             for (let tn of tNodes) pStr += tn.textContent;
 
             if (pStr.includes("Date and Time:")) {
-              pStr = `Date and Time: ${record.date || ''} ${record.time || ''}    Location: ${record.location || ''}`;
+              pStr = `Date and Time: ${record.date || record.weekEnding || ''} ${record.time || ''}    Location: ${record.location || record.site || ''}`;
               tNodes[0].textContent = pStr;
               for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
             } else if (pStr.includes("Meeting Closed:")) {
               pStr = `Meeting Closed: ${record.time || ''}    Next Meeting: Next week`;
               tNodes[0].textContent = pStr;
               for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
-            } else if (pStr.includes("Signed – Management:")) {
+            } else if (pStr.includes("Signed – Management:") || pStr.includes("Signed - Management:")) {
               if (record.managementSignature) {
                 const dateVal = formatDateShort(record.managementDate || record.date);
                 pStr = `Signed – Management: Signed (${dateVal})    Dated: ${dateVal}`;
@@ -375,7 +390,7 @@ export default function ManagerHealthAndSafetyDashboard() {
                 tNodes[0].textContent = pStr;
                 for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
               }
-            } else if (pStr.toLowerCase().startsWith("discussion about task planning")) {
+            } else if (pStr.toLowerCase().includes("discussion about task planning")) {
               tNodes[0].textContent = "Discussion About Task Planning and Weekly Goals:";
               for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
 
@@ -386,7 +401,7 @@ export default function ManagerHealthAndSafetyDashboard() {
                   setCellText(targetCell, record.taskPlanningDiscussion, xmlDoc);
                 }
               }
-            } else if (pStr.toLowerCase().startsWith("operational issues/other business")) {
+            } else if (pStr.toLowerCase().includes("operational issues/other business") || pStr.toLowerCase().includes("operational issues / other business")) {
               tNodes[0].textContent = "Operational Issues/other Business:";
               for (let j = 1; j < tNodes.length; j++) tNodes[j].textContent = "";
 
@@ -515,8 +530,8 @@ export default function ManagerHealthAndSafetyDashboard() {
         const serializer = new XMLSerializer();
         zip.file("word/document.xml", serializer.serializeToString(xmlDoc));
 
-        const locClean = (record.location || 'Site').replace(/[^a-zA-Z0-9_\-]/g, '_');
-        const outputFileName = `Toolbox Meeting - ${locClean} (${record.date}).docx`;
+        const locClean = (record.location || record.site || 'Site').replace(/[^a-zA-Z0-9_\-]/g, '_');
+        const outputFileName = `Toolbox Meeting - ${locClean} (${record.date || record.weekEnding}).docx`;
         await saveAndShareFile(zip, outputFileName);
       }
 
@@ -581,7 +596,7 @@ export default function ManagerHealthAndSafetyDashboard() {
                   data.inspections.map((item) => (
                     <div key={item.id} className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex justify-between items-center text-xs">
                       <div>
-                        <span className="font-bold text-slate-800 block">Week Ending: {item.weekEnding}</span>
+                        <span className="font-bold text-slate-800 block">Week Ending: {item.weekEnding || item.date}</span>
                         <span className="text-slate-500">Submitted by: <strong className="text-slate-700">{item.userName || item.inspectedBy}</strong></span>
                       </div>
                       <div className="flex gap-2">
@@ -623,8 +638,8 @@ export default function ManagerHealthAndSafetyDashboard() {
                   data.toolboxes.map((item) => (
                     <div key={item.id} className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex justify-between items-center text-xs">
                       <div>
-                        <span className="font-bold text-slate-800 block">Meeting Date: {item.date} ({item.attendees?.length || 0} Attendees)</span>
-                        <span className="text-slate-500">Submitted by: <strong className="text-slate-700">{item.userName}</strong></span>
+                        <span className="font-bold text-slate-800 block">Meeting Date: {item.date || item.weekEnding} ({item.attendees?.length || 0} Attendees)</span>
+                        <span className="text-slate-500">Submitted by: <strong className="text-slate-700">{item.userName || item.inspectedBy}</strong></span>
                       </div>
                       <div className="flex gap-2">
                         <button
@@ -666,7 +681,7 @@ export default function ManagerHealthAndSafetyDashboard() {
           <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4 border border-slate-200 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
-                {selectedSubmission.type}
+                {selectedSubmission.type || (selectedSubmission.id.startsWith('toolbox_') ? TOOLBOX_TYPE : INSPECTION_TYPE)}
               </h3>
               <button
                 type="button"
