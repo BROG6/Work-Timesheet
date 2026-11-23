@@ -19,7 +19,6 @@ export default function ManagerHealthAndSafetyDashboard() {
   const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [statusMessage, setStatusMessage] = useState(null);
 
-  // Real-time live listener without dropping docs missing createdAt
   useEffect(() => {
     setLoading(true);
     const colRef = collection(db, 'health_safety');
@@ -86,7 +85,6 @@ export default function ManagerHealthAndSafetyDashboard() {
     }
   };
 
-  // Group submissions by site name & classify strictly
   const siteMap = {};
   submissions.forEach((item) => {
     const rawSite = item.site || item.location || item.project || "General / Unassigned";
@@ -113,7 +111,6 @@ export default function ManagerHealthAndSafetyDashboard() {
     return `${day}/${month}/${year}`;
   };
 
-  // --- DOM PARSER & IMAGE INJECTION HELPER FUNCTIONS ---
   function cleanRunFormatting(node) {
     if (!node || !node.getElementsByTagName) return;
     const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -258,61 +255,86 @@ export default function ManagerHealthAndSafetyDashboard() {
     }
   }
 
-  const setValueAfterLabel = (pNode, labelText, valueText, xmlDoc) => {
+  const findLabelNodeIndex = (tNodes, labelText) => {
+    const target = labelText.toLowerCase();
+    let running = "";
+    for (let i = 0; i < tNodes.length; i++) {
+      running += tNodes[i].textContent || "";
+      if (running.toLowerCase().includes(target)) {
+        return i;
+      }
+    }
+    return -1;
+  };
+
+  const trimTrailingBlankPlaceholder = (node, labelText) => {
+    if (!node) return;
+    const raw = node.textContent || "";
+    const lower = raw.toLowerCase();
+    const lastChar = labelText[labelText.length - 1].toLowerCase();
+    const idx = lower.lastIndexOf(lastChar);
+    if (idx !== -1 && idx < raw.length - 1) {
+      const suffix = raw.slice(idx + 1);
+      if (/^[_\s]+$/.test(suffix)) {
+        node.textContent = raw.slice(0, idx + 1);
+        node.setAttribute("xml:space", "preserve");
+      }
+    }
+  };
+
+  const writeCleanValueNode = (pNode, tNodes, targetIndex, valueText, stopBeforeIndex, xmlDoc) => {
     const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    const endLimit = typeof stopBeforeIndex === "number" && stopBeforeIndex > targetIndex
+      ? stopBeforeIndex
+      : tNodes.length;
+
+    if (targetIndex >= 0 && targetIndex < tNodes.length) {
+      const valNode = tNodes[targetIndex];
+      valNode.textContent = valueText;
+      valNode.setAttribute("xml:space", "preserve");
+      if (valNode.parentNode) cleanRunFormatting(valNode.parentNode);
+      for (let i = targetIndex + 1; i < endLimit; i++) {
+        tNodes[i].textContent = "";
+      }
+    } else {
+      const r = xmlDoc.createElementNS(nsW, "w:r");
+      const t = xmlDoc.createElementNS(nsW, "w:t");
+      t.textContent = valueText;
+      t.setAttribute("xml:space", "preserve");
+      r.appendChild(t);
+      pNode.appendChild(r);
+    }
+  };
+
+  const setValueAfterLabel = (pNode, labelText, valueText, xmlDoc) => {
     const tNodes = Array.from(pNode.getElementsByTagName("w:t"));
     if (tNodes.length === 0) return;
 
-    const targetLabel = labelText.toLowerCase();
-    let runningText = "";
-    let labelEndNodeIndex = -1;
+    const labelIdx = findLabelNodeIndex(tNodes, labelText);
+    if (labelIdx !== -1) {
+      trimTrailingBlankPlaceholder(tNodes[labelIdx], labelText);
+      writeCleanValueNode(pNode, tNodes, labelIdx + 1, valueText, tNodes.length, xmlDoc);
+    } else if (tNodes.length > 1) {
+      writeCleanValueNode(pNode, tNodes, 1, valueText, tNodes.length, xmlDoc);
+    }
+  };
 
-    for (let i = 0; i < tNodes.length; i++) {
-      runningText += tNodes[i].textContent || "";
-      if (runningText.toLowerCase().includes(targetLabel)) {
-        labelEndNodeIndex = i;
-        break;
-      }
+  const setTwoValuesInParagraph = (pNode, label1, value1, label2, value2, xmlDoc) => {
+    const tNodes = Array.from(pNode.getElementsByTagName("w:t"));
+    if (tNodes.length === 0) return;
+
+    const idx1 = findLabelNodeIndex(tNodes, label1);
+    const idx2 = label2 ? findLabelNodeIndex(tNodes, label2) : -1;
+
+    if (idx1 !== -1) {
+      trimTrailingBlankPlaceholder(tNodes[idx1], label1);
+      const stopBefore = idx2 > idx1 ? idx2 : tNodes.length;
+      writeCleanValueNode(pNode, tNodes, idx1 + 1, value1, stopBefore, xmlDoc);
     }
 
-    if (labelEndNodeIndex !== -1) {
-      const labelNode = tNodes[labelEndNodeIndex];
-      const currentLabelText = labelNode.textContent || "";
-      const lowerLabelText = currentLabelText.toLowerCase();
-      const idxInNode = lowerLabelText.lastIndexOf(targetLabel[targetLabel.length - 1]);
-
-      if (idxInNode !== -1 && idxInNode < currentLabelText.length - 1) {
-        const prefix = currentLabelText.slice(0, idxInNode + 1);
-        const suffix = currentLabelText.slice(idxInNode + 1);
-        if (/^[_\s]+$/.test(suffix)) {
-          labelNode.textContent = prefix;
-          labelNode.setAttribute("xml:space", "preserve");
-        }
-      }
-
-      const nextNode = tNodes[labelEndNodeIndex + 1];
-      if (nextNode) {
-        nextNode.textContent = valueText;
-        nextNode.setAttribute("xml:space", "preserve");
-        if (nextNode.parentNode) cleanRunFormatting(nextNode.parentNode);
-        for (let j = labelEndNodeIndex + 2; j < tNodes.length; j++) {
-          tNodes[j].textContent = "";
-        }
-      } else {
-        const r = xmlDoc.createElementNS(nsW, "w:r");
-        const t = xmlDoc.createElementNS(nsW, "w:t");
-        t.textContent = valueText;
-        t.setAttribute("xml:space", "preserve");
-        r.appendChild(t);
-        pNode.appendChild(r);
-      }
-    } else if (tNodes.length > 1) {
-      tNodes[1].textContent = valueText;
-      tNodes[1].setAttribute("xml:space", "preserve");
-      if (tNodes[1].parentNode) cleanRunFormatting(tNodes[1].parentNode);
-      for (let i = 2; i < tNodes.length; i++) {
-        tNodes[i].textContent = "";
-      }
+    if (idx2 !== -1) {
+      trimTrailingBlankPlaceholder(tNodes[idx2], label2);
+      writeCleanValueNode(pNode, tNodes, idx2 + 1, value2, tNodes.length, xmlDoc);
     }
   };
 
@@ -388,7 +410,14 @@ export default function ManagerHealthAndSafetyDashboard() {
               setValueAfterLabel(p, "Site:", ` ${record.site || record.location || ''}`, xmlDoc);
             }
             if (text.includes("Week Ending:")) {
-              setValueAfterLabel(p, "Week Ending:", ` ${record.weekEnding || record.date || ''}      Time: ${record.time || ''}`, xmlDoc);
+              setTwoValuesInParagraph(
+                p,
+                "Week Ending:",
+                ` ${record.weekEnding || record.date || ''}      `,
+                "Time:",
+                ` ${record.time || ''}`,
+                xmlDoc
+              );
             }
             if (text.includes("Inspected By:")) {
               setValueAfterLabel(p, "Inspected By:", ` ${record.inspectedBy || record.userName || ''}`, xmlDoc);
@@ -398,7 +427,14 @@ export default function ManagerHealthAndSafetyDashboard() {
               if (record.signature) {
                 insertSignatureWithParagraph(p, record.signature, formattedDate, zip, xmlDoc);
               } else {
-                setValueAfterLabel(p, "Signed:", ` ________________      Dated: ${formattedDate}`, xmlDoc);
+                setTwoValuesInParagraph(
+                  p,
+                  "Signed:",
+                  ` ________________      `,
+                  "Dated:",
+                  ` ${formattedDate}`,
+                  xmlDoc
+                );
               }
             }
           }
@@ -448,16 +484,44 @@ export default function ManagerHealthAndSafetyDashboard() {
             for (let tn of tNodes) pStr += tn.textContent;
 
             if (pStr.includes("Date and Time:")) {
-              setValueAfterLabel(p, "Date and Time:", ` ${record.date || record.weekEnding || ''} ${record.time || ''}    Location: ${record.location || record.site || ''}`, xmlDoc);
+              setTwoValuesInParagraph(
+                p,
+                "Date and Time:",
+                ` ${record.date || record.weekEnding || ''} ${record.time || ''}    `,
+                "Location:",
+                ` ${record.location || record.site || ''}`,
+                xmlDoc
+              );
             } else if (pStr.includes("Meeting Closed:")) {
-              setValueAfterLabel(p, "Meeting Closed:", ` ${record.time || ''}    Next Meeting: Next week`, xmlDoc);
+              setTwoValuesInParagraph(
+                p,
+                "Meeting Closed:",
+                ` ${record.time || ''}    `,
+                "Next Meeting:",
+                " Next week",
+                xmlDoc
+              );
             } else if (pStr.includes("Signed – Management:") || pStr.includes("Signed - Management:")) {
               const labelMatch = pStr.includes("Signed – Management:") ? "Signed – Management:" : "Signed - Management:";
               if (record.managementSignature) {
                 const dateVal = formatDateShort(record.managementDate || record.date);
-                setValueAfterLabel(p, labelMatch, ` Signed (${dateVal})    Dated: ${dateVal}`, xmlDoc);
+                setTwoValuesInParagraph(
+                  p,
+                  labelMatch,
+                  ` Signed (${dateVal})    `,
+                  "Dated:",
+                  ` ${dateVal}`,
+                  xmlDoc
+                );
               } else {
-                setValueAfterLabel(p, labelMatch, ` ________________    Dated: ____________`, xmlDoc);
+                setTwoValuesInParagraph(
+                  p,
+                  labelMatch,
+                  ` ________________    `,
+                  "Dated:",
+                  " ____________",
+                  xmlDoc
+                );
               }
             } else if (pStr.toLowerCase().includes("discussion about task planning")) {
               let nextSibling = p.parentNode && p.parentNode.nodeName === 'w:tc' ? p.parentNode.parentNode.nextElementSibling : p.nextElementSibling;
@@ -611,7 +675,6 @@ export default function ManagerHealthAndSafetyDashboard() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-4 my-4 pb-12">
-      {/* Header Banner */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5 flex justify-between items-center">
         <div className="flex items-center gap-3">
           <img src={sjrLogo} alt="SJR Builders Logo" className="h-10 w-auto object-contain" />
@@ -650,7 +713,6 @@ export default function ManagerHealthAndSafetyDashboard() {
                 </span>
               </div>
 
-              {/* Inspections Table */}
               <div className="space-y-2">
                 <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider">Site Safety Inspection Reports</h4>
                 {data.inspections.length === 0 ? (
@@ -692,7 +754,6 @@ export default function ManagerHealthAndSafetyDashboard() {
                 )}
               </div>
 
-              {/* Toolboxes Table */}
               <div className="space-y-2 pt-2">
                 <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider">Toolbox Meeting Worksheets</h4>
                 {data.toolboxes.length === 0 ? (
@@ -738,7 +799,6 @@ export default function ManagerHealthAndSafetyDashboard() {
         </div>
       )}
 
-      {/* Submission Inspector Modal */}
       {selectedSubmission && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4 border border-slate-200 max-h-[90vh] overflow-y-auto">
