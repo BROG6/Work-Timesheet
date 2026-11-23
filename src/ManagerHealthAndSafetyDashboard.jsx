@@ -255,7 +255,7 @@ export default function ManagerHealthAndSafetyDashboard() {
     }
   }
 
-  const findLabelNodeIndex = (tNodes, labelText) => {
+  const findLabelEndNodeIndex = (tNodes, labelText) => {
     const target = labelText.toLowerCase();
     let running = "";
     for (let i = 0; i < tNodes.length; i++) {
@@ -267,11 +267,12 @@ export default function ManagerHealthAndSafetyDashboard() {
     return -1;
   };
 
-  const trimTrailingBlankPlaceholder = (node, labelText) => {
+  const stripTrailingPlaceholdersOnNode = (node, labelText) => {
     if (!node) return;
     const raw = node.textContent || "";
     const lower = raw.toLowerCase();
-    const lastChar = labelText[labelText.length - 1].toLowerCase();
+    const targetLower = labelText.toLowerCase();
+    const lastChar = targetLower[targetLower.length - 1];
     const idx = lower.lastIndexOf(lastChar);
     if (idx !== -1 && idx < raw.length - 1) {
       const suffix = raw.slice(idx + 1);
@@ -282,26 +283,26 @@ export default function ManagerHealthAndSafetyDashboard() {
     }
   };
 
-  const writeCleanValueNode = (pNode, tNodes, targetIndex, valueText, stopBeforeIndex, xmlDoc) => {
+  const insertValueAfterRun = (pNode, tNodes, afterNodeIndex, valueText, stopBeforeIndex, xmlDoc) => {
     const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-    const endLimit = typeof stopBeforeIndex === "number" && stopBeforeIndex > targetIndex
+    const endLimit = typeof stopBeforeIndex === "number" && stopBeforeIndex > afterNodeIndex
       ? stopBeforeIndex
       : tNodes.length;
 
-    if (targetIndex >= 0 && targetIndex < tNodes.length) {
-      const valNode = tNodes[targetIndex];
-      valNode.textContent = valueText;
-      valNode.setAttribute("xml:space", "preserve");
-      if (valNode.parentNode) cleanRunFormatting(valNode.parentNode);
-      for (let i = targetIndex + 1; i < endLimit; i++) {
-        tNodes[i].textContent = "";
-      }
+    for (let i = afterNodeIndex + 1; i < endLimit; i++) {
+      tNodes[i].textContent = "";
+    }
+
+    const r = xmlDoc.createElementNS(nsW, "w:r");
+    const t = xmlDoc.createElementNS(nsW, "w:t");
+    t.textContent = valueText;
+    t.setAttribute("xml:space", "preserve");
+    r.appendChild(t);
+
+    const anchorRun = tNodes[afterNodeIndex]?.parentNode;
+    if (anchorRun && anchorRun.parentNode === pNode) {
+      pNode.insertBefore(r, anchorRun.nextSibling);
     } else {
-      const r = xmlDoc.createElementNS(nsW, "w:r");
-      const t = xmlDoc.createElementNS(nsW, "w:t");
-      t.textContent = valueText;
-      t.setAttribute("xml:space", "preserve");
-      r.appendChild(t);
       pNode.appendChild(r);
     }
   };
@@ -310,12 +311,10 @@ export default function ManagerHealthAndSafetyDashboard() {
     const tNodes = Array.from(pNode.getElementsByTagName("w:t"));
     if (tNodes.length === 0) return;
 
-    const labelIdx = findLabelNodeIndex(tNodes, labelText);
+    const labelIdx = findLabelEndNodeIndex(tNodes, labelText);
     if (labelIdx !== -1) {
-      trimTrailingBlankPlaceholder(tNodes[labelIdx], labelText);
-      writeCleanValueNode(pNode, tNodes, labelIdx + 1, valueText, tNodes.length, xmlDoc);
-    } else if (tNodes.length > 1) {
-      writeCleanValueNode(pNode, tNodes, 1, valueText, tNodes.length, xmlDoc);
+      stripTrailingPlaceholdersOnNode(tNodes[labelIdx], labelText);
+      insertValueAfterRun(pNode, tNodes, labelIdx, valueText, tNodes.length, xmlDoc);
     }
   };
 
@@ -323,18 +322,22 @@ export default function ManagerHealthAndSafetyDashboard() {
     const tNodes = Array.from(pNode.getElementsByTagName("w:t"));
     if (tNodes.length === 0) return;
 
-    const idx1 = findLabelNodeIndex(tNodes, label1);
-    const idx2 = label2 ? findLabelNodeIndex(tNodes, label2) : -1;
+    const idx1 = findLabelEndNodeIndex(tNodes, label1);
+    const idx2 = label2 ? findLabelEndNodeIndex(tNodes, label2) : -1;
 
     if (idx1 !== -1) {
-      trimTrailingBlankPlaceholder(tNodes[idx1], label1);
-      const stopBefore = idx2 > idx1 ? idx2 : tNodes.length;
-      writeCleanValueNode(pNode, tNodes, idx1 + 1, value1, stopBefore, xmlDoc);
+      stripTrailingPlaceholdersOnNode(tNodes[idx1], label1);
+      const stopBefore1 = idx2 > idx1 ? idx2 : tNodes.length;
+      insertValueAfterRun(pNode, tNodes, idx1, value1, stopBefore1, xmlDoc);
     }
 
     if (idx2 !== -1) {
-      trimTrailingBlankPlaceholder(tNodes[idx2], label2);
-      writeCleanValueNode(pNode, tNodes, idx2 + 1, value2, tNodes.length, xmlDoc);
+      const freshTNodes = Array.from(pNode.getElementsByTagName("w:t"));
+      const freshIdx2 = findLabelEndNodeIndex(freshTNodes, label2);
+      if (freshIdx2 !== -1) {
+        stripTrailingPlaceholdersOnNode(freshTNodes[freshIdx2], label2);
+        insertValueAfterRun(pNode, freshTNodes, freshIdx2, value2, freshTNodes.length, xmlDoc);
+      }
     }
   };
 
@@ -482,6 +485,7 @@ export default function ManagerHealthAndSafetyDashboard() {
           if (tNodes.length > 0) {
             let pStr = "";
             for (let tn of tNodes) pStr += tn.textContent;
+            const cleanPStr = pStr.toLowerCase().trim();
 
             if (pStr.includes("Date and Time:")) {
               setTwoValuesInParagraph(
@@ -497,7 +501,7 @@ export default function ManagerHealthAndSafetyDashboard() {
                 p,
                 "Meeting Closed:",
                 ` ${record.time || ''}    `,
-                "Next Meeting:",
+                "eeting:",
                 " Next week",
                 xmlDoc
               );
@@ -523,20 +527,37 @@ export default function ManagerHealthAndSafetyDashboard() {
                   xmlDoc
                 );
               }
-            } else if (pStr.toLowerCase().includes("discussion about task planning")) {
-              let nextSibling = p.parentNode && p.parentNode.nodeName === 'w:tc' ? p.parentNode.parentNode.nextElementSibling : p.nextElementSibling;
-              if (nextSibling && record.taskPlanningDiscussion) {
-                const targetCell = nextSibling.getElementsByTagName ? nextSibling.getElementsByTagName("w:tc")[0] : null;
-                if (targetCell) {
-                  setCellText(targetCell, record.taskPlanningDiscussion, xmlDoc);
+            } else if (
+              cleanPStr.startsWith("discussion about task planning and weekly goals") &&
+              record.taskPlanningDiscussion
+            ) {
+              const targetP = paragraphs[i + 1];
+              if (targetP) {
+                const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+                const targetTNodes = targetP.getElementsByTagNameNS(nsW, "t");
+                if (targetTNodes.length > 0) {
+                  targetTNodes[0].textContent = record.taskPlanningDiscussion;
+                  targetTNodes[0].setAttribute("xml:space", "preserve");
+                  if (targetTNodes[0].parentNode) cleanRunFormatting(targetTNodes[0].parentNode);
+                  for (let k = 1; k < targetTNodes.length; k++) targetTNodes[k].textContent = "";
                 }
               }
-            } else if (pStr.toLowerCase().includes("operational issues/other business") || pStr.toLowerCase().includes("operational issues / other business")) {
-              let nextSibling = p.parentNode && p.parentNode.nodeName === 'w:tc' ? p.parentNode.parentNode.nextElementSibling : p.nextElementSibling;
-              if (nextSibling && record.operationalIssues) {
-                const targetCell = nextSibling.getElementsByTagName ? nextSibling.getElementsByTagName("w:tc")[0] : null;
-                if (targetCell) {
-                  setCellText(targetCell, record.operationalIssues, xmlDoc);
+            } else if (
+              (cleanPStr === "operational issues/other business:" ||
+                cleanPStr === "operational issues/other business" ||
+                cleanPStr === "operational issues / other business:" ||
+                cleanPStr === "operational issues / other business") &&
+              record.operationalIssues
+            ) {
+              const targetP = paragraphs[i + 1];
+              if (targetP) {
+                const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+                const targetTNodes = targetP.getElementsByTagNameNS(nsW, "t");
+                if (targetTNodes.length > 0) {
+                  targetTNodes[0].textContent = record.operationalIssues;
+                  targetTNodes[0].setAttribute("xml:space", "preserve");
+                  if (targetTNodes[0].parentNode) cleanRunFormatting(targetTNodes[0].parentNode);
+                  for (let k = 1; k < targetTNodes.length; k++) targetTNodes[k].textContent = "";
                 }
               }
             }
