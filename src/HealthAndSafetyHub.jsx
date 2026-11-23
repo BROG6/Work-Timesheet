@@ -675,17 +675,24 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }));
   };
 
-  function cleanRunFormatting(rNode) {
-    if (!rNode || !rNode.getElementsByTagName) return;
+  function cleanRunFormatting(node) {
+    if (!node || !node.getElementsByTagName) return;
     const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-    const rPrList = rNode.getElementsByTagNameNS(nsW, "rPr");
-    for (let i = 0; i < rPrList.length; i++) {
-      const rPr = rPrList[i];
-      ['highlight', 'shd', 'color'].forEach((tag) => {
-        const badNodes = Array.from(rPr.getElementsByTagNameNS(nsW, tag));
-        badNodes.forEach((bn) => rPr.removeChild(bn));
+    const containers = [
+      ...(node.nodeName === "w:rPr" ? [node] : []),
+      ...Array.from(node.getElementsByTagNameNS(nsW, "rPr")),
+      ...Array.from(node.getElementsByTagName("w:rPr")),
+    ];
+
+    containers.forEach((rPr) => {
+      ["highlight", "shd", "color"].forEach((tag) => {
+        const nsMatches = Array.from(rPr.getElementsByTagNameNS(nsW, tag));
+        const plainMatches = Array.from(rPr.getElementsByTagName(tag));
+        [...nsMatches, ...plainMatches].forEach((el) => {
+          if (el.parentNode) el.parentNode.removeChild(el);
+        });
       });
-    }
+    });
   }
 
   function setCellText(cell, text, xmlDoc) {
@@ -834,8 +841,14 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
   const setValueAfterLabel = (pNode, labelText, valueText, xmlDoc) => {
     const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    cleanRunFormatting(pNode);
+
     const tNodes = Array.from(pNode.getElementsByTagName("w:t"));
     if (tNodes.length === 0) return;
+
+    tNodes.forEach((tn) => {
+      if (tn.parentNode) cleanRunFormatting(tn.parentNode);
+    });
 
     const targetLabel = labelText.toLowerCase();
     let runningText = "";
@@ -995,6 +1008,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           if (locColonPos !== -1) {
             locNode.textContent = locText.slice(0, locColonPos + "Location:".length);
             locNode.setAttribute("xml:space", "preserve");
+            if (locNode.parentNode) cleanRunFormatting(locNode.parentNode);
           }
           if (tNodes[locIdx + 1]) {
             tNodes[locIdx + 1].textContent = ` ${toolboxData.location || ''}`;
