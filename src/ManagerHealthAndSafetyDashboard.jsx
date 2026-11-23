@@ -114,17 +114,24 @@ export default function ManagerHealthAndSafetyDashboard() {
   };
 
   // --- DOM PARSER & IMAGE INJECTION HELPER FUNCTIONS ---
-  function cleanRunFormatting(rNode) {
-    if (!rNode || !rNode.getElementsByTagName) return;
+  function cleanRunFormatting(node) {
+    if (!node || !node.getElementsByTagName) return;
     const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-    const rPrList = rNode.getElementsByTagNameNS(nsW, "rPr");
-    for (let i = 0; i < rPrList.length; i++) {
-      const rPr = rPrList[i];
-      ['highlight', 'shd', 'color'].forEach((tag) => {
-        const badNodes = Array.from(rPr.getElementsByTagNameNS(nsW, tag));
-        badNodes.forEach((bn) => rPr.removeChild(bn));
+    const containers = [
+      ...(node.nodeName === "w:rPr" ? [node] : []),
+      ...Array.from(node.getElementsByTagNameNS(nsW, "rPr")),
+      ...Array.from(node.getElementsByTagName("w:rPr")),
+    ];
+
+    containers.forEach((rPr) => {
+      ["highlight", "shd", "color"].forEach((tag) => {
+        const nsMatches = Array.from(rPr.getElementsByTagNameNS(nsW, tag));
+        const plainMatches = Array.from(rPr.getElementsByTagName(tag));
+        [...nsMatches, ...plainMatches].forEach((el) => {
+          if (el.parentNode) el.parentNode.removeChild(el);
+        });
       });
-    }
+    });
   }
 
   function setCellText(cell, text, xmlDoc) {
