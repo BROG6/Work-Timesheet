@@ -190,6 +190,154 @@ const buildInspectionDocId = (site, weekStart) =>
 const buildToolboxDocId = (location, date) =>
   `toolbox_${sanitizeSlug(location)}_${getMondayOfWeek(date)}`;
 
+const defaultInspectionSections = {
+  siteControl: [
+    { item: "Accommodation and lunchroom clean and hygienic", complies: "Yes", action: "", contractor: "" },
+    { item: "Toilet facilities clean and hygienic", complies: "Yes", action: "", contractor: "" },
+    { item: "General housekeeping up to date", complies: "Yes", action: "", contractor: "" },
+    { item: "Warning signs displayed", complies: "Yes", action: "", contractor: "" },
+    { item: "Hazard identification up to date", complies: "Yes", action: "", contractor: "" },
+    { item: "Site hoardings/fences in place", complies: "Yes", action: "", contractor: "" },
+    { item: "Hazardous materials stored safely", complies: "Yes", action: "", contractor: "" },
+  ],
+  firstAid: [
+    { item: "First Aid boxes are available and stocked", complies: "Yes", action: "", contractor: "" },
+    { item: "Accident Register is available", complies: "Yes", action: "", contractor: "" },
+    { item: "Fire Extinguisher is available and current", complies: "Yes", action: "", contractor: "" },
+    { item: "Evacuation Procedure current – emergencies included", complies: "Yes", action: "", contractor: "" },
+  ],
+  personalSafety: [
+    { item: "Signage displayed and legible", complies: "Yes", action: "", contractor: "" },
+    { item: "Hardhats being worn", complies: "Yes", action: "", contractor: "" },
+    { item: "Correct footwear being worn", complies: "Yes", action: "", contractor: "" },
+    { item: "Glasses/earmuffs/vests/masks used", complies: "Yes", action: "", contractor: "" },
+  ],
+  tidiness: [
+    { item: "Routes in/out clear", complies: "Yes", action: "", contractor: "" },
+    { item: "Site office clearly defined for visitors", complies: "Yes", action: "", contractor: "" },
+    { item: "Loose materials secure from wind", complies: "Yes", action: "", contractor: "" },
+  ],
+  excavations: [
+    { item: "Correctly shored and secured – isolated if possible", complies: "Yes", action: "", contractor: "" },
+  ],
+  electrical: [
+    { item: "Main board locked and waterproof", complies: "Yes", action: "", contractor: "" },
+    { item: "Condition and position of cables and leads", complies: "Yes", action: "", contractor: "" },
+    { item: "3 monthly tags on all tools and leads", complies: "Yes", action: "", contractor: "" },
+    { item: "RCD’s in use and tagged", complies: "Yes", action: "", contractor: "" },
+    { item: "No domestic multi boxes being used", complies: "Yes", action: "", contractor: "" },
+  ],
+  equipment: [
+    { item: "Equipment in good condition", complies: "Yes", action: "", contractor: "" },
+    { item: "Appropriate guards on equipment", complies: "Yes", action: "", contractor: "" },
+    { item: "Adequate temporary lighting", complies: "Yes", action: "", contractor: "" },
+  ],
+  scaffolding: [
+    { item: "Penetrations/holes identified and guarded", complies: "Yes", action: "", contractor: "" },
+    { item: "Safety harnesses and lines maintained and approved for use", complies: "Yes", action: "", contractor: "" },
+    { item: "Notifiable weekly Scaff tag current", complies: "Yes", action: "", contractor: "" },
+    { item: "Handrails/mid rails", complies: "Yes", action: "", contractor: "" },
+    { item: "Toe boards", complies: "Yes", action: "", contractor: "" },
+    { item: "Platforms", complies: "Yes", action: "", contractor: "" },
+    { item: "Ladders/stairs", complies: "Yes", action: "", contractor: "" },
+    { item: "Base Sound", complies: "Yes", action: "", contractor: "" },
+    { item: "Work Platforms clear", complies: "Yes", action: "", contractor: "" },
+    { item: "Platforms trip free", complies: "Yes", action: "", contractor: "" },
+    { item: "Planks tied down", complies: "Yes", action: "", contractor: "" },
+    { item: "Headroom clear", complies: "Yes", action: "", contractor: "" },
+    { item: "Ties/bracing adequate", complies: "Yes", action: "", contractor: "" },
+    { item: "Lift shafts/stairs", complies: "Yes", action: "", contractor: "" },
+  ],
+  ladders: [
+    { item: "Good condition", complies: "Yes", action: "", contractor: "" },
+    { item: "Secured top and bottom", complies: "Yes", action: "", contractor: "" },
+    { item: "Stays to step ladders", complies: "Yes", action: "", contractor: "" },
+    { item: "Working 2 steps down", complies: "Yes", action: "", contractor: "" },
+  ],
+  powderTools: [
+    { item: "Tools certificated", complies: "Yes", action: "", contractor: "" },
+    { item: "Operators certificated", complies: "Yes", action: "", contractor: "" },
+    { item: "PPE worn", complies: "Yes", action: "", contractor: "" },
+    { item: "Tools/charges stored in a secure place", complies: "Yes", action: "", contractor: "" },
+    { item: "Notice displayed", complies: "Yes", action: "", contractor: "" },
+  ],
+  welding: [
+    { item: "Hot Works permits being used", complies: "Yes", action: "", contractor: "" },
+    { item: "Bottles secure or in stand", complies: "Yes", action: "", contractor: "" },
+    { item: "Gauges/plugs/leads/hoses maintained", complies: "Yes", action: "", contractor: "" },
+    { item: "Welding screens", complies: "Yes", action: "", contractor: "" },
+    { item: "Flashback arresters", complies: "Yes", action: "", contractor: "" },
+    { item: "Extinguisher readily accessible", complies: "Yes", action: "", contractor: "" },
+    { item: "Operators using PPE", complies: "Yes", action: "", contractor: "" },
+  ],
+  plant: [
+    { item: "Service Certificate maintained", complies: "Yes", action: "", contractor: "" },
+    { item: "Warning devices (horn/reverse beeper)", complies: "Yes", action: "", contractor: "" },
+    { item: "Mirrors fitted", complies: "Yes", action: "", contractor: "" },
+    { item: "Seatbelts fitted", complies: "Yes", action: "", contractor: "" },
+    { item: "Roll over structures (ROPS) fitted", complies: "Yes", action: "", contractor: "" },
+  ],
+  cranes: [
+    { item: "Proper lift assessment plan completed", complies: "Yes", action: "", contractor: "" },
+    { item: "Current test certificate", complies: "Yes", action: "", contractor: "" },
+    { item: "Current test certificate for slings/chains/hooks", complies: "Yes", action: "", contractor: "" },
+    { item: "Slings/chains certified", complies: "Yes", action: "", contractor: "" },
+    { item: "Operator Procedures in place", complies: "Yes", action: "", contractor: "" },
+    { item: "Emergency Plan in place", complies: "Yes", action: "", contractor: "" },
+  ],
+  ewp: [
+    { item: "Log book filled in before use", complies: "Yes", action: "", contractor: "" },
+    { item: "Tyres inflated", complies: "Yes", action: "", contractor: "" },
+    { item: "Harnesses available for cherry pickers", complies: "Yes", action: "", contractor: "" },
+    { item: "Current test certificate", complies: "Yes", action: "", contractor: "" },
+  ],
+  hazardousGoods: [
+    { item: "Materials clearly labelled", complies: "Yes", action: "", contractor: "" },
+    { item: "Material safety data sheets available", complies: "Yes", action: "", contractor: "" },
+    { item: "Materials safely stored", complies: "Yes", action: "", contractor: "" },
+    { item: "No smoking sign displayed", complies: "Yes", action: "", contractor: "" },
+  ]
+};
+
+const createDefaultToolboxData = (dateStr, timeStr, userNameVal, locationVal = '') => ({
+  date: dateStr,
+  time: timeStr,
+  location: locationVal,
+  previousActions: [
+    { item: "Health and Safety", action: "", followUp: "" },
+    { item: "Event Investigations", action: "", followUp: "" },
+    { item: "Hazards", action: "", followUp: "" },
+    { item: "Plant and Equipment", action: "", followUp: "" },
+    { item: "Task Planning and Weekly Goals", action: "", followUp: "" },
+    { item: "Operational Issues/other Business", action: "", followUp: "" },
+    { item: "Other", action: "", followUp: "" },
+  ],
+  siteSafetyReview: [{ details: "", action: "", whoWhen: "" }],
+  workerTraining: [{ details: "", action: "", whoWhen: "" }],
+  eventInvestigations: [{ details: "", action: "", whoWhen: "" }],
+  hazards: [{ hazard: "", action: "", whoWhen: "" }],
+  hazardBoard: [{ item: "", update: "", whoWhen: "" }],
+  plantEquipment: [{ requirement: "", action: "", whoWhen: "" }],
+  taskPlanning: [{ task: "", ppe: "", timeframe: "", whoWhen: "" }],
+  taskPlanningDiscussion: "",
+  operationalIssues: "",
+  attendees: [
+    { name: userNameVal || '', company: 'SJR Builders', signature: '', date: dateStr }
+  ],
+  managementSignature: '',
+  managementDate: dateStr
+});
+
+const createDefaultInspectionData = (weekEndingStr, timeStr, userNameVal, siteVal = '') => ({
+  site: siteVal,
+  weekEnding: weekEndingStr,
+  time: timeStr,
+  inspectedBy: userNameVal || '',
+  signature: '',
+  dateSigned: weekEndingStr,
+  sections: defaultInspectionSections
+});
+
 export default function HealthAndSafetyHub({ userId, userName }) {
   const initialMonday = getMondayOfWeek(new Date());
 
@@ -204,6 +352,10 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
   // Stores the Monday (YYYY-MM-DD) of the selected week
   const [currentWeek, setCurrentWeek] = useState(initialMonday);
+  // Shared active site and active date across Inspection & Toolbox views
+  const [activeSite, setActiveSite] = useState('');
+  const [activeDate, setActiveDate] = useState(initialMonday);
+
   const [allExistingReports, setAllExistingReports] = useState([]);
   const [selectedReportId, setSelectedReportId] = useState('');
 
@@ -304,266 +456,177 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     fetchWorkers();
   }, [userName]);
 
-  const handleSwitchSubView = async (nextView) => {
-    setHsSubView(nextView);
+  const [inspectionData, setInspectionData] = useState(() =>
+    createDefaultInspectionData(initialMonday, getCurrentTimeString(), userName || '', '')
+  );
 
-    const activeSite = (
-      hsSubView === 'inspection' ? inspectionData.site : toolboxData.location
-    ).trim();
-    const activeMonday = getMondayOfWeek(currentWeek);
+  const [toolboxData, setToolboxData] = useState(() =>
+    createDefaultToolboxData(initialMonday, getCurrentTimeString(), userName || '', '')
+  );
 
-    if (!activeSite) {
+  const hydrateSubViewForSiteAndDate = async (targetView, siteVal, dateVal, mondayVal) => {
+    const cleanSite = (siteVal || '').trim();
+    const effectiveDate = dateVal || mondayVal;
+    const effectiveMonday = getMondayOfWeek(effectiveDate);
+
+    if (targetView === 'inspection') {
+      const targetDocId = cleanSite ? buildInspectionDocId(cleanSite, effectiveMonday) : '';
+      const existingLocal = targetDocId ? allExistingReports.find(r => r.id === targetDocId) : null;
+
+      if (existingLocal) {
+        setSelectedReportId(targetDocId);
+        setInspectionData({
+          ...createDefaultInspectionData(effectiveDate, getCurrentTimeString(), userName || '', cleanSite),
+          ...existingLocal,
+          site: existingLocal.site || cleanSite,
+          weekEnding: existingLocal.weekEnding || effectiveDate,
+          inspectedBy: existingLocal.inspectedBy || existingLocal.userName || userName || '',
+          sections: existingLocal.sections || defaultInspectionSections
+        });
+        return;
+      }
+
+      if (targetDocId) {
+        try {
+          const docSnap = await getDoc(doc(db, 'health_safety', targetDocId));
+          if (docSnap.exists()) {
+            const found = docSnap.data();
+            setSelectedReportId(targetDocId);
+            setInspectionData({
+              ...createDefaultInspectionData(effectiveDate, getCurrentTimeString(), userName || '', cleanSite),
+              ...found,
+              site: found.site || cleanSite,
+              weekEnding: found.weekEnding || effectiveDate,
+              inspectedBy: found.inspectedBy || found.userName || userName || '',
+              sections: found.sections || defaultInspectionSections
+            });
+            return;
+          }
+        } catch (err) {
+          console.warn("Could not load inspection doc on tab switch:", err);
+        }
+      }
+
       setSelectedReportId('');
-      return;
-    }
-
-    const counterpartId =
-      nextView === 'inspection'
-        ? buildInspectionDocId(activeSite, activeMonday)
-        : buildToolboxDocId(activeSite, activeMonday);
-
-    if (nextView === 'inspection') {
       setInspectionData(prev => ({
-        ...prev,
-        site: activeSite,
-        weekEnding: activeMonday,
-        dateSigned: prev.dateSigned || activeMonday
+        ...createDefaultInspectionData(effectiveDate, prev.time || getCurrentTimeString(), prev.inspectedBy || userName || '', cleanSite),
       }));
     } else {
-      setToolboxData(prev => ({
-        ...prev,
-        location: activeSite,
-        date: activeMonday,
-        managementDate: prev.managementDate || activeMonday
-      }));
-    }
+      const targetDocId = cleanSite ? buildToolboxDocId(cleanSite, effectiveMonday) : '';
+      const existingLocal = targetDocId ? allExistingReports.find(r => r.id === targetDocId) : null;
 
-    const existingLocal = allExistingReports.find(r => r.id === counterpartId);
-    if (existingLocal) {
-      setSelectedReportId(counterpartId);
-      if (nextView === 'inspection') {
-        setInspectionData(prev => ({
-          ...prev,
-          ...existingLocal,
-          site: existingLocal.site || activeSite,
-          weekEnding: existingLocal.weekEnding || activeMonday,
-          inspectedBy: existingLocal.inspectedBy || existingLocal.userName || prev.inspectedBy,
-          sections: existingLocal.sections || prev.sections
-        }));
-      } else {
+      if (existingLocal) {
+        setSelectedReportId(targetDocId);
         setToolboxData(prev => ({
-          ...prev,
+          ...createDefaultToolboxData(effectiveDate, getCurrentTimeString(), userName || '', cleanSite),
           ...existingLocal,
-          location: existingLocal.location || existingLocal.site || activeSite,
-          date: existingLocal.date || activeMonday
+          location: existingLocal.location || existingLocal.site || cleanSite,
+          date: existingLocal.date || effectiveDate,
+          previousActions: existingLocal.previousActions || prev.previousActions,
+          siteSafetyReview: existingLocal.siteSafetyReview || prev.siteSafetyReview,
+          workerTraining: existingLocal.workerTraining || prev.workerTraining,
+          eventInvestigations: existingLocal.eventInvestigations || prev.eventInvestigations,
+          hazards: existingLocal.hazards || prev.hazards,
+          hazardBoard: existingLocal.hazardBoard || prev.hazardBoard,
+          plantEquipment: existingLocal.plantEquipment || prev.plantEquipment,
+          taskPlanning: existingLocal.taskPlanning || prev.taskPlanning,
+          attendees: existingLocal.attendees || prev.attendees
         }));
+        return;
       }
-      return;
-    }
 
-    try {
-      const docSnap = await getDoc(doc(db, 'health_safety', counterpartId));
-      if (docSnap.exists()) {
-        const found = docSnap.data();
-        setSelectedReportId(counterpartId);
-        if (nextView === 'inspection') {
-          setInspectionData(prev => ({
-            ...prev,
-            ...found,
-            site: found.site || activeSite,
-            weekEnding: found.weekEnding || activeMonday,
-            inspectedBy: found.inspectedBy || found.userName || prev.inspectedBy,
-            sections: found.sections || prev.sections
-          }));
-        } else {
-          setToolboxData(prev => ({
-            ...prev,
-            ...found,
-            location: found.location || found.site || activeSite,
-            date: found.date || activeMonday
-          }));
+      if (targetDocId) {
+        try {
+          const docSnap = await getDoc(doc(db, 'health_safety', targetDocId));
+          if (docSnap.exists()) {
+            const found = docSnap.data();
+            setSelectedReportId(targetDocId);
+            setToolboxData(prev => ({
+              ...createDefaultToolboxData(effectiveDate, getCurrentTimeString(), userName || '', cleanSite),
+              ...found,
+              location: found.location || found.site || cleanSite,
+              date: found.date || effectiveDate,
+              previousActions: found.previousActions || prev.previousActions,
+              siteSafetyReview: found.siteSafetyReview || prev.siteSafetyReview,
+              workerTraining: found.workerTraining || prev.workerTraining,
+              eventInvestigations: found.eventInvestigations || prev.eventInvestigations,
+              hazards: found.hazards || prev.hazards,
+              hazardBoard: found.hazardBoard || prev.hazardBoard,
+              plantEquipment: found.plantEquipment || prev.plantEquipment,
+              taskPlanning: found.taskPlanning || prev.taskPlanning,
+              attendees: found.attendees || prev.attendees
+            }));
+            return;
+          }
+        } catch (err) {
+          console.warn("Could not load toolbox doc on tab switch:", err);
         }
-      } else {
-        setSelectedReportId('');
       }
-    } catch (err) {
-      console.warn("Could not sync counterpart H&S report:", err);
+
       setSelectedReportId('');
+      setToolboxData(prev => ({
+        ...createDefaultToolboxData(effectiveDate, prev.time || getCurrentTimeString(), userName || '', cleanSite),
+      }));
     }
   };
 
-  const handleShiftWeek = (direction) => {
+  const handleSwitchSubView = async (nextView) => {
+    if (nextView === hsSubView) return;
+
+    const currentSiteVal = (
+      hsSubView === 'inspection' ? inspectionData.site : toolboxData.location
+    ).trim() || activeSite;
+
+    const currentDateVal =
+      (hsSubView === 'inspection' ? inspectionData.weekEnding : toolboxData.date) || activeDate || currentWeek;
+
+    const mondayVal = getMondayOfWeek(currentDateVal);
+
+    setActiveSite(currentSiteVal);
+    setActiveDate(currentDateVal);
+    setCurrentWeek(mondayVal);
+    setHsSubView(nextView);
+
+    await hydrateSubViewForSiteAndDate(nextView, currentSiteVal, currentDateVal, mondayVal);
+  };
+
+  const handleShiftWeek = async (direction) => {
     const baseMonday = parseLocalDate(getMondayOfWeek(currentWeek));
     baseMonday.setDate(baseMonday.getDate() + (direction * 7));
     const newMondayStr = formatLocalISO(baseMonday);
     setCurrentWeek(newMondayStr);
+    setActiveDate(newMondayStr);
 
     if (hsSubView === 'inspection') {
       setInspectionData(prev => ({ ...prev, weekEnding: newMondayStr, dateSigned: newMondayStr }));
     } else {
       setToolboxData(prev => ({ ...prev, date: newMondayStr, managementDate: newMondayStr }));
     }
-    setSelectedReportId('');
+
+    if (activeSite.trim()) {
+      await hydrateSubViewForSiteAndDate(hsSubView, activeSite, newMondayStr, newMondayStr);
+    } else {
+      setSelectedReportId('');
+    }
   };
 
-  const handleThisWeek = () => {
+  const handleThisWeek = async () => {
     const mondayStr = getMondayOfWeek(new Date());
     setCurrentWeek(mondayStr);
+    setActiveDate(mondayStr);
+
     if (hsSubView === 'inspection') {
       setInspectionData(prev => ({ ...prev, weekEnding: mondayStr, dateSigned: mondayStr }));
     } else {
       setToolboxData(prev => ({ ...prev, date: mondayStr, managementDate: mondayStr }));
     }
-    setSelectedReportId('');
+
+    if (activeSite.trim()) {
+      await hydrateSubViewForSiteAndDate(hsSubView, activeSite, mondayStr, mondayStr);
+    } else {
+      setSelectedReportId('');
+    }
   };
-
-  const defaultInspectionSections = {
-    siteControl: [
-      { item: "Accommodation and lunchroom clean and hygienic", complies: "Yes", action: "", contractor: "" },
-      { item: "Toilet facilities clean and hygienic", complies: "Yes", action: "", contractor: "" },
-      { item: "General housekeeping up to date", complies: "Yes", action: "", contractor: "" },
-      { item: "Warning signs displayed", complies: "Yes", action: "", contractor: "" },
-      { item: "Hazard identification up to date", complies: "Yes", action: "", contractor: "" },
-      { item: "Site hoardings/fences in place", complies: "Yes", action: "", contractor: "" },
-      { item: "Hazardous materials stored safely", complies: "Yes", action: "", contractor: "" },
-    ],
-    firstAid: [
-      { item: "First Aid boxes are available and stocked", complies: "Yes", action: "", contractor: "" },
-      { item: "Accident Register is available", complies: "Yes", action: "", contractor: "" },
-      { item: "Fire Extinguisher is available and current", complies: "Yes", action: "", contractor: "" },
-      { item: "Evacuation Procedure current – emergencies included", complies: "Yes", action: "", contractor: "" },
-    ],
-    personalSafety: [
-      { item: "Signage displayed and legible", complies: "Yes", action: "", contractor: "" },
-      { item: "Hardhats being worn", complies: "Yes", action: "", contractor: "" },
-      { item: "Correct footwear being worn", complies: "Yes", action: "", contractor: "" },
-      { item: "Glasses/earmuffs/vests/masks used", complies: "Yes", action: "", contractor: "" },
-    ],
-    tidiness: [
-      { item: "Routes in/out clear", complies: "Yes", action: "", contractor: "" },
-      { item: "Site office clearly defined for visitors", complies: "Yes", action: "", contractor: "" },
-      { item: "Loose materials secure from wind", complies: "Yes", action: "", contractor: "" },
-    ],
-    excavations: [
-      { item: "Correctly shored and secured – isolated if possible", complies: "Yes", action: "", contractor: "" },
-    ],
-    electrical: [
-      { item: "Main board locked and waterproof", complies: "Yes", action: "", contractor: "" },
-      { item: "Condition and position of cables and leads", complies: "Yes", action: "", contractor: "" },
-      { item: "3 monthly tags on all tools and leads", complies: "Yes", action: "", contractor: "" },
-      { item: "RCD’s in use and tagged", complies: "Yes", action: "", contractor: "" },
-      { item: "No domestic multi boxes being used", complies: "Yes", action: "", contractor: "" },
-    ],
-    equipment: [
-      { item: "Equipment in good condition", complies: "Yes", action: "", contractor: "" },
-      { item: "Appropriate guards on equipment", complies: "Yes", action: "", contractor: "" },
-      { item: "Adequate temporary lighting", complies: "Yes", action: "", contractor: "" },
-    ],
-    scaffolding: [
-      { item: "Penetrations/holes identified and guarded", complies: "Yes", action: "", contractor: "" },
-      { item: "Safety harnesses and lines maintained and approved for use", complies: "Yes", action: "", contractor: "" },
-      { item: "Notifiable weekly Scaff tag current", complies: "Yes", action: "", contractor: "" },
-      { item: "Handrails/mid rails", complies: "Yes", action: "", contractor: "" },
-      { item: "Toe boards", complies: "Yes", action: "", contractor: "" },
-      { item: "Platforms", complies: "Yes", action: "", contractor: "" },
-      { item: "Ladders/stairs", complies: "Yes", action: "", contractor: "" },
-      { item: "Base Sound", complies: "Yes", action: "", contractor: "" },
-      { item: "Work Platforms clear", complies: "Yes", action: "", contractor: "" },
-      { item: "Platforms trip free", complies: "Yes", action: "", contractor: "" },
-      { item: "Planks tied down", complies: "Yes", action: "", contractor: "" },
-      { item: "Headroom clear", complies: "Yes", action: "", contractor: "" },
-      { item: "Ties/bracing adequate", complies: "Yes", action: "", contractor: "" },
-      { item: "Lift shafts/stairs", complies: "Yes", action: "", contractor: "" },
-    ],
-    ladders: [
-      { item: "Good condition", complies: "Yes", action: "", contractor: "" },
-      { item: "Secured top and bottom", complies: "Yes", action: "", contractor: "" },
-      { item: "Stays to step ladders", complies: "Yes", action: "", contractor: "" },
-      { item: "Working 2 steps down", complies: "Yes", action: "", contractor: "" },
-    ],
-    powderTools: [
-      { item: "Tools certificated", complies: "Yes", action: "", contractor: "" },
-      { item: "Operators certificated", complies: "Yes", action: "", contractor: "" },
-      { item: "PPE worn", complies: "Yes", action: "", contractor: "" },
-      { item: "Tools/charges stored in a secure place", complies: "Yes", action: "", contractor: "" },
-      { item: "Notice displayed", complies: "Yes", action: "", contractor: "" },
-    ],
-    welding: [
-      { item: "Hot Works permits being used", complies: "Yes", action: "", contractor: "" },
-      { item: "Bottles secure or in stand", complies: "Yes", action: "", contractor: "" },
-      { item: "Gauges/plugs/leads/hoses maintained", complies: "Yes", action: "", contractor: "" },
-      { item: "Welding screens", complies: "Yes", action: "", contractor: "" },
-      { item: "Flashback arresters", complies: "Yes", action: "", contractor: "" },
-      { item: "Extinguisher readily accessible", complies: "Yes", action: "", contractor: "" },
-      { item: "Operators using PPE", complies: "Yes", action: "", contractor: "" },
-    ],
-    plant: [
-      { item: "Service Certificate maintained", complies: "Yes", action: "", contractor: "" },
-      { item: "Warning devices (horn/reverse beeper)", complies: "Yes", action: "", contractor: "" },
-      { item: "Mirrors fitted", complies: "Yes", action: "", contractor: "" },
-      { item: "Seatbelts fitted", complies: "Yes", action: "", contractor: "" },
-      { item: "Roll over structures (ROPS) fitted", complies: "Yes", action: "", contractor: "" },
-    ],
-    cranes: [
-      { item: "Proper lift assessment plan completed", complies: "Yes", action: "", contractor: "" },
-      { item: "Current test certificate", complies: "Yes", action: "", contractor: "" },
-      { item: "Current test certificate for slings/chains/hooks", complies: "Yes", action: "", contractor: "" },
-      { item: "Slings/chains certified", complies: "Yes", action: "", contractor: "" },
-      { item: "Operator Procedures in place", complies: "Yes", action: "", contractor: "" },
-      { item: "Emergency Plan in place", complies: "Yes", action: "", contractor: "" },
-    ],
-    ewp: [
-      { item: "Log book filled in before use", complies: "Yes", action: "", contractor: "" },
-      { item: "Tyres inflated", complies: "Yes", action: "", contractor: "" },
-      { item: "Harnesses available for cherry pickers", complies: "Yes", action: "", contractor: "" },
-      { item: "Current test certificate", complies: "Yes", action: "", contractor: "" },
-    ],
-    hazardousGoods: [
-      { item: "Materials clearly labelled", complies: "Yes", action: "", contractor: "" },
-      { item: "Material safety data sheets available", complies: "Yes", action: "", contractor: "" },
-      { item: "Materials safely stored", complies: "Yes", action: "", contractor: "" },
-      { item: "No smoking sign displayed", complies: "Yes", action: "", contractor: "" },
-    ]
-  };
-
-  const [inspectionData, setInspectionData] = useState({
-    site: '',
-    weekEnding: currentWeek,
-    time: getCurrentTimeString(),
-    inspectedBy: userName || '',
-    signature: '',
-    dateSigned: currentWeek,
-    sections: defaultInspectionSections
-  });
-
-  const [toolboxData, setToolboxData] = useState({
-    date: currentWeek,
-    time: getCurrentTimeString(),
-    location: '',
-    previousActions: [
-      { item: "Health and Safety", action: "", followUp: "" },
-      { item: "Event Investigations", action: "", followUp: "" },
-      { item: "Hazards", action: "", followUp: "" },
-      { item: "Plant and Equipment", action: "", followUp: "" },
-      { item: "Task Planning and Weekly Goals", action: "", followUp: "" },
-      { item: "Operational Issues/other Business", action: "", followUp: "" },
-      { item: "Other", action: "", followUp: "" },
-    ],
-    siteSafetyReview: [{ details: "", action: "", whoWhen: "" }],
-    workerTraining: [{ details: "", action: "", whoWhen: "" }],
-    eventInvestigations: [{ details: "", action: "", whoWhen: "" }],
-    hazards: [{ hazard: "", action: "", whoWhen: "" }],
-    hazardBoard: [{ item: "", update: "", whoWhen: "" }],
-    plantEquipment: [{ requirement: "", action: "", whoWhen: "" }],
-    taskPlanning: [{ task: "", ppe: "", timeframe: "", whoWhen: "" }],
-    taskPlanningDiscussion: "",
-    operationalIssues: "",
-    attendees: [
-      { name: userName || '', company: 'SJR Builders', signature: '', date: currentWeek }
-    ],
-    managementSignature: '',
-    managementDate: currentWeek
-  });
 
   const targetFormType = hsSubView === 'inspection' ? INSPECTION_TYPE : TOOLBOX_TYPE;
   const activeMonday = getMondayOfWeek(currentWeek);
@@ -593,24 +656,28 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     if (!found) return;
 
     const repMonday = getReportMonday(found) || activeMonday;
+    const repSite = (found.site || found.location || '').trim();
+    const repDate = found.weekEnding || found.date || repMonday;
+
+    setCurrentWeek(repMonday);
+    setActiveSite(repSite);
+    setActiveDate(repDate);
 
     if (hsSubView === 'inspection' && found.type === INSPECTION_TYPE) {
-      setCurrentWeek(repMonday);
       setInspectionData({
-        site: found.site || found.location || '',
-        weekEnding: found.weekEnding || repMonday,
+        site: repSite,
+        weekEnding: repDate,
         time: found.time || getCurrentTimeString(),
         inspectedBy: found.inspectedBy || found.userName || userName || '',
         signature: found.signature || '',
-        dateSigned: found.dateSigned || found.weekEnding || repMonday,
+        dateSigned: found.dateSigned || repDate,
         sections: found.sections || defaultInspectionSections
       });
     } else if (hsSubView === 'toolbox' && found.type === TOOLBOX_TYPE) {
-      setCurrentWeek(repMonday);
       setToolboxData(prev => ({
-        date: found.date || repMonday,
+        date: repDate,
         time: found.time || getCurrentTimeString(),
-        location: found.location || found.site || '',
+        location: repSite,
         previousActions: found.previousActions || prev.previousActions,
         siteSafetyReview: found.siteSafetyReview || prev.siteSafetyReview,
         workerTraining: found.workerTraining || prev.workerTraining,
@@ -623,50 +690,19 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         operationalIssues: found.operationalIssues || '',
         attendees: found.attendees || prev.attendees,
         managementSignature: found.managementSignature || '',
-        managementDate: found.managementDate || found.date || repMonday
+        managementDate: found.managementDate || repDate
       }));
     }
   };
 
   const handleStartFreshForm = () => {
     setSelectedReportId('');
+    setActiveSite('');
+    setActiveDate(activeMonday);
     if (hsSubView === 'inspection') {
-      setInspectionData({
-        site: '',
-        weekEnding: activeMonday,
-        time: getCurrentTimeString(),
-        inspectedBy: userName || '',
-        signature: '',
-        dateSigned: activeMonday,
-        sections: defaultInspectionSections
-      });
+      setInspectionData(createDefaultInspectionData(activeMonday, getCurrentTimeString(), userName || '', ''));
     } else {
-      setToolboxData({
-        date: activeMonday,
-        time: getCurrentTimeString(),
-        location: '',
-        previousActions: [
-          { item: "Health and Safety", action: "", followUp: "" },
-          { item: "Event Investigations", action: "", followUp: "" },
-          { item: "Hazards", action: "", followUp: "" },
-          { item: "Plant and Equipment", action: "", followUp: "" },
-          { item: "Task Planning and Weekly Goals", action: "", followUp: "" },
-          { item: "Operational Issues/other Business", action: "", followUp: "" },
-          { item: "Other", action: "", followUp: "" },
-        ],
-        siteSafetyReview: [{ details: "", action: "", whoWhen: "" }],
-        workerTraining: [{ details: "", action: "", whoWhen: "" }],
-        eventInvestigations: [{ details: "", action: "", whoWhen: "" }],
-        hazards: [{ hazard: "", action: "", whoWhen: "" }],
-        hazardBoard: [{ item: "", update: "", whoWhen: "" }],
-        plantEquipment: [{ requirement: "", action: "", whoWhen: "" }],
-        taskPlanning: [{ task: "", ppe: "", timeframe: "", whoWhen: "" }],
-        taskPlanningDiscussion: "",
-        operationalIssues: "",
-        attendees: [{ name: userName || '', company: 'SJR Builders', signature: '', date: activeMonday }],
-        managementSignature: '',
-        managementDate: activeMonday
-      });
+      setToolboxData(createDefaultToolboxData(activeMonday, getCurrentTimeString(), userName || '', ''));
     }
     setStatusMessage({ type: 'success', text: `Started a fresh ${targetFormType} for week starting ${activeMonday}.` });
     setTimeout(() => setStatusMessage(null), 3000);
@@ -675,6 +711,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   const handleSiteOrWeekChange = async (newSite, newDate) => {
     const mondayStr = getMondayOfWeek(newDate || currentWeek);
     setCurrentWeek(mondayStr);
+    setActiveSite(newSite);
+    setActiveDate(newDate);
     setInspectionData(prev => ({ ...prev, site: newSite, weekEnding: newDate }));
 
     if (!newSite || !newSite.trim() || !mondayStr) {
@@ -709,6 +747,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   const handleToolboxLocationOrDateChange = async (newLoc, newDate) => {
     const mondayStr = getMondayOfWeek(newDate || currentWeek);
     setCurrentWeek(mondayStr);
+    setActiveSite(newLoc);
+    setActiveDate(newDate);
     setToolboxData(prev => ({ ...prev, location: newLoc, date: newDate }));
 
     if (!newLoc || !newLoc.trim() || !mondayStr) {
@@ -803,7 +843,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   const addAttendeeRow = () => {
     setToolboxData(prev => ({
       ...prev,
-      attendees: [...prev.attendees, { name: '', company: 'SJR Builders', signature: '', date: activeMonday }]
+      attendees: [...prev.attendees, { name: '', company: 'SJR Builders', signature: '', date: activeDate || activeMonday }]
     }));
   };
 
@@ -1257,7 +1297,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   };
 
-  const generateInspectionZipBuffer = async () => {
+  const generateInspectionZipBuffer = async (dataOverride = null) => {
+    const sourceData = dataOverride || inspectionData;
     const templateFileName = 'Site Safety Inspection Report.docx';
     const response = await fetch(`/${templateFileName}`);
     if (!response.ok) throw new Error(`Template file '${templateFileName}' not found.`);
@@ -1281,26 +1322,26 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         lower.includes("signed:")
       ) {
         if (lower.includes("site:")) {
-          fillInspectionHeaderField(p, "site:", inspectionData.site || '', xmlDoc);
+          fillInspectionHeaderField(p, "site:", sourceData.site || '', xmlDoc);
         }
         if (lower.includes("week ending:")) {
           setTwoValuesInParagraph(
             p,
             "week ending:",
-            inspectionData.weekEnding || '',
+            sourceData.weekEnding || '',
             "time:",
-            inspectionData.time || '',
+            sourceData.time || '',
             xmlDoc,
             "    "
           );
         }
         if (lower.includes("inspected by:")) {
-          fillInspectionHeaderField(p, "inspected by:", inspectionData.inspectedBy || '', xmlDoc);
+          fillInspectionHeaderField(p, "inspected by:", sourceData.inspectedBy || '', xmlDoc);
         }
         if (lower.includes("signed:")) {
-          const formattedDate = formatDateShort(inspectionData.dateSigned || inspectionData.weekEnding);
-          if (inspectionData.signature) {
-            insertSignatureWithParagraph(p, inspectionData.signature, formattedDate, zip, xmlDoc);
+          const formattedDate = formatDateShort(sourceData.dateSigned || sourceData.weekEnding);
+          if (sourceData.signature) {
+            insertSignatureWithParagraph(p, sourceData.signature, formattedDate, zip, xmlDoc);
           } else {
             setTwoValuesInParagraph(
               p,
@@ -1317,7 +1358,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
 
     const itemLookup = {};
-    Object.values(inspectionData.sections).forEach(sectionItems => {
+    Object.values(sourceData.sections || defaultInspectionSections).forEach(sectionItems => {
       sectionItems.forEach(row => {
         if (row.item) itemLookup[row.item.toLowerCase().trim()] = row;
       });
@@ -1341,7 +1382,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     return zip.generate({ type: 'uint8array' });
   };
 
-  const generateToolboxZipBuffer = async () => {
+  const generateToolboxZipBuffer = async (dataOverride = null) => {
+    const sourceData = dataOverride || toolboxData;
     const templateFileName = 'H&S and Toolbox Meeting Worksheet.docx';
     const response = await fetch(`/${templateFileName}`);
     if (!response.ok) throw new Error(`Template file '${templateFileName}' not found.`);
@@ -1365,13 +1407,13 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const cleanPStr = pStr.toLowerCase().trim();
 
       if (cleanPStr.includes("date and time:")) {
-        const dtCombined = `${toolboxData.date || ''} ${toolboxData.time || ''}`.trim();
+        const dtCombined = `${sourceData.date || ''} ${sourceData.time || ''}`.trim();
         setTwoValuesInParagraph(
           p,
           "date and time:",
           dtCombined,
           "location:",
-          toolboxData.location || '',
+          sourceData.location || '',
           xmlDoc,
           "    "
         );
@@ -1387,7 +1429,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         setTwoValuesInParagraph(
           p,
           "meeting closed:",
-          toolboxData.time || '',
+          sourceData.time || '',
           "next meeting:",
           "Next week",
           xmlDoc,
@@ -1395,8 +1437,8 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         );
       } else if (cleanPStr.includes("signed – management:") || cleanPStr.includes("signed - management:")) {
         const labelMatch = cleanPStr.includes("signed – management:") ? "signed – management:" : "signed - management:";
-        if (toolboxData.managementSignature) {
-          const dateVal = formatDateShort(toolboxData.managementDate || toolboxData.date);
+        if (sourceData.managementSignature) {
+          const dateVal = formatDateShort(sourceData.managementDate || sourceData.date);
           setTwoValuesInParagraph(
             p,
             labelMatch,
@@ -1419,23 +1461,23 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         }
       } else if (
         cleanPStr.startsWith("discussion about task planning and weekly goals") &&
-        toolboxData.taskPlanningDiscussion
+        sourceData.taskPlanningDiscussion
       ) {
         const targetP = paragraphs[i + 1];
         if (targetP) {
-          setParagraphText(targetP, toolboxData.taskPlanningDiscussion, xmlDoc);
+          setParagraphText(targetP, sourceData.taskPlanningDiscussion, xmlDoc);
         }
       } else if (
         (cleanPStr === "operational issues/other business:" ||
           cleanPStr === "operational issues/other business" ||
           cleanPStr === "operational issues / other business:" ||
           cleanPStr === "operational issues / other business") &&
-        toolboxData.operationalIssues
+        sourceData.operationalIssues
       ) {
         const targetP = paragraphs[i + 1];
         const targetText = targetP ? getCellText(targetP).toLowerCase() : "";
         if (targetP && !targetText.startsWith("8)") && targetText !== "other") {
-          setParagraphText(targetP, toolboxData.operationalIssues, xmlDoc);
+          setParagraphText(targetP, sourceData.operationalIssues, xmlDoc);
         }
       }
     }
@@ -1448,21 +1490,21 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const tableLabel = getCellText(headerCells[0]).toLowerCase();
 
       if (tableLabel.includes("present")) {
-        toolboxData.attendees.forEach((att, idx) => {
+        (sourceData.attendees || []).forEach((att, idx) => {
           const rowIndex = idx + 1;
           if (rows[rowIndex]) {
             const cells = rows[rowIndex].getElementsByTagName("w:tc");
             if (cells[0]) setCellText(cells[0], att.name || '', xmlDoc);
             if (cells[1]) setCellText(cells[1], att.company || '', xmlDoc);
             if (cells[2]) {
-              const formattedDate = formatDateShort(att.date || toolboxData.date);
+              const formattedDate = formatDateShort(att.date || sourceData.date);
               if (att.signature) insertSignatureWithParagraph(cells[2], att.signature, formattedDate, zip, xmlDoc);
               else setCellText(cells[2], formattedDate, xmlDoc);
             }
           }
         });
       } else if (tableLabel.includes("issues raised from site safety inspection")) {
-        toolboxData.siteSafetyReview.forEach((row, idx) => {
+        (sourceData.siteSafetyReview || []).forEach((row, idx) => {
           const rowIndex = idx + 1;
           if (rows[rowIndex]) {
             const cells = rows[rowIndex].getElementsByTagName("w:tc");
@@ -1472,7 +1514,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           }
         });
       } else if (tableLabel.includes("worker training needs")) {
-        toolboxData.workerTraining.forEach((row, idx) => {
+        (sourceData.workerTraining || []).forEach((row, idx) => {
           const rowIndex = idx + 1;
           if (rows[rowIndex]) {
             const cells = rows[rowIndex].getElementsByTagName("w:tc");
@@ -1482,7 +1524,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           }
         });
       } else if (tableLabel.includes("has any event") || tableLabel.includes("event investigations")) {
-        toolboxData.eventInvestigations.forEach((row, idx) => {
+        (sourceData.eventInvestigations || []).forEach((row, idx) => {
           const rowIndex = idx + 1;
           if (rows[rowIndex]) {
             const cells = rows[rowIndex].getElementsByTagName("w:tc");
@@ -1492,7 +1534,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           }
         });
       } else if (tableLabel.includes("hazard:") && !tableLabel.includes("board")) {
-        toolboxData.hazards.forEach((haz, idx) => {
+        (sourceData.hazards || []).forEach((haz, idx) => {
           const rowIndex = idx + 1;
           if (rows[rowIndex]) {
             const cells = rows[rowIndex].getElementsByTagName("w:tc");
@@ -1502,7 +1544,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           }
         });
       } else if (tableLabel.includes("hazard board")) {
-        toolboxData.hazardBoard.forEach((hb, idx) => {
+        (sourceData.hazardBoard || []).forEach((hb, idx) => {
           const rowIndex = idx + 1;
           if (rows[rowIndex]) {
             const cells = rows[rowIndex].getElementsByTagName("w:tc");
@@ -1512,7 +1554,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           }
         });
       } else if (tableLabel.includes("plant and equipment requirements") || tableLabel.includes("plant and equipment (including")) {
-        toolboxData.plantEquipment.forEach((plant, idx) => {
+        (sourceData.plantEquipment || []).forEach((plant, idx) => {
           const rowIndex = idx + 1;
           if (rows[rowIndex]) {
             const cells = rows[rowIndex].getElementsByTagName("w:tc");
@@ -1522,7 +1564,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           }
         });
       } else if (tableLabel.includes("task:")) {
-        toolboxData.taskPlanning.forEach((tp, idx) => {
+        (sourceData.taskPlanning || []).forEach((tp, idx) => {
           const rowIndex = idx + 1;
           if (rows[rowIndex]) {
             const cells = rows[rowIndex].getElementsByTagName("w:tc");
@@ -1537,7 +1579,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
           const cells = rows[i].getElementsByTagName("w:tc");
           if (cells.length < 2) continue;
           const rowLabel = getCellText(cells[0]).toLowerCase();
-          const matchedPrevious = toolboxData.previousActions.find(p => rowLabel.includes(p.item.toLowerCase()));
+          const matchedPrevious = (sourceData.previousActions || []).find(p => rowLabel.includes(p.item.toLowerCase()));
           if (matchedPrevious) {
             if (cells[1]) setCellText(cells[1], matchedPrevious.action || '', xmlDoc);
             if (cells[2]) setCellText(cells[2], matchedPrevious.followUp || '', xmlDoc);
@@ -1564,7 +1606,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const siteNameClean = siteName.replace(/[^a-zA-Z0-9_\-]/g, '_');
       const filesToShare = [];
 
-      const inspectionUint8 = await generateInspectionZipBuffer();
+      const inspectionUint8 = await generateInspectionZipBuffer(inspectionData);
       const inspectionFileName = `Site Safety Inspection - ${siteNameClean} (${inspectionData.weekEnding}).docx`;
       filesToShare.push(await writeBufferToCache(inspectionUint8, inspectionFileName));
 
@@ -1574,32 +1616,24 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       let toolboxIncluded = false;
       if (toolboxSnap.exists()) {
         const tData = toolboxSnap.data();
-        const originalToolboxState = { ...toolboxData };
-        setToolboxData({
+        const toolboxPayload = {
+          ...createDefaultToolboxData(
+            tData.date || inspectionData.weekEnding,
+            tData.time || '10:00',
+            userName || '',
+            tData.location || tData.site || siteName
+          ),
+          ...tData,
           date: tData.date || inspectionData.weekEnding,
           time: tData.time || '10:00',
           location: tData.location || tData.site || siteName,
-          previousActions: tData.previousActions || toolboxData.previousActions,
-          siteSafetyReview: tData.siteSafetyReview || toolboxData.siteSafetyReview,
-          workerTraining: tData.workerTraining || toolboxData.workerTraining,
-          eventInvestigations: tData.eventInvestigations || toolboxData.eventInvestigations,
-          hazards: tData.hazards || toolboxData.hazards,
-          hazardBoard: tData.hazardBoard || toolboxData.hazardBoard,
-          plantEquipment: tData.plantEquipment || toolboxData.plantEquipment,
-          taskPlanning: tData.taskPlanning || toolboxData.taskPlanning,
-          taskPlanningDiscussion: tData.taskPlanningDiscussion || '',
-          operationalIssues: tData.operationalIssues || '',
-          attendees: tData.attendees || toolboxData.attendees,
-          managementSignature: tData.managementSignature || '',
           managementDate: tData.managementDate || tData.date || inspectionData.weekEnding
-        });
+        };
 
-        const toolboxUint8 = await generateToolboxZipBuffer();
+        const toolboxUint8 = await generateToolboxZipBuffer(toolboxPayload);
         const toolboxFileName = `Toolbox Meeting - ${siteNameClean} (${inspectionData.weekEnding}).docx`;
         filesToShare.push(await writeBufferToCache(toolboxUint8, toolboxFileName));
         toolboxIncluded = true;
-
-        setToolboxData(originalToolboxState);
       }
 
       await shareOrDownloadFiles(filesToShare);
@@ -1629,7 +1663,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const locNameClean = locName.replace(/[^a-zA-Z0-9_\-]/g, '_');
       const filesToShare = [];
 
-      const toolboxUint8 = await generateToolboxZipBuffer();
+      const toolboxUint8 = await generateToolboxZipBuffer(toolboxData);
       const toolboxFileName = `Toolbox Meeting - ${locNameClean} (${toolboxData.date}).docx`;
       filesToShare.push(await writeBufferToCache(toolboxUint8, toolboxFileName));
 
@@ -1639,23 +1673,26 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       let inspectionIncluded = false;
       if (inspectionSnap.exists()) {
         const iData = inspectionSnap.data();
-        const originalInspectionState = { ...inspectionData };
-        setInspectionData({
+        const inspectionPayload = {
+          ...createDefaultInspectionData(
+            iData.weekEnding || toolboxData.date,
+            iData.time || '10:00',
+            iData.inspectedBy || userName || '',
+            iData.site || iData.location || locName
+          ),
+          ...iData,
           site: iData.site || iData.location || locName,
           weekEnding: iData.weekEnding || toolboxData.date,
           time: iData.time || '10:00',
           inspectedBy: iData.inspectedBy || userName || '',
-          signature: iData.signature || '',
           dateSigned: iData.dateSigned || toolboxData.date,
           sections: iData.sections || defaultInspectionSections
-        });
+        };
 
-        const inspectionUint8 = await generateInspectionZipBuffer();
+        const inspectionUint8 = await generateInspectionZipBuffer(inspectionPayload);
         const inspectionFileName = `Site Safety Inspection - ${locNameClean} (${toolboxData.date}).docx`;
         filesToShare.push(await writeBufferToCache(inspectionUint8, inspectionFileName));
         inspectionIncluded = true;
-
-        setInspectionData(originalInspectionState);
       }
 
       await shareOrDownloadFiles(filesToShare);
@@ -1728,6 +1765,10 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const mondayStr = getMondayOfWeek(inspectionData.weekEnding || currentWeek);
       const docId = buildInspectionDocId(siteVal, mondayStr);
 
+      setActiveSite(siteVal);
+      setActiveDate(inspectionData.weekEnding || mondayStr);
+      setCurrentWeek(mondayStr);
+
       const payload = {
         userId,
         userName,
@@ -1766,6 +1807,10 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const mondayStr = getMondayOfWeek(toolboxData.date || currentWeek);
       const docId = buildToolboxDocId(locVal, mondayStr);
 
+      setActiveSite(locVal);
+      setActiveDate(toolboxData.date || mondayStr);
+      setCurrentWeek(mondayStr);
+
       const payload = {
         userId,
         userName,
@@ -1792,10 +1837,10 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   };
 
   const currentFormSite = (
-    hsSubView === 'inspection' ? inspectionData.site : toolboxData.location
+    (hsSubView === 'inspection' ? inspectionData.site : toolboxData.location) || activeSite
   ).trim();
   const currentFormDate =
-    hsSubView === 'inspection' ? inspectionData.weekEnding : toolboxData.date;
+    (hsSubView === 'inspection' ? inspectionData.weekEnding : toolboxData.date) || activeDate || activeMonday;
 
   const isSelectedIdInOptions =
     selectedReportId &&
@@ -1885,7 +1930,7 @@ export default function HealthAndSafetyHub({ userId, userName }) {
 
               {!isSelectedIdInOptions && currentFormSite && (
                 <option value="__ACTIVE_DRAFT__">
-                  {currentFormSite} ({currentFormDate || activeMonday})
+                  {currentFormSite} ({currentFormDate})
                 </option>
               )}
 
