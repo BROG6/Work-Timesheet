@@ -173,7 +173,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
   const [registeredWorkers, setRegisteredWorkers] = useState([]);
   const [autoFillContractor, setAutoFillContractor] = useState(true);
 
-  // Week & Site Navigation State
   const [currentWeek, setCurrentWeek] = useState(new Date().toISOString().split('T')[0]);
   const [allExistingReports, setAllExistingReports] = useState([]);
   const [selectedReportId, setSelectedReportId] = useState('');
@@ -840,61 +839,87 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     }
   }
 
-  const setValueAfterLabel = (pNode, labelText, valueText, xmlDoc) => {
+  const findLabelNodeIndex = (tNodes, labelText) => {
+    const target = labelText.toLowerCase();
+    let running = "";
+    for (let i = 0; i < tNodes.length; i++) {
+      running += tNodes[i].textContent || "";
+      if (running.toLowerCase().includes(target)) {
+        return i;
+      }
+    }
+    return -1;
+  };
+
+  const trimTrailingBlankPlaceholder = (node, labelText) => {
+    if (!node) return;
+    const raw = node.textContent || "";
+    const lower = raw.toLowerCase();
+    const lastChar = labelText[labelText.length - 1].toLowerCase();
+    const idx = lower.lastIndexOf(lastChar);
+    if (idx !== -1 && idx < raw.length - 1) {
+      const suffix = raw.slice(idx + 1);
+      if (/^[_\s]+$/.test(suffix)) {
+        node.textContent = raw.slice(0, idx + 1);
+        node.setAttribute("xml:space", "preserve");
+      }
+    }
+  };
+
+  const writeCleanValueNode = (pNode, tNodes, targetIndex, valueText, stopBeforeIndex, xmlDoc) => {
     const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    const endLimit = typeof stopBeforeIndex === "number" && stopBeforeIndex > targetIndex
+      ? stopBeforeIndex
+      : tNodes.length;
+
+    if (targetIndex >= 0 && targetIndex < tNodes.length) {
+      const valNode = tNodes[targetIndex];
+      valNode.textContent = valueText;
+      valNode.setAttribute("xml:space", "preserve");
+      if (valNode.parentNode) cleanRunFormatting(valNode.parentNode);
+      for (let i = targetIndex + 1; i < endLimit; i++) {
+        tNodes[i].textContent = "";
+      }
+    } else {
+      const r = xmlDoc.createElementNS(nsW, "w:r");
+      const t = xmlDoc.createElementNS(nsW, "w:t");
+      t.textContent = valueText;
+      t.setAttribute("xml:space", "preserve");
+      r.appendChild(t);
+      pNode.appendChild(r);
+    }
+  };
+
+  const setValueAfterLabel = (pNode, labelText, valueText, xmlDoc) => {
     const tNodes = Array.from(pNode.getElementsByTagName("w:t"));
     if (tNodes.length === 0) return;
 
-    const targetLabel = labelText.toLowerCase();
-    let runningText = "";
-    let labelEndNodeIndex = -1;
+    const labelIdx = findLabelNodeIndex(tNodes, labelText);
+    if (labelIdx !== -1) {
+      trimTrailingBlankPlaceholder(tNodes[labelIdx], labelText);
+      writeCleanValueNode(pNode, tNodes, labelIdx + 1, valueText, tNodes.length, xmlDoc);
+    } else if (tNodes.length > 1) {
+      writeCleanValueNode(pNode, tNodes, 1, valueText, tNodes.length, xmlDoc);
+    }
+  };
 
-    for (let i = 0; i < tNodes.length; i++) {
-      runningText += tNodes[i].textContent || "";
-      if (runningText.toLowerCase().includes(targetLabel)) {
-        labelEndNodeIndex = i;
-        break;
-      }
+  // Preserves both label1 and label2 in their original runs/colours, only writing clean black values
+  const setTwoValuesInParagraph = (pNode, label1, value1, label2, value2, xmlDoc) => {
+    const tNodes = Array.from(pNode.getElementsByTagName("w:t"));
+    if (tNodes.length === 0) return;
+
+    const idx1 = findLabelNodeIndex(tNodes, label1);
+    const idx2 = label2 ? findLabelNodeIndex(tNodes, label2) : -1;
+
+    if (idx1 !== -1) {
+      trimTrailingBlankPlaceholder(tNodes[idx1], label1);
+      const stopBefore = idx2 > idx1 ? idx2 : tNodes.length;
+      writeCleanValueNode(pNode, tNodes, idx1 + 1, value1, stopBefore, xmlDoc);
     }
 
-    if (labelEndNodeIndex !== -1) {
-      const labelNode = tNodes[labelEndNodeIndex];
-      const currentLabelText = labelNode.textContent || "";
-      const lowerLabelText = currentLabelText.toLowerCase();
-      const idxInNode = lowerLabelText.lastIndexOf(targetLabel[targetLabel.length - 1]);
-
-      if (idxInNode !== -1 && idxInNode < currentLabelText.length - 1) {
-        const prefix = currentLabelText.slice(0, idxInNode + 1);
-        const suffix = currentLabelText.slice(idxInNode + 1);
-        if (/^[_\s]+$/.test(suffix)) {
-          labelNode.textContent = prefix;
-          labelNode.setAttribute("xml:space", "preserve");
-        }
-      }
-
-      const nextNode = tNodes[labelEndNodeIndex + 1];
-      if (nextNode) {
-        nextNode.textContent = valueText;
-        nextNode.setAttribute("xml:space", "preserve");
-        if (nextNode.parentNode) cleanRunFormatting(nextNode.parentNode);
-        for (let j = labelEndNodeIndex + 2; j < tNodes.length; j++) {
-          tNodes[j].textContent = "";
-        }
-      } else {
-        const r = xmlDoc.createElementNS(nsW, "w:r");
-        const t = xmlDoc.createElementNS(nsW, "w:t");
-        t.textContent = valueText;
-        t.setAttribute("xml:space", "preserve");
-        r.appendChild(t);
-        pNode.appendChild(r);
-      }
-    } else if (tNodes.length > 1) {
-      tNodes[1].textContent = valueText;
-      tNodes[1].setAttribute("xml:space", "preserve");
-      if (tNodes[1].parentNode) cleanRunFormatting(tNodes[1].parentNode);
-      for (let i = 2; i < tNodes.length; i++) {
-        tNodes[i].textContent = "";
-      }
+    if (idx2 !== -1) {
+      trimTrailingBlankPlaceholder(tNodes[idx2], label2);
+      writeCleanValueNode(pNode, tNodes, idx2 + 1, value2, tNodes.length, xmlDoc);
     }
   };
 
@@ -915,24 +940,35 @@ export default function HealthAndSafetyHub({ userId, userName }) {
     for (let p of paragraphs) {
       const text = getCellText(p);
       if (text.includes("Site:") || text.includes("Week Ending:") || text.includes("Inspected By:") || text.includes("Signed:")) {
-        const tNodes = p.getElementsByTagName("w:t");
-        if (tNodes.length > 0) {
-          let pStr = "";
-          for (let tn of tNodes) pStr += tn.textContent;
-
-          if (pStr.includes("Site:")) {
-            setValueAfterLabel(p, "Site:", ` ${inspectionData.site || ''}`, xmlDoc);
-          } else if (pStr.includes("Week Ending:")) {
-            setValueAfterLabel(p, "Week Ending:", ` ${inspectionData.weekEnding || ''}      Time: ${inspectionData.time || ''}`, xmlDoc);
-          } else if (pStr.includes("Inspected By:")) {
-            setValueAfterLabel(p, "Inspected By:", ` ${inspectionData.inspectedBy || ''}`, xmlDoc);
-          } else if (pStr.includes("Signed:")) {
-            const formattedDate = formatDateShort(inspectionData.dateSigned || inspectionData.weekEnding);
-            if (inspectionData.signature) {
-              insertSignatureWithParagraph(p, inspectionData.signature, formattedDate, zip, xmlDoc);
-            } else {
-              setValueAfterLabel(p, "Signed:", ` ________________      Dated: ${formattedDate}`, xmlDoc);
-            }
+        if (text.includes("Site:")) {
+          setValueAfterLabel(p, "Site:", ` ${inspectionData.site || ''}`, xmlDoc);
+        }
+        if (text.includes("Week Ending:")) {
+          setTwoValuesInParagraph(
+            p,
+            "Week Ending:",
+            ` ${inspectionData.weekEnding || ''}      `,
+            "Time:",
+            ` ${inspectionData.time || ''}`,
+            xmlDoc
+          );
+        }
+        if (text.includes("Inspected By:")) {
+          setValueAfterLabel(p, "Inspected By:", ` ${inspectionData.inspectedBy || ''}`, xmlDoc);
+        }
+        if (text.includes("Signed:")) {
+          const formattedDate = formatDateShort(inspectionData.dateSigned || inspectionData.weekEnding);
+          if (inspectionData.signature) {
+            insertSignatureWithParagraph(p, inspectionData.signature, formattedDate, zip, xmlDoc);
+          } else {
+            setTwoValuesInParagraph(
+              p,
+              "Signed:",
+              ` ________________      `,
+              "Dated:",
+              ` ${formattedDate}`,
+              xmlDoc
+            );
           }
         }
       }
@@ -986,52 +1022,44 @@ export default function HealthAndSafetyHub({ userId, userName }) {
       const cleanPStr = pStr.toLowerCase().trim();
 
       if (pStr.includes("Date and Time:")) {
-        const locIdx = tNodes.findIndex(tn => (tn.textContent || "").includes("Location:"));
-        if (locIdx !== -1) {
-          const dtIdx = tNodes.findIndex(tn => (tn.textContent || "").includes("Date and Time:"));
-          if (dtIdx !== -1 && dtIdx + 1 < locIdx) {
-            tNodes[dtIdx + 1].textContent = ` ${toolboxData.date || ''} ${toolboxData.time || ''}  `;
-            tNodes[dtIdx + 1].setAttribute("xml:space", "preserve");
-            if (tNodes[dtIdx + 1].parentNode) cleanRunFormatting(tNodes[dtIdx + 1].parentNode);
-            for (let k = dtIdx + 2; k < locIdx; k++) {
-              tNodes[k].textContent = "";
-            }
-          }
-          const locNode = tNodes[locIdx];
-          const locText = locNode.textContent || "";
-          const locColonPos = locText.indexOf("Location:");
-          if (locColonPos !== -1) {
-            locNode.textContent = locText.slice(0, locColonPos + "Location:".length);
-            locNode.setAttribute("xml:space", "preserve");
-          }
-          if (tNodes[locIdx + 1]) {
-            tNodes[locIdx + 1].textContent = ` ${toolboxData.location || ''}`;
-            tNodes[locIdx + 1].setAttribute("xml:space", "preserve");
-            if (tNodes[locIdx + 1].parentNode) cleanRunFormatting(tNodes[locIdx + 1].parentNode);
-            for (let m = locIdx + 2; m < tNodes.length; m++) {
-              tNodes[m].textContent = "";
-            }
-          } else {
-            const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-            const r = xmlDoc.createElementNS(nsW, "w:r");
-            const t = xmlDoc.createElementNS(nsW, "w:t");
-            t.textContent = ` ${toolboxData.location || ''}`;
-            t.setAttribute("xml:space", "preserve");
-            r.appendChild(t);
-            p.appendChild(r);
-          }
-        } else {
-          setValueAfterLabel(p, "Date and Time:", ` ${toolboxData.date || ''} ${toolboxData.time || ''}    Location: ${toolboxData.location || ''}`, xmlDoc);
-        }
+        setTwoValuesInParagraph(
+          p,
+          "Date and Time:",
+          ` ${toolboxData.date || ''} ${toolboxData.time || ''}    `,
+          "Location:",
+          ` ${toolboxData.location || ''}`,
+          xmlDoc
+        );
       } else if (pStr.includes("Meeting Closed:")) {
-        setValueAfterLabel(p, "Meeting Closed:", ` ${toolboxData.time || ''}    Next Meeting: Next week`, xmlDoc);
+        setTwoValuesInParagraph(
+          p,
+          "Meeting Closed:",
+          ` ${toolboxData.time || ''}    `,
+          "Next Meeting:",
+          " Next week",
+          xmlDoc
+        );
       } else if (pStr.includes("Signed – Management:") || pStr.includes("Signed - Management:")) {
         const labelMatch = pStr.includes("Signed – Management:") ? "Signed – Management:" : "Signed - Management:";
         if (toolboxData.managementSignature) {
           const dateVal = formatDateShort(toolboxData.managementDate || toolboxData.date);
-          setValueAfterLabel(p, labelMatch, ` Signed (${dateVal})    Dated: ${dateVal}`, xmlDoc);
+          setTwoValuesInParagraph(
+            p,
+            labelMatch,
+            ` Signed (${dateVal})    `,
+            "Dated:",
+            ` ${dateVal}`,
+            xmlDoc
+          );
         } else {
-          setValueAfterLabel(p, labelMatch, ` ________________    Dated: ____________`, xmlDoc);
+          setTwoValuesInParagraph(
+            p,
+            labelMatch,
+            ` ________________    `,
+            "Dated:",
+            " ____________",
+            xmlDoc
+          );
         }
       } else if (
         !cleanPStr.startsWith("6)") &&
@@ -1423,7 +1451,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         </button>
       </div>
 
-      {/* WEEK NAVIGATION & SITE SELECTOR BAR */}
       <div className="bg-slate-100 border border-slate-200 p-3 rounded-xl space-y-3">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-2 border-b border-slate-200 pb-3">
           <div className="flex items-center gap-1.5 w-full sm:w-auto justify-center">
@@ -1513,7 +1540,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         </div>
       )}
 
-      {/* VIEW 1: SITE SAFETY INSPECTION REPORT */}
       {hsSubView === 'inspection' && (
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5 space-y-5">
           <div className="border-b border-slate-200 pb-3 flex items-center justify-between gap-3">
@@ -1694,7 +1720,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
         </div>
       )}
 
-      {/* VIEW 2: TOOLBOX MEETING WORKSHEET */}
       {hsSubView === 'toolbox' && (
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5 space-y-5">
           <div className="border-b border-slate-200 pb-3 flex items-center justify-between gap-3">
@@ -1751,7 +1776,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               </div>
             </div>
 
-            {/* SECTION: Action Follow ups from Previous Meeting */}
             <div className="space-y-3 pt-2">
               <h3 className="text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">
                 Action Follow ups from Previous Meeting
@@ -1787,7 +1811,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* CARD 1: Issues Raised from Site Safety Inspection */}
             <div className="space-y-3 pt-2">
               <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase">
@@ -1835,7 +1858,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* CARD 2: Worker Training Needs */}
             <div className="space-y-3 pt-2">
               <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase">
@@ -1883,7 +1905,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* CARD 3: Event Investigations */}
             <div className="space-y-3 pt-2">
               <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase">
@@ -1951,7 +1972,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* SECTION: Hazards (3-Column) */}
             <div className="space-y-3 pt-2">
               <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase">Hazards</h3>
@@ -2017,7 +2037,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* SECTION: Hazard Board - Updating (3-Column) */}
             <div className="space-y-3 pt-2">
               <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase">Hazard Board - Updating</h3>
@@ -2083,7 +2102,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* SECTION: Plant and Equipment (3-Column) */}
             <div className="space-y-3 pt-2">
               <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase">Plant and Equipment (including Test & Tag)</h3>
@@ -2149,7 +2167,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* SECTION: Task Planning and Weekly Goals (4-Column Table) */}
             <div className="space-y-3 pt-2">
               <div className="flex justify-between items-center bg-slate-100 px-3 py-1.5 rounded-md">
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase">Task Planning and Weekly Goals</h3>
@@ -2226,7 +2243,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               ))}
             </div>
 
-            {/* SECTION: Discussion About Task Planning and Weekly Goals (Comment Box) */}
             <div className="space-y-2 pt-2">
               <label className="block text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">
                 Discussion About Task Planning and Weekly Goals
@@ -2241,7 +2257,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               />
             </div>
 
-            {/* SECTION: Operational Issues / other Business (Comment Box) */}
             <div className="space-y-2 pt-2">
               <label className="block text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">
                 Operational Issues / other Business
@@ -2256,7 +2271,6 @@ export default function HealthAndSafetyHub({ userId, userName }) {
               />
             </div>
 
-            {/* SECTION: Attendees */}
             <div className="space-y-3 pt-2">
               <div className="flex justify-between items-center">
                 <h3 className="text-xs font-extrabold text-slate-800 uppercase bg-slate-100 px-3 py-1.5 rounded-md">Present / Attendees</h3>
