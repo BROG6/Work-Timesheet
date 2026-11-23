@@ -295,42 +295,30 @@ export default function ManagerHealthAndSafetyDashboard() {
     const matchPos = normalizedCombined.indexOf(target);
     if (matchPos !== -1) {
       const matchEnd = matchPos + target.length;
-      for (let r of ranges) {
-        if (matchEnd <= r.end + 2) {
-          return r.index;
+      for (let i = 0; i < ranges.length; i++) {
+        if (matchEnd <= ranges[i].end) {
+          return ranges[i].index;
         }
       }
       return ranges[ranges.length - 1].index;
     }
 
-    const corePhrase = target.replace(/[:–-]/g, "").trim();
-    if (corePhrase.length >= 4) {
-      const fallbackPos = normalizedCombined.indexOf(corePhrase);
-      if (fallbackPos !== -1) {
-        const fallbackEnd = fallbackPos + corePhrase.length;
-        for (let r of ranges) {
-          if (fallbackEnd <= r.end + 3) {
-            return r.index;
-          }
-        }
-      }
-    }
-
     return -1;
   };
 
-  const insertValueAfterMarkerNode = (pNode, tNodes, markerIndex, valueText, xmlDoc) => {
+  const insertValueAfterMarkerNode = (pNode, tNodes, markerIndex, valueText, xmlDoc, trailingPad = "") => {
     const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     const cleanValue = valueText.trim();
     if (!cleanValue) return;
 
     const anchorRun = tNodes[markerIndex]?.parentNode;
+    const formattedValue = ` ${cleanValue}${trailingPad}`;
 
     for (let i = markerIndex + 1; i < tNodes.length; i++) {
       const val = tNodes[i].textContent || "";
       const trimmed = val.trim();
       if (trimmed === "" || /^[_\s–-]+$/.test(trimmed)) {
-        tNodes[i].textContent = ` ${cleanValue}`;
+        tNodes[i].textContent = formattedValue;
         tNodes[i].setAttribute("xml:space", "preserve");
         forceBlackTextOnRun(tNodes[i].parentNode, xmlDoc);
         return;
@@ -342,7 +330,7 @@ export default function ManagerHealthAndSafetyDashboard() {
 
     const r = xmlDoc.createElementNS(nsW, "w:r");
     const t = xmlDoc.createElementNS(nsW, "w:t");
-    t.textContent = ` ${cleanValue}`;
+    t.textContent = formattedValue;
     t.setAttribute("xml:space", "preserve");
     r.appendChild(t);
     forceBlackTextOnRun(r, xmlDoc);
@@ -354,31 +342,57 @@ export default function ManagerHealthAndSafetyDashboard() {
     }
   };
 
-  const setValueAfterLabel = (pNode, markerText, valueText, xmlDoc) => {
+  const setValueAfterLabel = (pNode, markerText, valueText, xmlDoc, trailingPad = "") => {
     const tNodes = Array.from(pNode.getElementsByTagName("w:t"));
     if (tNodes.length === 0) return;
 
     const markerIdx = findMarkerEndNodeIndex(tNodes, markerText);
     if (markerIdx !== -1) {
-      insertValueAfterMarkerNode(pNode, tNodes, markerIdx, valueText, xmlDoc);
+      insertValueAfterMarkerNode(pNode, tNodes, markerIdx, valueText, xmlDoc, trailingPad);
     }
   };
 
-  const setTwoValuesInParagraph = (pNode, marker1, value1, marker2, value2, xmlDoc) => {
+  const setTwoValuesInParagraph = (pNode, marker1, value1, marker2, value2, xmlDoc, pad1 = "") => {
     const tNodes = Array.from(pNode.getElementsByTagName("w:t"));
     if (tNodes.length === 0) return;
 
     const idx1 = findMarkerEndNodeIndex(tNodes, marker1);
     if (idx1 !== -1) {
-      insertValueAfterMarkerNode(pNode, tNodes, idx1, value1, xmlDoc);
+      insertValueAfterMarkerNode(pNode, tNodes, idx1, value1, xmlDoc, pad1);
     }
 
     if (marker2) {
       const freshTNodes = Array.from(pNode.getElementsByTagName("w:t"));
       const idx2 = findMarkerEndNodeIndex(freshTNodes, marker2);
       if (idx2 !== -1) {
-        insertValueAfterMarkerNode(pNode, freshTNodes, idx2, value2, xmlDoc);
+        insertValueAfterMarkerNode(pNode, freshTNodes, idx2, value2, xmlDoc, "");
       }
+    }
+  };
+
+  const collapseEmptyUnderlineParagraph = (pNode, xmlDoc) => {
+    if (!pNode) return;
+    const text = getCellText(pNode).trim();
+    if (text === "" || /^[_\s–-]+$/.test(text)) {
+      const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+      const tNodes = pNode.getElementsByTagName("w:t");
+      for (let tn of tNodes) {
+        tn.textContent = "";
+      }
+      let pPr = pNode.getElementsByTagNameNS(nsW, "pPr")[0] || pNode.getElementsByTagName("w:pPr")[0];
+      if (!pPr) {
+        pPr = xmlDoc.createElementNS(nsW, "w:pPr");
+        pNode.insertBefore(pPr, pNode.firstChild);
+      }
+      let spacing = pPr.getElementsByTagNameNS(nsW, "spacing")[0] || pPr.getElementsByTagName("w:spacing")[0];
+      if (!spacing) {
+        spacing = xmlDoc.createElementNS(nsW, "w:spacing");
+        pPr.appendChild(spacing);
+      }
+      spacing.setAttribute("w:before", "0");
+      spacing.setAttribute("w:after", "0");
+      spacing.setAttribute("w:line", "20");
+      spacing.setAttribute("w:lineRule", "auto");
     }
   };
 
@@ -484,7 +498,8 @@ export default function ManagerHealthAndSafetyDashboard() {
                 record.weekEnding || record.date || '',
                 "time:",
                 record.time || '',
-                xmlDoc
+                xmlDoc,
+                "    "
               );
             }
             if (lower.includes("inspected by:")) {
@@ -501,7 +516,8 @@ export default function ManagerHealthAndSafetyDashboard() {
                   "________________",
                   "dated:",
                   formattedDate,
-                  xmlDoc
+                  xmlDoc,
+                  "    "
                 );
               }
             }
@@ -560,8 +576,12 @@ export default function ManagerHealthAndSafetyDashboard() {
                 dtCombined,
                 "location:",
                 record.location || record.site || '',
-                xmlDoc
+                xmlDoc,
+                "    "
               );
+              if (paragraphs[i + 1]) {
+                collapseEmptyUnderlineParagraph(paragraphs[i + 1], xmlDoc);
+              }
             } else if (cleanPStr.includes("meeting closed:")) {
               setTwoValuesInParagraph(
                 p,
@@ -569,7 +589,8 @@ export default function ManagerHealthAndSafetyDashboard() {
                 record.time || '',
                 "next meeting:",
                 "Next week",
-                xmlDoc
+                xmlDoc,
+                "    "
               );
             } else if (cleanPStr.includes("signed – management:") || cleanPStr.includes("signed - management:")) {
               const labelMatch = cleanPStr.includes("signed – management:") ? "signed – management:" : "signed - management:";
@@ -581,7 +602,8 @@ export default function ManagerHealthAndSafetyDashboard() {
                   `Signed (${dateVal})`,
                   "dated:",
                   dateVal,
-                  xmlDoc
+                  xmlDoc,
+                  "    "
                 );
               } else {
                 setTwoValuesInParagraph(
@@ -590,7 +612,8 @@ export default function ManagerHealthAndSafetyDashboard() {
                   "________________",
                   "dated:",
                   "____________",
-                  xmlDoc
+                  xmlDoc,
+                  "    "
                 );
               }
             } else if (
