@@ -26,7 +26,7 @@ export default function BuildersTools() {
   // --- Balustrade State ---
   const [bal, setBal] = useState({
     totalSpan: 3000,
-    picketWidth: 90,
+    picketWidth: 45, // Default set to 45mm
     maxGap: 99,
     postWidth: 90,
     endPosts: 'both', // 'none' | 'one' | 'both'
