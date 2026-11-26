@@ -8,6 +8,7 @@ import TimesheetEntry from './TimesheetEntry';
 import ManagerDashboard from './ManagerDashboard';
 import HealthAndSafetyHub from './HealthAndSafetyHub';
 import ManagerHealthAndSafetyDashboard from './ManagerHealthAndSafetyDashboard';
+import BuildersTools from './BuildersTools';
 import { useOnlineStatus } from './useOnlineStatus';
 import { Capacitor } from '@capacitor/core';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
@@ -15,23 +16,28 @@ import { initNotifications, checkAndSuppressDailyReminder } from './notification
 import { checkNativeAPKUpdate } from './nativeUpdater';
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
 
+// Injected from package.json via Vite `define` (`__APP_VERSION__`), with fallback
+const CURRENT_APP_VERSION =
+  typeof __APP_VERSION__ !== 'undefined' && __APP_VERSION__
+    ? __APP_VERSION__
+    : '1.0.129';
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeView, setActiveView] = useState('main'); // 'main' or 'hs'
-  
+  const [activeView, setActiveView] = useState('main'); // 'main', 'hs', or 'tools'
+
   const isOnline = useOnlineStatus();
 
   // 1. App Launch Initialization (Version Check, Native APK, Capgo, and Notification Permissions)
   useEffect(() => {
     // Force-bust stale local storage/caches on app version changes WITHOUT signing users out
-    const CURRENT_APP_VERSION = "1.0.128"; // Increment this whenever you push major layout changes
     const savedVersion = localStorage.getItem('sjr_app_version');
-    
+
     if (savedVersion !== CURRENT_APP_VERSION) {
-      console.log("New app version detected. Purging stale UI cache...");
-      
+      console.log(`New app version detected (${CURRENT_APP_VERSION}). Purging stale UI cache...`);
+
       // Selectively clear local UI/profile cache keys, leaving Firebase Auth intact
       Object.keys(localStorage).forEach((key) => {
         if (key.startsWith('sjr_') && key !== 'sjr_app_version') {
@@ -178,7 +184,7 @@ export default function App() {
         <div>
           <div className="flex items-center space-x-2">
             <h1 className="text-lg font-bold text-gray-800">Timesheet App</h1>
-            
+
             {/* Status Pill Badge */}
             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
               isOnline ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
@@ -196,7 +202,7 @@ export default function App() {
         </div>
 
         <div className="flex items-center space-x-2">
-          <button 
+          <button
             onClick={handleSignOut}
             className="text-xs bg-gray-200 text-gray-700 px-3 py-1.5 rounded hover:bg-gray-300 transition font-medium cursor-pointer"
           >
@@ -229,10 +235,23 @@ export default function App() {
         >
           {isManager ? '🛡️ H&S Site Register' : '🛡️ Health & Safety Hub'}
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveView('tools')}
+          className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+            activeView === 'tools'
+              ? 'bg-emerald-500 text-slate-950 shadow-md'
+              : 'text-slate-300 hover:text-white'
+          }`}
+        >
+          📐 Builders Tools
+        </button>
       </div>
 
       {/* Main Body View Rendering */}
-      {activeView === 'hs' ? (
+      {activeView === 'tools' ? (
+        <BuildersTools />
+      ) : activeView === 'hs' ? (
         isManager ? (
           <ManagerHealthAndSafetyDashboard />
         ) : (
